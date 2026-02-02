@@ -74,7 +74,7 @@ struct WelcomeView: View {
     @State private var viewModel: SetupViewModel?
     @State private var showContent = false
     @State private var setupComplete = false
-    @State private var currentSetupStatus: String = ""
+    @State private var isSettingUp = false
     @State private var setupSteps: [SetupStepInfo] = []
     @Namespace private var welcomeNamespace
 
@@ -150,7 +150,7 @@ struct WelcomeView: View {
                             .glassEffect(.regular, in: Capsule())
                     }
                     .buttonStyle(.plain)
-                } else if viewModel?.isLoading == true {
+                } else if isSettingUp {
                     // Loading state with progress steps
                     VStack(spacing: Spacing.lg) {
                         // Progress steps display
@@ -245,7 +245,7 @@ struct WelcomeView: View {
             ]
 
             // Trigger loading UI
-            viewModel?.isLoading = true
+            isSettingUp = true
 
             do {
                 // Step 1: Configure audio session
@@ -276,13 +276,12 @@ struct WelcomeView: View {
 
                 // Transition to complete state
                 try? await Task.sleep(for: .milliseconds(400))
-                viewModel?.isLoading = false
-                viewModel?.isSetupComplete = true
+                isSettingUp = false
                 withAnimation(.spring(duration: 0.4)) {
                     setupComplete = true
                 }
             } catch {
-                viewModel?.isLoading = false
+                isSettingUp = false
                 engine.errorMessage = error.localizedDescription
             }
         }
@@ -313,7 +312,16 @@ struct MainInterfaceView: View {
     @State private var fftAnalyzer = FFTAnalyzer()
     @State private var chordDetector = ChordDetector()
     @State private var gestureController = VisionGestureController()
+    @State private var semanticProcessor = SemanticCommandProcessor()
     @State private var analysisTask: Task<Void, Never>?
+
+    // AI Chatbot
+    @State private var chatbotController = AIChatbotController()
+    @State private var showingChatbot = false
+
+    // Performance Mode
+    @State private var showingPerformanceMode = false
+    @State private var performanceController = PerformanceModeController()
 
     enum MainTab: String, CaseIterable {
         case pedalboard = "Pedalboard"
@@ -349,7 +357,10 @@ struct MainInterfaceView: View {
                     VStack(spacing: Spacing.md) {
                         AudioVisualizationPanel(engine: engine)
 
-                        // Compact chord display
+                        // Mini spectrum indicator (always observes FFT for real-time updates)
+                        MiniSpectrumIndicator(analyzer: fftAnalyzer)
+
+                        // Compact chord display (already observes ChordDetector)
                         CompactChordBadge(detector: chordDetector)
 
                         BackingTrackView(engine: engine)
@@ -387,6 +398,7 @@ struct MainInterfaceView: View {
                                 fftAnalyzer: fftAnalyzer,
                                 chordDetector: chordDetector,
                                 gestureController: gestureController,
+                                semanticProcessor: semanticProcessor,
                                 engine: engine
                             )
                         case .learnEffects:
@@ -409,6 +421,29 @@ struct MainInterfaceView: View {
                 .frame(minWidth: 400, minHeight: 500)
                 #endif
         }
+        // AI Chatbot Overlay - floating panel accessible from anywhere
+        .overlay(alignment: .bottomTrailing) {
+            AIChatbotOverlayView(
+                controller: chatbotController,
+                processor: semanticProcessor,
+                engine: engine,
+                isExpanded: $showingChatbot
+            )
+            .padding(Spacing.lg)
+        }
+        // Performance Mode - fullscreen pedalboard with gesture control
+        .fullScreenCover(isPresented: $showingPerformanceMode) {
+            PerformanceModeView(
+                engine: engine,
+                gestureController: gestureController,
+                controller: performanceController,
+                presets: presetService.presets,
+                onExit: { showingPerformanceMode = false }
+            )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .enterPerformanceMode)) { _ in
+            showingPerformanceMode = true
+        }
         .onAppear {
             setupGestureActions()
             setupAudioAnalysis()
@@ -425,20 +460,13 @@ struct MainInterfaceView: View {
         // Cancel any existing analysis task
         analysisTask?.cancel()
 
-        // Use async Task loop instead of Timer to avoid MainActor capture issues
-        analysisTask = Task {
-            await runAudioAnalysisLoop()
-        }
-    }
-
-    private func runAudioAnalysisLoop() async {
-        while !Task.isCancelled {
-            let samples = engine.latestAudioSamples
+        // Connect audio samples to analyzers via callback
+        // This is more efficient than polling - samples are pushed when available
+        engine.onAudioSamplesAvailable = { [fftAnalyzer, chordDetector] samples in
             if samples.count >= 2048 {
                 fftAnalyzer.analyze(samples: samples)
                 chordDetector.analyze(samples: samples)
             }
-            try? await Task.sleep(for: .milliseconds(50))
         }
     }
 
@@ -468,6 +496,7 @@ struct AIToolsView: View {
     let fftAnalyzer: FFTAnalyzer
     let chordDetector: ChordDetector
     @Bindable var gestureController: VisionGestureController
+    @Bindable var semanticProcessor: SemanticCommandProcessor
     @Bindable var engine: AudioEngineManager
 
     var body: some View {
@@ -492,6 +521,10 @@ struct AIToolsView: View {
                     Spacer()
                 }
                 .padding(.horizontal, Spacing.lg)
+
+                // AI Tone Assistant - Natural Language to DSP
+                AIToneCommandView(processor: semanticProcessor, engine: engine)
+                    .padding(.horizontal, Spacing.lg)
 
                 // Spectrum Analyzer (FFT)
                 GlassCard(cornerRadius: CornerRadius.lg) {
@@ -563,6 +596,11 @@ struct TechExplanationCard: View {
                     .foregroundStyle(Color.riffPrimary)
 
                 VStack(alignment: .leading, spacing: Spacing.md) {
+                    TechBullet(
+                        framework: "Foundation Models",
+                        description: "On-device LLM for natural language to DSP parameter conversion"
+                    )
+
                     TechBullet(
                         framework: "Accelerate (vDSP)",
                         description: "Apple's high-performance math library for FFT calculations"

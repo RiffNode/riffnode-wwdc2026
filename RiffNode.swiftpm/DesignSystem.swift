@@ -269,9 +269,10 @@ struct GlassIconButton: View {
                 .font(.system(size: size * 0.4, weight: .medium))
                 .foregroundStyle(tint)
                 .frame(width: size, height: size)
+                .contentShape(Circle())
                 .glassEffect(.regular, in: Circle())
         }
-        .buttonStyle(ScaleButtonStyle())
+        .buttonStyle(.plain)
     }
 }
 

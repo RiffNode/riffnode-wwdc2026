@@ -1,5 +1,6 @@
 import AVFoundation
 import Observation
+import os
 import SwiftUI
 
 // MARK: - Audio Engine Manager
@@ -320,18 +321,81 @@ final class AudioEngineManager: AudioManaging {
         rebuildAudioChain()
     }
 
+    // MARK: - Expression/CV Control
+
+    /// Set expression value for CV-controlled parameters (e.g., Wah via mouth openness)
+    /// - Parameters:
+    ///   - value: Expression value from 0.0 to 1.0
+    ///   - effectType: The effect type to control
+    func setExpressionValue(_ value: Float, for effectType: EffectType) {
+        guard let effect = effectsChain.first(where: { $0.type == effectType && $0.isEnabled }) else { return }
+
+        // Map 0-1 expression value to appropriate parameter range
+        switch effectType {
+        case .equalizer:
+            // Wah effect = sweep mid frequency from low to high
+            // Map 0-1 to -12 to +12 dB mid boost (creates wah sweep)
+            let midValue = (value - 0.5) * 24  // -12 to +12
+            updateEffectParameter(effect, key: "mid", value: midValue)
+
+            // Also boost treble slightly at higher wah positions
+            let trebleValue = value * 6  // 0 to +6 dB
+            updateEffectParameter(effect, key: "treble", value: trebleValue)
+
+        case .delay:
+            // Expression controls delay mix (for swell effects)
+            let mixValue = value * 100  // 0 to 100
+            updateEffectParameter(effect, key: "mix", value: mixValue)
+
+        case .reverb:
+            // Expression controls reverb mix
+            let mixValue = value * 100  // 0 to 100
+            updateEffectParameter(effect, key: "wetDryMix", value: mixValue)
+
+        case .chorus, .phaser, .flanger:
+            // Expression controls modulation depth
+            let depthValue = value * 100  // 0 to 100
+            updateEffectParameter(effect, key: "depth", value: depthValue)
+
+        case .tremolo:
+            // Expression controls tremolo depth
+            let depthValue = value * 100  // 0 to 100
+            updateEffectParameter(effect, key: "depth", value: depthValue)
+
+        case .distortion, .overdrive, .fuzz:
+            // Expression controls drive level
+            let driveValue = 30 + value * 70  // 30 to 100
+            updateEffectParameter(effect, key: "level", value: driveValue)
+
+        case .compressor:
+            // Expression controls threshold
+            let thresholdValue = -40 + value * 40  // -40 to 0 dB
+            updateEffectParameter(effect, key: "threshold", value: thresholdValue)
+        }
+    }
+
     func applyPreset(_ preset: EffectPreset) {
         effectsChain = preset.effects.map { $0.toEffectNode() }
-        
+
         // Sync bypass states
         syncBypassStates()
-        
+
         // Apply all effect parameters
         for effect in effectsChain {
             applyEffectParameters(effect)
         }
-        
+
         print("applyPreset: Applied preset '\(preset.name)'")
+    }
+
+    /// Rebuild effects chain with current settings
+    /// Called after batch parameter updates (e.g., from AI tone assistant)
+    func rebuildEffectsChain() {
+        syncBypassStates()
+        for effect in effectsChain {
+            applyEffectParameters(effect)
+        }
+        print("rebuildEffectsChain: Effects chain updated")
     }
 
     // MARK: - BackingTrackManaging Implementation
@@ -683,6 +747,12 @@ final class AudioEngineManager: AudioManaging {
 
             if !data.samples.isEmpty {
                 latestAudioSamples = data.samples
+
+                // Feed audio samples to analyzers via callback
+                // This enables real-time FFT and chord detection
+                if let callback = onAudioSamplesAvailable {
+                    callback(data.samples)
+                }
             }
 
             try? await Task.sleep(for: .milliseconds(33))
@@ -1155,32 +1225,31 @@ func audioCalculateRMS(_ samples: [Float]) -> Float {
 final class AudioSampleBuffer: @unchecked Sendable {
     static let shared = AudioSampleBuffer()
 
-    private let lock = NSLock()
-    private var _samples: [Float] = []
-    private var _waveform: [Float] = Array(repeating: 0, count: 128)
-    private var _rms: Float = 0
+    // OSAllocatedUnfairLock is ~2-4x faster than NSLock for uncontended cases
+    // Better for real-time audio where low latency is critical
+    private let lock = OSAllocatedUnfairLock<AudioBufferState>(initialState: AudioBufferState())
 
-    struct AudioData {
-        let samples: [Float]
-        let waveform: [Float]
-        let rms: Float
+    private struct AudioBufferState {
+        var samples: [Float] = []
+        var waveform: [Float] = Array(repeating: 0, count: 128)
+        var rms: Float = 0
     }
 
     private init() {}
 
-    /// Write audio data from audio thread (thread-safe)
+    /// Write audio data from audio thread (thread-safe, lock-free optimized)
     func write(samples: [Float], waveform: [Float], rms: Float) {
-        lock.lock()
-        defer { lock.unlock() }
-        _samples = samples
-        _waveform = waveform
-        _rms = rms
+        lock.withLock { state in
+            state.samples = samples
+            state.waveform = waveform
+            state.rms = rms
+        }
     }
 
-    /// Read audio data from main thread (thread-safe)
+    /// Read audio data from main thread (thread-safe, lock-free optimized)
     func read() -> AudioData {
-        lock.lock()
-        defer { lock.unlock() }
-        return AudioData(samples: _samples, waveform: _waveform, rms: _rms)
+        lock.withLock { state in
+            AudioData(samples: state.samples, waveform: state.waveform, rms: state.rms)
+        }
     }
 }

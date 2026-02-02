@@ -490,22 +490,15 @@ struct GlassEffectCardView: View {
                 // Header - clean, minimal design
                 Button(action: onTap) {
                     HStack(spacing: 12) {
-                        // Icon with subtle background
-                        Image(systemName: effect.icon)
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .frame(width: 40, height: 40)
-                            .glassEffect(.regular, in: Circle())
-
                         Text(effect.name)
                             .font(.headline)
                             .foregroundStyle(.primary)
 
                         Spacer()
 
-                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        Text(isExpanded ? "Less" : "More")
+                            .font(.subheadline)
                             .foregroundStyle(.tertiary)
-                            .font(.system(size: 14, weight: .medium))
                     }
                     .padding()
                 }
@@ -536,38 +529,30 @@ struct GlassEffectCardDetails: View {
             VStack(alignment: .leading, spacing: 16) {
                 // What It Does
                 GlassEffectInfoSection(
-                    icon: "gearshape.fill",
                     title: "What It Does",
-                    content: effect.function,
-                    accentColor: .primary.opacity(0.6)
+                    content: effect.function
                 )
 
                 // The Sound
                 GlassEffectInfoSection(
-                    icon: "waveform",
                     title: "The Sound",
-                    content: effect.sound,
-                    accentColor: .primary.opacity(0.6)
+                    content: effect.sound
                 )
 
                 // How To Use
                 GlassEffectTipsSection(
-                    icon: "lightbulb.fill",
                     title: "How To Use",
-                    content: effect.howToUse,
-                    accentColor: .primary.opacity(0.6)
+                    content: effect.howToUse
                 )
 
                 // Signal Chain Position
                 GlassEffectSignalChainSection(
-                    position: effect.signalChainPosition,
-                    effectColor: .primary.opacity(0.5)
+                    position: effect.signalChainPosition
                 )
 
                 // Famous Artists
                 GlassEffectArtistsSection(
-                    artists: effect.famousUsers,
-                    accentColor: .primary.opacity(0.6)
+                    artists: effect.famousUsers
                 )
             }
             .padding()
@@ -578,22 +563,14 @@ struct GlassEffectCardDetails: View {
 // MARK: - Glass Effect Info Section
 
 struct GlassEffectInfoSection: View {
-    let icon: String
     let title: String
     let content: String
-    let accentColor: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(accentColor)
-
-                Text(title.uppercased())
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(accentColor)
-            }
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.tertiary)
 
             Text(content)
                 .font(.subheadline)
@@ -607,39 +584,23 @@ struct GlassEffectInfoSection: View {
 // MARK: - Glass Effect Tips Section
 
 struct GlassEffectTipsSection: View {
-    let icon: String
     let title: String
     let content: String
-    let accentColor: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(accentColor)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.tertiary)
 
-                Text(title.uppercased())
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(accentColor)
-            }
-
-            HStack(alignment: .top, spacing: 8) {
-                Rectangle()
-                    .fill(accentColor)
-                    .frame(width: 3)
-
-                Text(content)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(12)
-            .glassEffect(
-                .regular.tint(accentColor),
-                in: RoundedRectangle(cornerRadius: 8)
-            )
+            Text(content)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
         }
     }
 }
@@ -648,35 +609,28 @@ struct GlassEffectTipsSection: View {
 
 struct GlassEffectSignalChainSection: View {
     let position: String
-    let effectColor: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.orange)
-
-                Text("SIGNAL CHAIN POSITION")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.orange)
-            }
+        VStack(alignment: .leading, spacing: 6) {
+            Text("SIGNAL CHAIN")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.tertiary)
 
             // Visual signal chain indicator
             HStack(spacing: 4) {
-                Image(systemName: "guitars")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                Text("IN")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.tertiary)
 
                 ForEach(0..<5) { i in
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(i == getPositionIndex() ? effectColor : Color.white.opacity(0.2))
+                        .fill(i == getPositionIndex() ? Color.primary.opacity(0.6) : Color.primary.opacity(0.15))
                         .frame(width: 20, height: 8)
                 }
 
-                Image(systemName: "speaker.wave.2.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                Text("OUT")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.tertiary)
 
                 Spacer()
             }
@@ -709,31 +663,22 @@ struct GlassEffectSignalChainSection: View {
 
 struct GlassEffectArtistsSection: View {
     let artists: String
-    let accentColor: Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(accentColor)
-
-                Text("FAMOUS USERS")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(accentColor)
-            }
+        VStack(alignment: .leading, spacing: 6) {
+            Text("FAMOUS USERS")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.tertiary)
 
             let artistList = artists.components(separatedBy: ", ")
             FlowLayout(spacing: 6) {
                 ForEach(artistList, id: \.self) { artist in
                     Text(artist)
                         .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .glassEffect(
-                            .regular.tint(accentColor),
-                            in: Capsule()
-                        )
+                        .glassEffect(.regular, in: Capsule())
                 }
             }
         }

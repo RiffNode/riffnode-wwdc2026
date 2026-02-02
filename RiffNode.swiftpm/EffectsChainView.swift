@@ -49,6 +49,22 @@ struct EffectsChainView: View {
                 }
                 .buttonStyle(.plain)
                 .clipShape(Capsule())
+
+                // Stage Mode button
+                Button {
+                    NotificationCenter.default.post(name: .enterPerformanceMode, object: nil)
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "rectangle.expand.vertical")
+                        Text("Stage Mode")
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 14)
+                    .glassEffect(.regular, in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal)
 

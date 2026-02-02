@@ -483,11 +483,76 @@ struct EducationalSpectrumView: View {
     }
 }
 
+// MARK: - Mini Spectrum Indicator
+// Compact always-visible spectrum display to ensure FFT analyzer stays observed
+// Placed in left panel so analyzers always have active SwiftUI observers
+
+struct MiniSpectrumIndicator: View {
+    let analyzer: FFTAnalyzer
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Spectrum icon
+            Image(systemName: "waveform.path.ecg")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.cyan)
+
+            // Mini spectrum bars
+            HStack(spacing: 2) {
+                ForEach(0..<16, id: \.self) { index in
+                    let binIndex = index * (analyzer.binCount / 16)
+                    let magnitude = binIndex < analyzer.magnitudes.count ?
+                        analyzer.magnitudes[binIndex] : 0
+
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(barColor(for: index))
+                        .frame(width: 4, height: 8 + CGFloat(magnitude) * 24)
+                }
+            }
+            .frame(height: 32)
+
+            Spacer()
+
+            // Peak frequency indicator
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Peak")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+
+                Text(formatFrequency(analyzer.peakFrequency))
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.cyan)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .glassEffect(.regular, in: Capsule())
+    }
+
+    private func barColor(for index: Int) -> Color {
+        let position = Float(index) / 16.0
+        if position < 0.25 { return .red.opacity(0.8) }
+        if position < 0.5 { return .orange.opacity(0.8) }
+        if position < 0.75 { return .green.opacity(0.8) }
+        return .cyan.opacity(0.8)
+    }
+
+    private func formatFrequency(_ freq: Float) -> String {
+        if freq >= 1000 {
+            return String(format: "%.1fk", freq / 1000)
+        }
+        return String(format: "%.0f Hz", freq)
+    }
+}
+
 // MARK: - Preview
 
 #Preview {
     @Previewable @State var previewAnalyzer = FFTAnalyzer()
-    FFTSpectrumView(analyzer: previewAnalyzer)
-        .padding()
-        .background(Color.black)
+    VStack(spacing: 20) {
+        FFTSpectrumView(analyzer: previewAnalyzer)
+        MiniSpectrumIndicator(analyzer: previewAnalyzer)
+    }
+    .padding()
+    .background(Color.black)
 }

@@ -261,10 +261,12 @@ struct GlassTransportControls: View {
                     } label: {
                         Image(systemName: "stop.fill")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(hasTrack && isPlaying ? .primary : .secondary)
+                            .foregroundStyle(hasTrack && isPlaying ? Color.primary : Color.secondary)
                             .frame(width: 48, height: 48)
+                            .contentShape(Circle())
+                            .glassEffect(.regular, in: Circle())
                     }
-                    .glassEffect(.regular, in: Circle())
+                    .buttonStyle(.plain)
                     .disabled(!hasTrack || !isPlaying)
 
                     // Play/Pause button - full Liquid Glass with tint
@@ -279,15 +281,17 @@ struct GlassTransportControls: View {
                             } else {
                                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                                     .font(.system(size: 22, weight: .bold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(Color.white)
                             }
                         }
                         .frame(width: 56, height: 56)
+                        .contentShape(Circle())
+                        .glassEffect(
+                            hasTrack ? .regular.tint(Color.riffPrimary) : .regular,
+                            in: Circle()
+                        )
                     }
-                    .glassEffect(
-                        hasTrack ? .regular.tint(Color.riffPrimary) : .regular,
-                        in: Circle()
-                    )
+                    .buttonStyle(.plain)
                     .disabled(!hasTrack)
                 }
             }
@@ -296,14 +300,14 @@ struct GlassTransportControls: View {
             HStack(spacing: 10) {
                 Image(systemName: "speaker.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.primary.opacity(0.6))
 
                 Slider(value: $volume, in: 0...1)
-                    .tint(.primary)
+                    .tint(Color.primary)
 
                 Image(systemName: "speaker.wave.3.fill")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.primary.opacity(0.6))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
