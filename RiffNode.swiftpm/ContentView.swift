@@ -83,39 +83,41 @@ struct WelcomeView: View {
             Spacer(minLength: 60)
 
             // Hero section with large glass logo - centered
-            VStack(spacing: Spacing.xl) {
-                // Large glass app icon with custom RiffNode logo - native iOS 26 glass
-                ZStack {
-                    // Subtle ambient glow only
-                    Circle()
-                        .fill(Color.riffPrimary.opacity(0.15))
-                        .frame(width: 160, height: 160)
-                        .blur(radius: 30)
+            GlassEffectContainer(spacing: 24) {
+                VStack(spacing: Spacing.xl) {
+                    // Large glass app icon – circle shape matches the ambient glow
+                    ZStack {
+                        // Subtle ambient glow
+                        Circle()
+                            .fill(Color.riffPrimary.opacity(0.15))
+                            .frame(width: 160, height: 160)
+                            .blur(radius: 30)
 
-                    // Logo directly on glass - no extra circle border
-                    Image("RiffNodeLogo")
-                        .renderingMode(.template)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 80, height: 80)
-                        .foregroundStyle(Color.riffPrimary)
-                        .padding(35)
-                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 32))
+                        // Logo on a circular glass disc
+                        Image("RiffNodeLogo")
+                            .renderingMode(.template)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 80, height: 80)
+                            .foregroundStyle(Color.riffPrimary)
+                            .padding(35)
+                            .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.12)), in: Circle())
+                    }
+                    .scaleEffect(showContent ? 1 : 0.8)
+                    .opacity(showContent ? 1 : 0)
+
+                    // App name
+                    VStack(spacing: Spacing.sm) {
+                        Text("RiffNode")
+                            .font(.system(size: 48, weight: .bold, design: .rounded))
+                            .foregroundStyle(.primary)
+
+                        Text("Guitar Effects Playground")
+                            .font(.title3.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .opacity(showContent ? 1 : 0)
                 }
-                .scaleEffect(showContent ? 1 : 0.8)
-                .opacity(showContent ? 1 : 0)
-
-                // App name with subtle gradient
-                VStack(spacing: Spacing.sm) {
-                    Text("RiffNode")
-                        .font(.system(size: 48, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-
-                    Text("Guitar Effects Playground")
-                        .font(.title3.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-                .opacity(showContent ? 1 : 0)
             }
 
             Spacer(minLength: 40)
@@ -123,7 +125,8 @@ struct WelcomeView: View {
             // Action buttons - simplified single-step setup
             VStack(spacing: Spacing.md) {
                 if setupComplete {
-                    // Setup complete - offer tour or skip
+                    // Setup complete – offer tour or skip
+                    // "Take the Tour" is the primary CTA – tinted capsule glass
                     Button {
                         onStartTour()
                     } label: {
@@ -134,26 +137,27 @@ struct WelcomeView: View {
                         }
                         .foregroundStyle(.primary)
                         .padding(.vertical, 14)
-                        .padding(.horizontal, 28)
-                        .glassEffect(.regular, in: Capsule())
+                        .padding(.horizontal, 32)
+                        .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.18)), in: Capsule())
                     }
                     .buttonStyle(.plain)
 
+                    // "Skip to Main" is a secondary action – plain capsule glass
                     Button {
                         onSkipToMain()
                     } label: {
                         Text("Skip to Main")
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.secondary)
-                            .padding(.vertical, 14)
-                            .padding(.horizontal, 28)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 24)
                             .glassEffect(.regular, in: Capsule())
                     }
                     .buttonStyle(.plain)
                 } else if isSettingUp {
-                    // Loading state with progress steps
-                    VStack(spacing: Spacing.lg) {
-                        // Progress steps display
+                    // Loading state with progress steps – each row
+                    // gets its own glass so they fuse inside the container
+                    GlassEffectContainer(spacing: 12) {
                         VStack(spacing: Spacing.sm) {
                             ForEach(setupSteps) { step in
                                 HStack(spacing: Spacing.sm) {
@@ -177,14 +181,20 @@ struct WelcomeView: View {
 
                                     Spacer()
                                 }
+                                .padding(.horizontal, Spacing.md)
+                                .padding(.vertical, Spacing.sm)
+                                .glassEffect(
+                                    step.isComplete
+                                        ? .regular.tint(.green.opacity(0.15))
+                                        : (step.isActive ? .regular.tint(Color.riffPrimary.opacity(0.2)) : .regular),
+                                    in: RoundedRectangle(cornerRadius: 10)
+                                )
                             }
                         }
-                        .padding(Spacing.lg)
-                        .frame(width: 280)
-                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
+                        .frame(width: 300)
                     }
                 } else {
-                    // Initial setup button
+                    // Initial setup button – primary CTA capsule
                     Button {
                         startSetup()
                     } label: {
@@ -195,8 +205,8 @@ struct WelcomeView: View {
                         }
                         .foregroundStyle(.primary)
                         .padding(.vertical, 14)
-                        .padding(.horizontal, 28)
-                        .glassEffect(.regular, in: Capsule())
+                        .padding(.horizontal, 36)
+                        .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.18)), in: Capsule())
                     }
                     .buttonStyle(.plain)
 
@@ -352,15 +362,15 @@ struct MainInterfaceView: View {
             .padding(.top, Spacing.sm)
 
             HStack(spacing: Spacing.md) {
-                // Left panel - wrapped in glass container for liquid fusion effect
-                GlassEffectContainer(spacing: Spacing.md) {
+                // Left panel – all glass cards sit inside one container
+                // so neighbouring cards fuse into a single liquid shape
+                GlassEffectContainer(spacing: 16) {
                     VStack(spacing: Spacing.md) {
                         AudioVisualizationPanel(engine: engine)
 
-                        // Mini spectrum indicator (always observes FFT for real-time updates)
+                        // Spectrum + chord badge fuse with the cards above / below
                         MiniSpectrumIndicator(analyzer: fftAnalyzer)
 
-                        // Compact chord display (already observes ChordDetector)
                         CompactChordBadge(detector: chordDetector)
 
                         BackingTrackView(engine: engine)
@@ -371,13 +381,9 @@ struct MainInterfaceView: View {
 
                 // Right panel with tab switching
                 VStack(spacing: 0) {
-                    // Glass tab selector - refined navigation
-                    HStack {
-                        GlassTabBar(selection: $selectedTab, tint: Color.riffPrimary) { tab in
-                            tab.icon
-                        }
-                        
-                        Spacer()
+                    // Tab bar – single glass element, no container needed
+                    GlassTabBar(selection: $selectedTab, tint: Color.riffPrimary) { tab in
+                        tab.icon
                     }
                     .padding(.horizontal, Spacing.lg)
                     .padding(.top, Spacing.md)
@@ -397,8 +403,6 @@ struct MainInterfaceView: View {
                             AIToolsView(
                                 fftAnalyzer: fftAnalyzer,
                                 chordDetector: chordDetector,
-                                gestureController: gestureController,
-                                semanticProcessor: semanticProcessor,
                                 engine: engine
                             )
                         case .learnEffects:
@@ -495,92 +499,73 @@ struct MainInterfaceView: View {
 struct AIToolsView: View {
     let fftAnalyzer: FFTAnalyzer
     let chordDetector: ChordDetector
-    @Bindable var gestureController: VisionGestureController
-    @Bindable var semanticProcessor: SemanticCommandProcessor
     @Bindable var engine: AudioEngineManager
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Spacing.lg) {
-                // Header with glass pill
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: Spacing.sm) {
-                            Image(systemName: "brain.head.profile")
-                                .font(.title2)
-                                .foregroundStyle(Color.riffPrimary)
+            GlassEffectContainer(spacing: 20) {
+                VStack(spacing: Spacing.lg) {
+                    // Header
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: Spacing.sm) {
+                                Image(systemName: "waveform.path.ecg")
+                                    .font(.title2)
+                                    .foregroundStyle(.cyan)
 
-                            Text("AI-Powered Tools")
-                                .font(.title2.bold())
+                                Text("Audio Analysis")
+                                    .font(.title2.bold())
+                            }
+
+                            Text("Real-time frequency and pitch analysis powered by Accelerate framework")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
-
-                        Text("Machine Learning & Computer Vision for Musicians")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        Spacer()
                     }
-                    Spacer()
-                }
-                .padding(.horizontal, Spacing.lg)
-
-                // AI Tone Assistant - Natural Language to DSP
-                AIToneCommandView(processor: semanticProcessor, engine: engine)
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.vertical, Spacing.sm)
+                    .glassEffect(.regular.tint(.cyan.opacity(0.1)), in: RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal, Spacing.lg)
 
-                // Spectrum Analyzer (FFT)
-                GlassCard(cornerRadius: CornerRadius.lg) {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        Label("Real-Time Spectrum Analysis", systemImage: "waveform.path.ecg")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+                    // Spectrum Analyzer (FFT)
+                    GlassCard(cornerRadius: CornerRadius.lg) {
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            Label("Real-Time Spectrum Analysis", systemImage: "waveform.path.ecg")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
 
-                        Text("Fast Fourier Transform (FFT) decomposes your audio into frequency components")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            Text("Fast Fourier Transform (FFT) decomposes your audio into frequency components")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
 
-                        FFTSpectrumView(analyzer: fftAnalyzer)
-                    }
-                }
-                .padding(.horizontal, Spacing.lg)
-
-                // Chord Detection
-                GlassCard(cornerRadius: CornerRadius.lg) {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        Label("AI Chord Detection", systemImage: "pianokeys")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-
-                        Text("Pitch detection using autocorrelation algorithm identifies notes and chords")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        ChordDetectorView(detector: chordDetector)
-                    }
-                }
-                .padding(.horizontal, Spacing.lg)
-
-                // Vision Gesture Control
-                GlassCard(cornerRadius: CornerRadius.lg) {
-                    VStack(alignment: .leading, spacing: Spacing.md) {
-                        Label("Hands-Free Gesture Control", systemImage: "hand.raised.fill")
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-
-                        Text("Computer Vision detects head movements - control effects while playing!")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        VisionGestureControlView(controller: gestureController) { gesture in
-                            print("Gesture: \(gesture.rawValue)")
+                            FFTSpectrumView(analyzer: fftAnalyzer)
                         }
                     }
-                }
-                .padding(.horizontal, Spacing.lg)
-
-                // Educational note
-                TechExplanationCard()
                     .padding(.horizontal, Spacing.lg)
+
+                    // Chord Detection
+                    GlassCard(cornerRadius: CornerRadius.lg) {
+                        VStack(alignment: .leading, spacing: Spacing.md) {
+                            Label("AI Chord Detection", systemImage: "pianokeys")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+
+                            Text("Pitch detection using autocorrelation algorithm identifies notes and chords")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            ChordDetectorView(detector: chordDetector)
+                        }
+                    }
+                    .padding(.horizontal, Spacing.lg)
+
+                    // Educational note
+                    TechExplanationCard()
+                        .padding(.horizontal, Spacing.lg)
+                }
+                .padding(.vertical, Spacing.md)
             }
-            .padding(.vertical, Spacing.md)
         }
     }
 }
@@ -640,6 +625,9 @@ struct TechBullet: View {
                 Text(framework)
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.primary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.15)), in: RoundedRectangle(cornerRadius: 6))
 
                 Text(description)
                     .font(.system(size: 12))
@@ -665,56 +653,59 @@ struct GlassTopBarView: View {
     }
 
     var body: some View {
-        HStack(spacing: 16) {
-            // Logo with custom RiffNode icon - larger size
-            HStack(spacing: 12) {
-                Image("RiffNodeLogo")
-                    .renderingMode(.template)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 42, height: 42)
-                    .foregroundStyle(Color.riffPrimary)
+        // One container wraps everything so all toolbar pills / buttons
+        // fuse into a single liquid glass bar.
+        GlassEffectContainer(spacing: 20) {
+            HStack(spacing: 16) {
+                // Logo with custom RiffNode icon
+                HStack(spacing: 12) {
+                    Image("RiffNodeLogo")
+                        .renderingMode(.template)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 42, height: 42)
+                        .foregroundStyle(Color.riffPrimary)
 
-                Text("RiffNode")
-                    .font(.title.bold())
+                    Text("RiffNode")
+                        .font(.title.bold())
+                        .foregroundStyle(.primary)
+                }
+
+                Spacer()
+
+                // Audio Input Device indicator
+                GlassAudioInputBadge(
+                    deviceName: engine.currentInputDeviceName,
+                    deviceType: engine.currentInputDeviceType,
+                    onRefresh: {
+                        engine.refreshInputDevices()
+                    }
+                )
+
+                // Presets button
+                Button {
+                    showingPresets = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "square.stack.3d.up.fill")
+                        Text("Presets")
+                    }
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
-            }
-
-            Spacer()
-
-            // Audio Input Device indicator
-            GlassAudioInputBadge(
-                deviceName: engine.currentInputDeviceName,
-                deviceType: engine.currentInputDeviceType,
-                onRefresh: {
-                    engine.refreshInputDevices()
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 14)
+                    .glassEffect(.regular, in: Capsule())
                 }
-            )
+                .buttonStyle(.plain)
 
-            // Presets button
-            Button {
-                showingPresets = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.stack.3d.up.fill")
-                    Text("Presets")
-                }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.primary)
-                .padding(.vertical, 8)
-                .padding(.horizontal, 14)
-                .glassEffect(.regular, in: Capsule())
-            }
-            .buttonStyle(.plain)
+                // Engine status
+                GlassStatusIndicator(
+                    status: engine.isRunning ? .active : .inactive,
+                    label: engine.isRunning ? "Running" : "Stopped"
+                )
 
-            // Engine status
-            GlassStatusIndicator(
-                status: engine.isRunning ? .active : .inactive,
-                label: engine.isRunning ? "Running" : "Stopped"
-            )
-
-            // Controls
-            HStack(spacing: 12) {
+                // Play/Stop + Settings – already inside the outer container
+                // so they fuse with the status indicator next to them
                 GlassIconButton(
                     icon: engine.isRunning ? "stop.fill" : "play.fill",
                     tint: engine.isRunning ? .red : .green
@@ -730,11 +721,11 @@ struct GlassTopBarView: View {
                     showingSettings = true
                 }
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            // The outer glass shape covers the whole bar
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        // Liquid Glass toolbar
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
     }
 }
 
@@ -858,17 +849,19 @@ struct GlassPresetCategoryBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                Button("All") {
-                    withAnimation { selectedCategory = nil }
-                }
-                .buttonStyle(GlassPillStyle(isSelected: selectedCategory == nil, tint: .accentColor))
-
-                ForEach(EffectPreset.PresetCategory.allCases, id: \.self) { category in
-                    Button(category.rawValue) {
-                        withAnimation { selectedCategory = category }
+            GlassEffectContainer(spacing: 12) {
+                HStack(spacing: 8) {
+                    Button("All") {
+                        withAnimation { selectedCategory = nil }
                     }
-                    .buttonStyle(GlassPillStyle(isSelected: selectedCategory == category, tint: category.color))
+                    .buttonStyle(GlassPillStyle(isSelected: selectedCategory == nil, tint: .accentColor))
+
+                    ForEach(EffectPreset.PresetCategory.allCases, id: \.self) { category in
+                        Button(category.rawValue) {
+                            withAnimation { selectedCategory = category }
+                        }
+                        .buttonStyle(GlassPillStyle(isSelected: selectedCategory == category, tint: category.color))
+                    }
                 }
             }
             .padding()
@@ -897,9 +890,8 @@ struct GlassPresetCard: View {
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(preset.category.color.opacity(0.2))
                         .foregroundStyle(preset.category.color)
-                        .clipShape(Capsule())
+                        .glassEffect(.regular.tint(preset.category.color.opacity(0.2)), in: Capsule())
                 }
 
                 Text(preset.description)
@@ -915,8 +907,7 @@ struct GlassPresetCard: View {
                             .foregroundStyle(effect.type.color)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 4)
-                            .background(effect.type.color.opacity(0.2))
-                            .clipShape(Capsule())
+                            .glassEffect(.regular.tint(effect.type.color.opacity(0.25)), in: Capsule())
                     }
                 }
             }
@@ -931,42 +922,185 @@ struct GlassPresetCard: View {
 }
 
 // MARK: - Settings View
+// Apple-style settings with proper section grouping and professional appearance
 
 struct SettingsView: View {
     @Bindable var engine: AudioEngineManager
     @Environment(\.dismiss) private var dismiss
+
+    @State private var showResetConfirmation = false
 
     var body: some View {
         NavigationStack {
             ZStack {
                 AdaptiveBackground()
 
-                Form {
-                    Section("Audio") {
-                        GlassStatusRow(label: "Status", value: engine.isRunning ? "Running" : "Stopped", isPositive: engine.isRunning)
-                        GlassStatusRow(label: "Permission", value: engine.hasPermission ? "Granted" : "Denied", isPositive: engine.hasPermission)
-                    }
+                ScrollView {
+                    VStack(spacing: Spacing.lg) {
+                        // Audio Engine Section
+                        SettingsSection(title: "Audio Engine") {
+                            SettingsRow(
+                                icon: "waveform.circle.fill",
+                                iconColor: engine.isRunning ? .green : .red,
+                                title: "Engine Status",
+                                subtitle: engine.isRunning ? "Audio processing active" : "Engine stopped"
+                            ) {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(engine.isRunning ? Color.green : Color.red)
+                                        .frame(width: 10, height: 10)
+                                    Text(engine.isRunning ? "Running" : "Stopped")
+                                        .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(engine.isRunning ? .green : .red)
+                                }
+                            }
 
-                    Section("Effects Chain") {
-                        LabeledContent("Active Effects") {
-                            Text("\(engine.effectsChain.filter { $0.isEnabled }.count)")
+                            GlassDivider()
+
+                            SettingsRow(
+                                icon: "mic.fill",
+                                iconColor: engine.hasPermission ? .green : .orange,
+                                title: "Microphone Access",
+                                subtitle: engine.hasPermission ? "Permission granted" : "Permission required"
+                            ) {
+                                Image(systemName: engine.hasPermission ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(engine.hasPermission ? .green : .orange)
+                            }
                         }
-                        LabeledContent("Total Effects") {
-                            Text("\(engine.effectsChain.count)")
+
+                        // Audio Input Section
+                        SettingsSection(title: "Audio Input") {
+                            SettingsRow(
+                                icon: engine.currentInputDeviceType.icon,
+                                iconColor: engine.currentInputDeviceType.color,
+                                title: "Input Device",
+                                subtitle: engine.currentInputDeviceName
+                            ) {
+                                Button {
+                                    engine.refreshInputDevices()
+                                } label: {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            GlassDivider()
+
+                            SettingsRow(
+                                icon: "slider.horizontal.3",
+                                iconColor: .purple,
+                                title: "Input Level",
+                                subtitle: "Current signal strength"
+                            ) {
+                                // Mini level meter
+                                HStack(spacing: 2) {
+                                    ForEach(0..<8, id: \.self) { i in
+                                        RoundedRectangle(cornerRadius: 1)
+                                            .fill(
+                                                i < Int(engine.inputLevel * 8)
+                                                    ? (i < 6 ? Color.green : Color.orange)
+                                                    : Color.primary.opacity(0.15)
+                                            )
+                                            .frame(width: 4, height: 16)
+                                    }
+                                }
+                            }
                         }
-                    }
 
-                    Section("About") {
-                        LabeledContent("Version", value: "1.0")
-                        LabeledContent("Built with", value: "Swift 6 & SwiftUI")
-                        LabeledContent("Architecture", value: "Clean Architecture + SOLID")
+                        // Effects Chain Section
+                        SettingsSection(title: "Effects Chain") {
+                            SettingsRow(
+                                icon: "square.stack.3d.up.fill",
+                                iconColor: .riffPrimary,
+                                title: "Active Effects",
+                                subtitle: "\(engine.effectsChain.filter { $0.isEnabled }.count) of \(engine.effectsChain.count) enabled"
+                            ) {
+                                Text("\(engine.effectsChain.filter { $0.isEnabled }.count)")
+                                    .font(.title2.weight(.bold).monospacedDigit())
+                                    .foregroundStyle(Color.riffPrimary)
+                            }
 
-                        Text("RiffNode is a visual guitar effects playground built for the Swift Student Challenge 2026. Connect your guitar through an audio interface and explore a world of effects!")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                            GlassDivider()
+
+                            SettingsRow(
+                                icon: "arrow.counterclockwise",
+                                iconColor: .orange,
+                                title: "Reset Effects",
+                                subtitle: "Restore default chain"
+                            ) {
+                                Button("Reset") {
+                                    showResetConfirmation = true
+                                }
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.orange)
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 14)
+                                .glassEffect(.regular.tint(.orange.opacity(0.15)), in: Capsule())
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        // About Section
+                        SettingsSection(title: "About") {
+                            // App Info Header
+                            HStack(spacing: 16) {
+                                Image("RiffNodeLogo")
+                                    .renderingMode(.template)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 60, height: 60)
+                                    .foregroundStyle(Color.riffPrimary)
+                                    .padding(12)
+                                    .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.12)), in: RoundedRectangle(cornerRadius: 16))
+
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("RiffNode")
+                                        .font(.title2.bold())
+
+                                    Text("Version 1.0")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+
+                                    Text("Swift Student Challenge 2026")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+
+                                Spacer()
+                            }
+                            .padding(.bottom, Spacing.sm)
+
+                            GlassDivider()
+
+                            SettingsInfoRow(label: "Built with", value: "Swift 6 & SwiftUI")
+                            GlassDivider()
+                            SettingsInfoRow(label: "UI Framework", value: "iOS 26 Liquid Glass")
+                            GlassDivider()
+                            SettingsInfoRow(label: "Audio Engine", value: "AVAudioEngine")
+                            GlassDivider()
+                            SettingsInfoRow(label: "Architecture", value: "Clean Architecture")
+                        }
+
+                        // Description
+                        VStack(spacing: Spacing.sm) {
+                            Text("Guitar Effects Playground")
+                                .font(.headline)
+                                .foregroundStyle(.primary)
+
+                            Text("RiffNode is a visual guitar effects playground. Connect your guitar through an audio interface and explore a world of effects with AI-powered tone assistance, real-time spectrum analysis, and hands-free gesture control.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding()
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
+                        .padding(.horizontal, Spacing.lg)
                     }
+                    .padding(.vertical, Spacing.md)
                 }
-                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Settings")
             .toolbar {
@@ -974,10 +1108,126 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .confirmationDialog("Reset Effects Chain?", isPresented: $showResetConfirmation) {
+                Button("Reset to Default", role: .destructive) {
+                    // Reset effects chain to default
+                    engine.effectsChain.forEach { effect in
+                        if !effect.isEnabled {
+                            engine.toggleEffect(effect)
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will enable all effects and reset their parameters to default values.")
+            }
         }
         #if os(macOS)
-        .frame(width: 400, height: 400)
+        .frame(width: 450, height: 650)
         #endif
+    }
+}
+
+// MARK: - Settings Section
+
+private struct SettingsSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            Text(title.uppercased())
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, Spacing.lg + 4)
+
+            VStack(spacing: 0) {
+                content
+            }
+            .padding(Spacing.md)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, Spacing.lg)
+        }
+    }
+}
+
+// MARK: - Settings Row
+
+private struct SettingsRow<Trailing: View>: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let subtitle: String
+    @ViewBuilder let trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 14) {
+            // Icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(iconColor.opacity(0.15))
+                    .frame(width: 36, height: 36)
+
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(iconColor)
+            }
+
+            // Labels
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            // Trailing content
+            trailing
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Settings Info Row
+
+private struct SettingsInfoRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Text(value)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
+        }
+        .padding(.vertical, 6)
+    }
+}
+
+// MARK: - Settings Section Header
+
+private struct SettingsSectionHeader: View {
+    let title: String
+
+    init(_ title: String) { self.title = title }
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(size: 11, weight: .bold))
+            .foregroundStyle(.secondary)
+            .padding(.bottom, Spacing.xs)
     }
 }
 

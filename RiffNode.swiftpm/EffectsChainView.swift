@@ -9,7 +9,7 @@ struct EffectsChainView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            // Header
+            // Header – plain row, no glass on the title; buttons are capsule glass
             HStack {
                 HStack(spacing: 10) {
                     Image(systemName: "cable.connector.horizontal")
@@ -20,7 +20,7 @@ struct EffectsChainView: View {
 
                 Spacer()
 
-                // Add effect menu - organized by category
+                // Add effect menu
                 Menu {
                     ForEach(EffectCategory.allCases) { category in
                         Menu(category.rawValue) {
@@ -43,12 +43,10 @@ struct EffectsChainView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
                     .padding(.vertical, 8)
-                    .padding(.horizontal, 14)
-                    .contentShape(Capsule())
+                    .padding(.horizontal, 16)
                     .glassEffect(.regular, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .clipShape(Capsule())
 
                 // Stage Mode button
                 Button {
@@ -61,7 +59,7 @@ struct EffectsChainView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.primary)
                     .padding(.vertical, 8)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 16)
                     .glassEffect(.regular, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -96,27 +94,48 @@ struct GlassSignalChainView: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            GlassEffectContainer(spacing: 0) {
-                signalChainContent
-            }
+            signalChainContent
         }
-        .glassCard(cornerRadius: 20, padding: 16)
+        // Dark pedalboard surface – no glass here
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.13), Color(white: 0.09)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color(white: 0.28), Color(white: 0.1)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+        .padding(.horizontal)
     }
 
     private var signalChainContent: some View {
         HStack(spacing: 0) {
-            GlassJackView(label: "IN", isInput: true)
-            GlassConnectorView()
+            PedalboardJack(label: "IN", isInput: true)
+            PedalboardCable()
 
             ForEach(Array(engine.effectsChain.enumerated()), id: \.element.id) { index, effect in
                 pedalWithDragDrop(effect: effect, index: index)
-                GlassConnectorView()
+                PedalboardCable()
             }
 
-            GlassJackView(label: "OUT", isInput: false)
+            PedalboardJack(label: "OUT", isInput: false)
         }
-        .padding(.vertical, 20)
-        .padding(.horizontal, 8)
+        .padding(.vertical, 22)
+        .padding(.horizontal, 12)
     }
 
     private func pedalWithDragDrop(effect: EffectNode, index: Int) -> some View {
@@ -181,64 +200,65 @@ struct GlassSignalChainView: View {
     }
 }
 
-// MARK: - Glass Jack View
+// MARK: - Pedalboard Jack (hardware-style)
 
-struct GlassJackView: View {
+struct PedalboardJack: View {
     let label: String
     let isInput: Bool
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 8) {
+            // Jack housing – dark metal cylinder
             ZStack {
-                // Jack housing with Liquid Glass effect
-                Color.clear
-                    .frame(width: 44, height: 54)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
-
-                // Jack hole
-                Circle()
+                RoundedRectangle(cornerRadius: 7)
                     .fill(
-                        RadialGradient(
-                            colors: [Color.black.opacity(0.8), Color.gray.opacity(0.3)],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 12
+                        LinearGradient(
+                            colors: [Color(white: 0.22), Color(white: 0.12)],
+                            startPoint: .top,
+                            endPoint: .bottom
                         )
                     )
-                    .frame(width: 24, height: 24)
-                    .overlay {
+                    .frame(width: 42, height: 52)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .stroke(Color(white: 0.28), lineWidth: 1)
+                    )
+
+                // Jack hole – dark circle with rim
+                Circle()
+                    .fill(Color(white: 0.04))
+                    .frame(width: 22, height: 22)
+                    .overlay(
                         Circle()
-                            .strokeBorder(Color.gray.opacity(0.5), lineWidth: 2)
-                    }
+                            .stroke(Color(white: 0.3), lineWidth: 1.5)
+                    )
+                    .shadow(color: .black.opacity(0.5), radius: 2, x: 0, y: 1)
             }
 
+            // Label
             Text(label)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(isInput ? .green : .cyan)
+                .foregroundStyle(isInput ? Color.green : Color(white: 0.55))
         }
     }
 }
 
-// MARK: - Glass Connector View
+// MARK: - Pedalboard Cable (hardware-style)
 
-struct GlassConnectorView: View {
+struct PedalboardCable: View {
     var body: some View {
-        ZStack {
-            // Connection line
-            Rectangle()
+        VStack(spacing: 0) {
+            // Cable line – slightly curved look via a thin rounded rect
+            RoundedRectangle(cornerRadius: 2)
                 .fill(
                     LinearGradient(
-                        colors: [.white.opacity(0.1), .white.opacity(0.2), .white.opacity(0.1)],
+                        colors: [Color(white: 0.22), Color(white: 0.18), Color(white: 0.22)],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .frame(width: 24, height: 3)
-
-            // Signal dot
-            Circle()
-                .fill(.cyan.opacity(0.4))
-                .frame(width: 4, height: 4)
+                .frame(width: 28, height: 3)
+                .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 1)
         }
     }
 }
@@ -360,11 +380,10 @@ struct GlassEffectEducationView: View {
                         ForEach(effectType.commonGenres, id: \.self) { genre in
                             Text(genre)
                                 .font(.caption2)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.purple)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .background(Color.purple.opacity(0.3))
-                                .clipShape(Capsule())
+                                .glassEffect(.regular.tint(.purple.opacity(0.2)), in: Capsule())
                         }
                     }
                 }

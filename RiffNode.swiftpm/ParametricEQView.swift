@@ -16,7 +16,10 @@ struct ParametricEQView: View {
             GlassEQHeader(
                 isAnalyzerActive: $isAnalyzerActive,
                 bands: $bands,
-                onReset: { bands = EQBand.defaultBands }
+                onReset: {
+                    bands = EQBand.defaultBands
+                    engine.resetEQ()
+                }
             )
 
             // Main EQ Display with glass styling - larger for direct interaction
@@ -68,6 +71,22 @@ struct ParametricEQView: View {
             }
         }
         .animation(.spring(duration: 0.25), value: selectedBand)
+        // Sync EQ bands with audio engine whenever they change
+        .onChange(of: bands) { _, newBands in
+            syncEQToEngine(newBands)
+        }
+        .onAppear {
+            // Initial sync on appear
+            syncEQToEngine(bands)
+        }
+    }
+
+    /// Sync the UI EQ bands to the audio engine
+    private func syncEQToEngine(_ bands: [EQBand]) {
+        let bandConfigs = bands.map { band in
+            (frequency: band.frequency, gain: band.gain, q: band.q, isEnabled: band.isEnabled)
+        }
+        engine.updateAllEQBands(bandConfigs)
     }
 }
 
@@ -104,7 +123,7 @@ struct GlassEQHeader: View {
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.primary)
                     .padding(.vertical, 6)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 12)
                     .glassEffect(.regular, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -126,12 +145,15 @@ struct GlassEQHeader: View {
                 .buttonStyle(GlassPillStyle(isSelected: isAnalyzerActive, tint: .primary))
 
                 // Reset button
-                Button("Reset", action: onReset)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .padding(.vertical, 6)
-                    .padding(.horizontal, 10)
-                    .glassEffect(.regular, in: Capsule())
+                Button(action: onReset) {
+                    Text("Reset")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .glassEffect(.regular, in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -142,6 +164,7 @@ struct GlassEQHeader: View {
 struct GlassEQPresetPicker: View {
     @Binding var bands: [EQBand]
     @Binding var isPresented: Bool
+    var onPresetApplied: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -153,38 +176,41 @@ struct GlassEQPresetPicker: View {
             }
             .padding()
 
-            // Preset list
+            // Preset list – each item is its own glass pill so they fuse
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                    ForEach(EQPreset.presets) { preset in
-                        Button {
-                            withAnimation(.spring(duration: 0.3)) {
-                                var newBands = bands
-                                preset.applyTo(&newBands)
-                                bands = newBands
-                            }
-                            isPresented = false
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: preset.icon)
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(.primary)
-                                    .frame(width: 24)
+                GlassEffectContainer(spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        ForEach(EQPreset.presets) { preset in
+                            Button {
+                                withAnimation(.spring(duration: 0.3)) {
+                                    var newBands = bands
+                                    preset.applyTo(&newBands)
+                                    bands = newBands
+                                }
+                                onPresetApplied?()
+                                isPresented = false
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: preset.icon)
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(.primary)
+                                        .frame(width: 24)
 
-                                Text(preset.name)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(.primary)
+                                    Text(preset.name)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.primary)
 
-                                Spacer()
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8))
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding()
                 }
-                .padding()
             }
         }
         .frame(width: 280, height: 400)
@@ -583,15 +609,21 @@ struct GlassEQBandStrip: View {
                     }
                 } label: {
                     VStack(spacing: 2) {
-                        // Band number with type indicator
+                        // Band number – selected gets a tinted glass circle
                         ZStack {
                             Circle()
-                                .fill(isSelected ? band.type.color : band.type.color.opacity(0.3))
+                                .fill(.clear)
                                 .frame(width: 20, height: 20)
+                                .glassEffect(
+                                    isSelected
+                                        ? .regular.tint(band.type.color)
+                                        : .regular.tint(band.type.color.opacity(0.2)),
+                                    in: Circle()
+                                )
 
                             Text("\(index + 1)")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(isSelected ? .black : .white)
+                                .foregroundStyle(isSelected ? .white : .primary)
                         }
 
                         // Frequency
@@ -627,32 +659,30 @@ struct GlassEQBandControls: View {
     var body: some View {
         GlassCard(cornerRadius: 12) {
             VStack(spacing: 12) {
-                // Type selector
-                HStack(spacing: 6) {
-                    ForEach(EQBand.BandType.allCases, id: \.self) { type in
-                        Button {
-                            band.type = type
-                        } label: {
-                            VStack(spacing: 2) {
-                                Image(systemName: type.icon)
-                                    .font(.system(size: 12))
-                                Text(type.shortName)
-                                    .font(.system(size: 8, weight: .medium))
-                            }
-                            .frame(width: 46, height: 32)
-                            .foregroundStyle(band.type == type ? .black : .secondary)
-                            .background {
-                                if band.type == type {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(type.color.opacity(0.8))
+                // Type selector – each type pill gets glass; selected one is tinted
+                GlassEffectContainer(spacing: 6) {
+                    HStack(spacing: 6) {
+                        ForEach(EQBand.BandType.allCases, id: \.self) { type in
+                            Button {
+                                band.type = type
+                            } label: {
+                                VStack(spacing: 2) {
+                                    Image(systemName: type.icon)
+                                        .font(.system(size: 12))
+                                    Text(type.shortName)
+                                        .font(.system(size: 8, weight: .medium))
                                 }
+                                .frame(width: 46, height: 32)
+                                .foregroundStyle(band.type == type ? .white : .secondary)
+                                .glassEffect(
+                                    band.type == type
+                                        ? .regular.tint(type.color)
+                                        : .regular,
+                                    in: RoundedRectangle(cornerRadius: 6)
+                                )
                             }
-                            .modifier(ConditionalGlassModifier(
-                                isEnabled: band.type != type,
-                                shape: RoundedRectangle(cornerRadius: 6)
-                            ))
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
 
@@ -748,7 +778,7 @@ struct GlassEQBandControls: View {
 
 // MARK: - EQ Band Model
 
-struct EQBand: Identifiable {
+struct EQBand: Identifiable, Equatable {
     let id: Int
     var frequency: Float      // 20 - 20000 Hz
     var gain: Float           // -24 to +24 dB

@@ -27,11 +27,16 @@ struct BackingTrackView: View {
                     onImport: { isImporting = true }
                 )
 
-                // Track info and waveform preview
+                // Track info, waveform preview, and timeline
                 GlassTrackInfoView(
                     trackName: loadedTrackName,
                     isPlaying: engine.isBackingTrackPlaying,
-                    isLoading: isLoading
+                    isLoading: isLoading,
+                    currentTime: engine.backingTrackCurrentTime,
+                    duration: engine.backingTrackDuration,
+                    onSeek: { time in
+                        engine.seekBackingTrack(to: time)
+                    }
                 )
 
                 // Transport controls
@@ -123,7 +128,7 @@ struct GlassMediaPlayerHeader: View {
                 }
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.primary)
-                .padding(.vertical, 8)
+                .padding(.vertical, 6)
                 .padding(.horizontal, 14)
                 .glassEffect(.regular, in: Capsule())
             }
@@ -138,56 +143,135 @@ struct GlassTrackInfoView: View {
     let trackName: String?
     let isPlaying: Bool
     let isLoading: Bool
+    let currentTime: TimeInterval
+    let duration: TimeInterval
+    let onSeek: (TimeInterval) -> Void
+
+    @State private var isDragging = false
+    @State private var dragProgress: Double = 0
+
+    private var progress: Double {
+        guard duration > 0 else { return 0 }
+        return isDragging ? dragProgress : (currentTime / duration)
+    }
 
     var body: some View {
-        HStack(spacing: 16) {
-            // Album art placeholder / waveform indicator - native iOS 26 glass
-            ZStack {
-                if isLoading {
-                    ProgressView()
-                        .controlSize(.regular)
-                        .tint(.primary)
-                } else if trackName != nil {
-                    MiniWaveformView(isPlaying: isPlaying)
-                } else {
-                    Image(systemName: "waveform")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(width: 64, height: 64)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-
-            // Track info
-            VStack(alignment: .leading, spacing: 6) {
-                if let name = trackName {
-                    Text(formatTrackName(name))
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-
-                    HStack(spacing: 8) {
-                        // Status indicator
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(isPlaying ? .green : .secondary)
-                                .frame(width: 6, height: 6)
-                            Text(isPlaying ? "Playing" : "Ready")
-                                .font(.caption)
-                                .foregroundStyle(isPlaying ? .green : .secondary)
-                        }
+        VStack(spacing: 12) {
+            HStack(spacing: 16) {
+                // Album art placeholder / waveform indicator - native iOS 26 glass
+                ZStack {
+                    if isLoading {
+                        ProgressView()
+                            .controlSize(.regular)
+                            .tint(.primary)
+                    } else if trackName != nil {
+                        MiniWaveformView(isPlaying: isPlaying)
+                    } else {
+                        Image(systemName: "waveform")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
                     }
-                } else {
-                    Text("No track loaded")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-
-                    Text("Import an audio file to jam along")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
                 }
+                .frame(width: 64, height: 64)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+
+                // Track info
+                VStack(alignment: .leading, spacing: 6) {
+                    if let name = trackName {
+                        Text(formatTrackName(name))
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+
+                        HStack(spacing: 8) {
+                            // Status indicator
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(isPlaying ? .green : .secondary)
+                                    .frame(width: 6, height: 6)
+                                Text(isPlaying ? "Playing" : "Ready")
+                                    .font(.caption)
+                                    .foregroundStyle(isPlaying ? .green : .secondary)
+                            }
+                        }
+                    } else {
+                        Text("No track loaded")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Text("Import an audio file to jam along")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+
+                Spacer()
             }
 
-            Spacer()
+            // Timeline scrubber (only shown when track is loaded)
+            if trackName != nil && duration > 0 {
+                VStack(spacing: 6) {
+                    // Progress bar with scrubber
+                    GeometryReader { geometry in
+                        ZStack(alignment: .leading) {
+                            // Track background
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.primary.opacity(0.15))
+                                .frame(height: 6)
+
+                            // Progress fill
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.riffPrimary.opacity(0.7), Color.riffPrimary],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: geometry.size.width * progress, height: 6)
+
+                            // Scrubber knob
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: isDragging ? 16 : 12, height: isDragging ? 16 : 12)
+                                .shadow(color: .black.opacity(0.2), radius: 3)
+                                .position(
+                                    x: max(6, min(geometry.size.width - 6, geometry.size.width * progress)),
+                                    y: 3
+                                )
+                        }
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    isDragging = true
+                                    let newProgress = max(0, min(1, value.location.x / geometry.size.width))
+                                    dragProgress = newProgress
+                                }
+                                .onEnded { value in
+                                    isDragging = false
+                                    let newProgress = max(0, min(1, value.location.x / geometry.size.width))
+                                    onSeek(newProgress * duration)
+                                }
+                        )
+                    }
+                    .frame(height: 16)
+
+                    // Time labels
+                    HStack {
+                        Text(formatTime(isDragging ? dragProgress * duration : currentTime))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Text(formatTime(duration))
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.top, 4)
+                .animation(.spring(duration: 0.2), value: isDragging)
+            }
         }
     }
 
@@ -202,6 +286,12 @@ struct GlassTrackInfoView: View {
             displayName = String(displayName.prefix(27)) + "..."
         }
         return displayName
+    }
+
+    private func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 
@@ -252,10 +342,10 @@ struct GlassTransportControls: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // Centered transport buttons - wrapped for liquid fusion effect
+            // Centered transport buttons – fuse into one liquid group
             GlassEffectContainer(spacing: 16) {
                 HStack(spacing: 16) {
-                    // Stop button
+                    // Stop button – circle glass
                     Button {
                         onStop()
                     } label: {
@@ -269,7 +359,7 @@ struct GlassTransportControls: View {
                     .buttonStyle(.plain)
                     .disabled(!hasTrack || !isPlaying)
 
-                    // Play/Pause button - full Liquid Glass with tint
+                    // Play/Pause button – tinted circle glass (primary CTA)
                     Button {
                         if isPlaying { onStop() } else { onPlay() }
                     } label: {
@@ -277,17 +367,19 @@ struct GlassTransportControls: View {
                             if isLoading {
                                 ProgressView()
                                     .controlSize(.small)
-                                    .tint(.white)
+                                    .tint(.primary)
                             } else {
                                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                                     .font(.system(size: 22, weight: .bold))
-                                    .foregroundStyle(Color.white)
+                                    .foregroundStyle(.primary)
                             }
                         }
                         .frame(width: 56, height: 56)
                         .contentShape(Circle())
                         .glassEffect(
-                            hasTrack ? .regular.tint(Color.riffPrimary) : .regular,
+                            hasTrack
+                                ? .regular.tint(Color.riffPrimary.opacity(0.2))
+                                : .regular,
                             in: Circle()
                         )
                     }
@@ -296,7 +388,7 @@ struct GlassTransportControls: View {
                 }
             }
 
-            // Volume slider - full Liquid Glass
+            // Volume slider – native Liquid Glass slider
             HStack(spacing: 10) {
                 Image(systemName: "speaker.fill")
                     .font(.system(size: 12))

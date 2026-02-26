@@ -361,14 +361,7 @@ struct ChordDetectorView: View {
             }
         }
         .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(red: 0.1, green: 0.08, blue: 0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(Color.yellow.opacity(0.3), lineWidth: 1)
-                )
-        )
+        .glassEffect(.regular.tint(.yellow.opacity(0.1)), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var tuningDirection: String {

@@ -79,7 +79,7 @@ final class AIChatbotController {
 
         if success {
             // Create response with effect recommendations
-            var response = ChatMessage(
+            let response = ChatMessage(
                 role: .assistant,
                 content: processor.lastExplanation,
                 appliedEffects: processor.lastEnabledEffects
@@ -154,8 +154,7 @@ struct ChatMessageBubble: View {
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(bubbleBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .glassEffect(bubbleTint, in: RoundedRectangle(cornerRadius: 16))
 
                 // Effect badges and apply button for AI responses
                 if let effects = message.appliedEffects, !effects.isEmpty {
@@ -172,7 +171,7 @@ struct ChatMessageBubble: View {
                             }
                         }
 
-                        // Apply button
+                        // Apply button – tinted capsule glass
                         if !message.isApplied {
                             Button {
                                 onApply?()
@@ -182,11 +181,10 @@ struct ChatMessageBubble: View {
                                     Text("Apply")
                                 }
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
+                                .foregroundStyle(.primary)
                                 .padding(.vertical, 6)
-                                .background(Color.riffPrimary)
-                                .clipShape(Capsule())
+                                .padding(.horizontal, 14)
+                                .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.18)), in: Capsule())
                             }
                             .buttonStyle(.plain)
                         } else {
@@ -207,12 +205,14 @@ struct ChatMessageBubble: View {
         }
     }
 
-    @ViewBuilder
-    private var bubbleBackground: some View {
+    /// Glass tint for the bubble – user messages get an indigo tint,
+    /// assistant messages get a purple tint.  Both render as proper
+    /// Liquid Glass rather than flat colour fills.
+    private var bubbleTint: Glass {
         if message.role == .user {
-            Color.riffPrimary.opacity(0.15)
+            return .regular.tint(Color.riffPrimary.opacity(0.2))
         } else {
-            Color.purple.opacity(0.15)
+            return .regular.tint(.purple.opacity(0.2))
         }
     }
 }
@@ -228,8 +228,7 @@ struct EffectBadge: View {
             .foregroundStyle(effectColor)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(effectColor.opacity(0.2))
-            .clipShape(Capsule())
+            .glassEffect(.regular.tint(effectColor.opacity(0.2)), in: Capsule())
     }
 
     private var effectColor: Color {
@@ -386,23 +385,24 @@ struct AIChatbotOverlayView: View {
 
     private var quickSuggestionsBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(controller.quickSuggestions, id: \.self) { suggestion in
-                    Button {
-                        Task {
-                            await controller.sendMessage(suggestion, processor: processor, engine: engine)
+            GlassEffectContainer(spacing: 12) {
+                HStack(spacing: 8) {
+                    ForEach(controller.quickSuggestions, id: \.self) { suggestion in
+                        Button {
+                            Task {
+                                await controller.sendMessage(suggestion, processor: processor, engine: engine)
+                            }
+                        } label: {
+                            Text(suggestion)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.primary)
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 12)
+                                .glassEffect(.regular, in: Capsule())
                         }
-                    } label: {
-                        Text(suggestion)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(.primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.primary.opacity(0.05))
-                            .clipShape(Capsule())
+                        .buttonStyle(.plain)
+                        .disabled(controller.isProcessing)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(controller.isProcessing)
                 }
             }
             .padding(.horizontal, 16)
@@ -462,8 +462,7 @@ struct TypingIndicator: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(Color.purple.opacity(0.15))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .glassEffect(.regular.tint(.purple.opacity(0.15)), in: RoundedRectangle(cornerRadius: 16))
         .onAppear {
             withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
                 animationPhase = .pi * 2
@@ -484,19 +483,18 @@ struct AIChatbotFAB: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                // Main button
+                // Pure Liquid Glass circle – no colour tint
                 Circle()
                     .fill(.clear)
                     .frame(width: 56, height: 56)
-                    .glassEffect(.regular.tint(.purple), in: Circle())
+                    .glassEffect(.regular, in: Circle())
 
-                // Icon
+                // Icon – use .primary so it adapts to the glass backdrop
                 Image(systemName: isExpanded ? "xmark" : "wand.and.stars")
                     .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.purple)
-                    .rotationEffect(.degrees(isExpanded ? 0 : 0))
+                    .foregroundStyle(.primary)
 
-                // New message indicator
+                // New-message badge
                 if hasNewMessage && !isExpanded {
                     Circle()
                         .fill(.red)
@@ -506,7 +504,7 @@ struct AIChatbotFAB: View {
             }
         }
         .buttonStyle(.plain)
-        .shadow(color: .purple.opacity(0.3), radius: isHovered ? 12 : 8, x: 0, y: 4)
+        .shadow(color: .black.opacity(isHovered ? 0.18 : 0.1), radius: isHovered ? 12 : 8, x: 0, y: 4)
         .scaleEffect(isHovered ? 1.05 : 1.0)
         .animation(.spring(duration: 0.2), value: isHovered)
         .onHover { isHovered = $0 }

@@ -469,14 +469,7 @@ struct VisionGestureControlView: View {
             }
         }
         .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(red: 0.08, green: 0.06, blue: 0.12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(Color.purple.opacity(0.3), lineWidth: 1)
-                )
-        )
+        .glassEffect(.regular.tint(.purple.opacity(0.1)), in: RoundedRectangle(cornerRadius: 12))
         .onAppear {
             controller.onGestureDetected = { gesture in
                 onGestureAction(gesture)

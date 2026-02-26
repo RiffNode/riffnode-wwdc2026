@@ -224,21 +224,17 @@ struct GlassPillStyle: ButtonStyle {
 
     @ViewBuilder
     func makeBody(configuration: Configuration) -> some View {
-        let label = configuration.label
+        configuration.label
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(isSelected ? .white : .secondary)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-
-        Group {
-            if isSelected {
-                label.background(Capsule().fill(tint))
-            } else {
-                label.glassEffect(.regular, in: Capsule())
-            }
-        }
-        .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            .glassEffect(
+                isSelected ? .regular.tint(tint) : .regular,
+                in: Capsule()
+            )
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 
@@ -504,8 +500,9 @@ struct GlassDivider: View {
 
 // MARK: - Effect Pedal Card
 
-/// A Liquid Glass card specifically designed for effect pedals
-/// Uses native .glassEffect() for premium lensing and refraction
+/// A realistic dark pedal enclosure with an LED and effect icon.
+/// Only the selected-state overlay uses glass; the body itself is solid dark
+/// so the pedalboard reads as hardware, not UI.
 struct GlassEffectPedal: View {
     let effect: EffectNode
     var isSelected: Bool = false
@@ -516,68 +513,90 @@ struct GlassEffectPedal: View {
     @State private var isHovering = false
 
     var body: some View {
-        VStack(spacing: 8) {
-            // LED indicator with glow
+        VStack(spacing: 10) {
+            // LED indicator
             ZStack {
+                // Outer glow when enabled
                 Circle()
-                    .fill(effect.isEnabled ? Color.green.opacity(0.3) : .clear)
-                    .frame(width: 16, height: 16)
-                    .blur(radius: 4)
+                    .fill(effect.isEnabled ? Color.green.opacity(0.35) : .clear)
+                    .frame(width: 18, height: 18)
+                    .blur(radius: 5)
 
+                // LED dot
                 Circle()
-                    .fill(effect.isEnabled ? Color.green : Color.gray.opacity(0.4))
+                    .fill(effect.isEnabled ? Color.green : Color(white: 0.35))
                     .frame(width: 10, height: 10)
-                    .shadow(color: effect.isEnabled ? .green.opacity(0.8) : .clear, radius: 6)
+                    .shadow(color: effect.isEnabled ? .green.opacity(0.9) : .clear, radius: 5)
             }
 
             // Effect icon
             Image(systemName: effect.type.icon)
-                .font(.system(size: 26, weight: .medium))
-                .foregroundStyle(effect.isEnabled ? effect.type.color : .secondary)
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(effect.isEnabled ? effect.type.color : Color(white: 0.55))
 
-            // Effect name
+            // Abbreviation label
             Text(effect.type.abbreviation)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(effect.isEnabled ? .primary : .secondary)
+                .foregroundStyle(effect.isEnabled ? .white : Color(white: 0.6))
 
+            // Full name – very subtle
             Text(effect.type.rawValue)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color(white: 0.4))
                 .lineLimit(1)
         }
-        .frame(width: 85, height: 115)
-        .glassEffect(
-            effect.isEnabled ? .regular.tint(effect.type.color) : .regular,
-            in: RoundedRectangle(cornerRadius: 16)
+        .frame(width: 88, height: 118)
+        // Dark pedal enclosure body
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(white: 0.17), Color(white: 0.11)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
         )
-        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+        // Metallic edge – subtle rim highlight on top, dark on bottom
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color(white: 0.35),          // top highlight
+                            Color(white: 0.18),          // sides
+                            Color(white: 0.08)           // bottom shadow
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 1.2
+                )
+        )
+        // Selected state: a glass-coloured ring around the pedal
         .overlay {
             if isSelected {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 14)
                     .strokeBorder(effect.type.color, lineWidth: 2.5)
-                    .shadow(color: effect.type.color.opacity(0.5), radius: 8)
+                    .shadow(color: effect.type.color.opacity(0.45), radius: 6)
             }
         }
-        .overlay {
-            // Delete button on hover
+        // Subtle drop shadow so pedals "sit" on the board
+        .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
+        // Delete badge on hover
+        .overlay(alignment: .topTrailing) {
             if isHovering {
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button(action: onDelete) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 18))
-                                .foregroundStyle(.white, .red)
-                                .shadow(color: .black.opacity(0.3), radius: 2)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Spacer()
+                Button(action: onDelete) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.white, .red)
+                        .shadow(color: .black.opacity(0.4), radius: 2)
                 }
-                .padding(6)
+                .buttonStyle(.plain)
+                .offset(x: 6, y: -6)
             }
         }
-        .scaleEffect(isHovering ? 1.02 : 1.0)
+        .scaleEffect(isHovering ? 1.03 : 1.0)
         .animation(.spring(duration: 0.2), value: isHovering)
         .onTapGesture(count: 2) { onDoubleTap() }
         .onTapGesture { onTap() }

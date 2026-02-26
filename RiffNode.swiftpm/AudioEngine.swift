@@ -48,6 +48,11 @@ final class AudioEngineManager: AudioManaging {
 
     private(set) var isBackingTrackPlaying = false
     var backingTrackVolume: Float = 0.5
+    private(set) var backingTrackDuration: TimeInterval = 0
+    private(set) var backingTrackCurrentTime: TimeInterval = 0
+    private var backingTrackStartTime: Date?
+    private var backingTrackStartPosition: TimeInterval = 0
+    private var playbackUpdateTimer: Timer?
 
     // MARK: - Private Audio Components
 
@@ -321,6 +326,59 @@ final class AudioEngineManager: AudioManaging {
         rebuildAudioChain()
     }
 
+    // MARK: - Parametric EQ Control
+
+    /// Update a specific EQ band's parameters
+    /// - Parameters:
+    ///   - bandIndex: Index of the band (0-9 for 10-band EQ)
+    ///   - frequency: Center frequency in Hz
+    ///   - gain: Gain in dB (-24 to +24)
+    ///   - q: Q factor (bandwidth)
+    func updateEQBand(index bandIndex: Int, frequency: Float, gain: Float, q: Float) {
+        guard let eq = effectUnits?.equalizer,
+              bandIndex >= 0 && bandIndex < eq.bands.count else {
+            return
+        }
+
+        let band = eq.bands[bandIndex]
+        band.frequency = frequency
+        band.gain = gain
+        band.bandwidth = q
+        band.bypass = false
+
+        print("updateEQBand: Band \(bandIndex) - freq: \(frequency)Hz, gain: \(gain)dB, Q: \(q)")
+    }
+
+    /// Update all EQ bands at once from an array of band configurations
+    /// - Parameter bands: Array of tuples containing (frequency, gain, q, isEnabled)
+    func updateAllEQBands(_ bands: [(frequency: Float, gain: Float, q: Float, isEnabled: Bool)]) {
+        guard let eq = effectUnits?.equalizer else { return }
+
+        for (index, config) in bands.enumerated() where index < eq.bands.count {
+            eq.bands[index].frequency = config.frequency
+            eq.bands[index].gain = config.gain
+            eq.bands[index].bandwidth = config.q
+            eq.bands[index].bypass = !config.isEnabled
+        }
+
+        print("updateAllEQBands: Updated \(bands.count) bands")
+    }
+
+    /// Reset all EQ bands to flat (0 dB)
+    func resetEQ() {
+        guard let eq = effectUnits?.equalizer else { return }
+
+        let frequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+        for (index, freq) in frequencies.enumerated() where index < eq.bands.count {
+            eq.bands[index].frequency = freq
+            eq.bands[index].gain = 0
+            eq.bands[index].bandwidth = 1.0
+            eq.bands[index].bypass = false
+        }
+
+        print("resetEQ: All bands reset to flat")
+    }
+
     // MARK: - Expression/CV Control
 
     /// Set expression value for CV-controlled parameters (e.g., Wah via mouth openness)
@@ -402,7 +460,7 @@ final class AudioEngineManager: AudioManaging {
 
     func loadBackingTrack(url: URL) async throws {
         print("loadBackingTrack: Loading \(url.lastPathComponent)")
-        
+
         let file = try AVAudioFile(forReading: url)
         let fileFormat = file.processingFormat
         let frameCount = AVAudioFrameCount(file.length)
@@ -415,8 +473,12 @@ final class AudioEngineManager: AudioManaging {
 
         try file.read(into: buffer)
         backingTrackBuffer = buffer
-        
-        print("loadBackingTrack: Loaded \(frameCount) frames")
+
+        // Calculate duration
+        backingTrackDuration = Double(frameCount) / fileFormat.sampleRate
+        backingTrackCurrentTime = 0
+
+        print("loadBackingTrack: Loaded \(frameCount) frames, duration: \(backingTrackDuration)s")
     }
 
     func playBackingTrack() {
@@ -428,22 +490,102 @@ final class AudioEngineManager: AudioManaging {
 
         player.stop()
 
-        player.scheduleBuffer(buffer, at: nil, options: .loops)
+        // Schedule from current position
+        let framePosition = AVAudioFramePosition(backingTrackCurrentTime * buffer.format.sampleRate)
+        let frameCount = AVAudioFrameCount(buffer.frameLength)
+
+        if framePosition < Int64(frameCount) {
+            // Create a segment buffer from current position
+            let remainingFrames = AVAudioFrameCount(Int64(frameCount) - framePosition)
+            if let segmentBuffer = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: remainingFrames) {
+                segmentBuffer.frameLength = remainingFrames
+
+                // Copy from offset position
+                if let srcData = buffer.floatChannelData, let dstData = segmentBuffer.floatChannelData {
+                    for channel in 0..<Int(buffer.format.channelCount) {
+                        memcpy(dstData[channel], srcData[channel].advanced(by: Int(framePosition)), Int(remainingFrames) * MemoryLayout<Float>.size)
+                    }
+                }
+
+                player.scheduleBuffer(segmentBuffer, at: nil, options: [])
+            }
+        }
+
         player.volume = backingTrackVolume
         player.play()
         isBackingTrackPlaying = true
-        
-        print("playBackingTrack: Started playing")
+        backingTrackStartTime = Date()
+        backingTrackStartPosition = backingTrackCurrentTime
+
+        // Start playback position update timer
+        startPlaybackTimer()
+
+        print("playBackingTrack: Started playing from \(backingTrackCurrentTime)s")
     }
 
     func stopBackingTrack() {
         backingTrackPlayer?.stop()
         isBackingTrackPlaying = false
+        stopPlaybackTimer()
+
+        // Update current time based on how long we played
+        if let startTime = backingTrackStartTime {
+            backingTrackCurrentTime = backingTrackStartPosition + Date().timeIntervalSince(startTime)
+            if backingTrackCurrentTime >= backingTrackDuration {
+                backingTrackCurrentTime = 0
+            }
+        }
+        backingTrackStartTime = nil
     }
 
     func setBackingTrackVolume(_ volume: Float) {
         backingTrackVolume = volume
         backingTrackPlayer?.volume = volume
+    }
+
+    func seekBackingTrack(to time: TimeInterval) {
+        let wasPlaying = isBackingTrackPlaying
+
+        // Stop current playback
+        if wasPlaying {
+            backingTrackPlayer?.stop()
+            stopPlaybackTimer()
+        }
+
+        // Update position
+        backingTrackCurrentTime = max(0, min(time, backingTrackDuration))
+
+        // Resume if was playing
+        if wasPlaying {
+            playBackingTrack()
+        }
+    }
+
+    private func startPlaybackTimer() {
+        stopPlaybackTimer()
+        playbackUpdateTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updatePlaybackPosition()
+            }
+        }
+    }
+
+    private func stopPlaybackTimer() {
+        playbackUpdateTimer?.invalidate()
+        playbackUpdateTimer = nil
+    }
+
+    private func updatePlaybackPosition() {
+        guard isBackingTrackPlaying, let startTime = backingTrackStartTime else { return }
+
+        backingTrackCurrentTime = backingTrackStartPosition + Date().timeIntervalSince(startTime)
+
+        // Check if playback completed
+        if backingTrackCurrentTime >= backingTrackDuration {
+            backingTrackCurrentTime = 0
+            backingTrackStartPosition = 0
+            backingTrackStartTime = Date()
+        }
     }
 
     // MARK: - Private Helpers
@@ -738,6 +880,7 @@ final class AudioEngineManager: AudioManaging {
     }
 
     private func runVisualizationLoop() async {
+        var frameCounter = 0
         while !Task.isCancelled && isRunning {
             let data = AudioSampleBuffer.shared.read()
 
@@ -745,17 +888,20 @@ final class AudioEngineManager: AudioManaging {
             outputLevel = inputLevel * 0.9
             waveformSamples = data.waveform
 
-            if !data.samples.isEmpty {
+            // Feed audio samples to analyzers every 3rd frame (~10 Hz for FFT)
+            // This reduces CPU load while still providing responsive analysis
+            frameCounter += 1
+            if frameCounter >= 3 && !data.samples.isEmpty && data.samples.count >= 2048 {
+                frameCounter = 0
                 latestAudioSamples = data.samples
 
-                // Feed audio samples to analyzers via callback
-                // This enables real-time FFT and chord detection
                 if let callback = onAudioSamplesAvailable {
                     callback(data.samples)
                 }
             }
 
-            try? await Task.sleep(for: .milliseconds(33))
+            // 16ms = ~60fps for smooth waveform visualization
+            try? await Task.sleep(for: .milliseconds(16))
         }
     }
 
@@ -806,26 +952,18 @@ private final class EffectUnitsContainer {
         compressor.wetDryMix = 30
         compressor.bypass = true
         
-        // EQ
-        equalizer = AVAudioUnitEQ(numberOfBands: 3)
+        // 10-band Parametric EQ
+        // Frequencies: 32, 64, 125, 250, 500, 1k, 2k, 4k, 8k, 16k Hz
+        equalizer = AVAudioUnitEQ(numberOfBands: 10)
         if let eq = equalizer {
-            eq.bands[0].filterType = .lowShelf
-            eq.bands[0].frequency = 100
-            eq.bands[0].bandwidth = 1.0
-            eq.bands[0].gain = 0
-            eq.bands[0].bypass = false
-            
-            eq.bands[1].filterType = .parametric
-            eq.bands[1].frequency = 1000
-            eq.bands[1].bandwidth = 1.0
-            eq.bands[1].gain = 0
-            eq.bands[1].bypass = false
-            
-            eq.bands[2].filterType = .highShelf
-            eq.bands[2].frequency = 4000
-            eq.bands[2].bandwidth = 1.0
-            eq.bands[2].gain = 0
-            eq.bands[2].bypass = false
+            let frequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
+            for (index, freq) in frequencies.enumerated() {
+                eq.bands[index].filterType = index == 0 ? .lowShelf : (index == 9 ? .highShelf : .parametric)
+                eq.bands[index].frequency = freq
+                eq.bands[index].bandwidth = 1.0
+                eq.bands[index].gain = 0
+                eq.bands[index].bypass = false
+            }
         }
         
         // Overdrive - soft clipping
@@ -1146,43 +1284,41 @@ enum AudioInputDeviceType: String {
 private func audioTapCallback(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
     // ✅ SAFE: This is a nonisolated global function.
     // It runs on the audio thread with no MainActor association.
-    
+
     guard let channelData = buffer.floatChannelData else { return }
     let frameLength = Int(buffer.frameLength)
     guard frameLength > 0 else { return }
-    
-    let channelCount = Int(buffer.format.channelCount)
-    let strideStep = 4
-    let outputSize = frameLength / strideStep
-    guard outputSize > 0 else { return }
 
-    // Read from BOTH channels and combine - Scarlett Solo guitar is on Input 2 (right channel)
-    var samples = [Float](repeating: 0, count: outputSize)
-    
-    for i in 0..<outputSize {
+    let channelCount = Int(buffer.format.channelCount)
+
+    // Get FULL samples for FFT analysis (no downsampling)
+    var fullSamples = [Float](repeating: 0, count: frameLength)
+
+    for i in 0..<frameLength {
         var maxSample: Float = 0
         // Check all channels and take the maximum (handles mono/stereo and different input configs)
         for ch in 0..<channelCount {
-            let sample = abs(channelData[ch][i * strideStep])
-            if sample > abs(maxSample) {
-                maxSample = channelData[ch][i * strideStep]
+            let sample = channelData[ch][i]
+            if abs(sample) > abs(maxSample) {
+                maxSample = sample
             }
         }
-        samples[i] = maxSample
+        fullSamples[i] = maxSample
     }
 
     // Use free functions to avoid any MainActor association
-    let rms = audioCalculateRMS(samples)
-    let waveform = audioDownsampleForDisplay(samples, targetCount: 128)
-    
+    let rms = audioCalculateRMS(fullSamples)
+    let waveform = audioDownsampleForDisplay(fullSamples, targetCount: 128)
+
     // DEBUG: Print RMS every ~1 second (every ~43 callbacks at 44100Hz/1024 buffer)
     audioTapDebugCounter += 1
     if audioTapDebugCounter % 43 == 0 {
-        print("🎸 Audio tap: channels=\(channelCount), rms=\(rms), maxSample=\(samples.max() ?? 0)")
+        print("🎸 Audio tap: channels=\(channelCount), frames=\(frameLength), rms=\(rms), maxSample=\(fullSamples.max() ?? 0)")
     }
 
     // Write to thread-safe buffer (no MainActor dependency)
-    AudioSampleBuffer.shared.write(samples: samples, waveform: waveform, rms: rms)
+    // Full samples will be accumulated in the buffer for FFT analysis
+    AudioSampleBuffer.shared.write(samples: fullSamples, waveform: waveform, rms: rms)
 }
 
 // Debug counter for tap callback (nonisolated(unsafe) required for Swift 6 strict concurrency)
@@ -1229,10 +1365,15 @@ final class AudioSampleBuffer: @unchecked Sendable {
     // Better for real-time audio where low latency is critical
     private let lock = OSAllocatedUnfairLock<AudioBufferState>(initialState: AudioBufferState())
 
+    // Target buffer size for FFT analysis (needs 2048+ samples)
+    private let analysisBufferSize = 4096
+
     private struct AudioBufferState {
         var samples: [Float] = []
         var waveform: [Float] = Array(repeating: 0, count: 128)
         var rms: Float = 0
+        // Accumulating buffer for FFT analysis
+        var analysisBuffer: [Float] = []
     }
 
     private init() {}
@@ -1243,13 +1384,22 @@ final class AudioSampleBuffer: @unchecked Sendable {
             state.samples = samples
             state.waveform = waveform
             state.rms = rms
+
+            // Accumulate samples for FFT analysis
+            state.analysisBuffer.append(contentsOf: samples)
+
+            // Keep buffer at target size (sliding window)
+            if state.analysisBuffer.count > analysisBufferSize {
+                state.analysisBuffer.removeFirst(state.analysisBuffer.count - analysisBufferSize)
+            }
         }
     }
 
     /// Read audio data from main thread (thread-safe, lock-free optimized)
     func read() -> AudioData {
         lock.withLock { state in
-            AudioData(samples: state.samples, waveform: state.waveform, rms: state.rms)
+            // Return the accumulated analysis buffer for FFT
+            AudioData(samples: state.analysisBuffer, waveform: state.waveform, rms: state.rms)
         }
     }
 }

@@ -57,7 +57,7 @@ struct AIToneCommandView: View {
                 TextField("Describe your tone...", text: $commandText)
                     .textFieldStyle(.plain)
                     .padding(12)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+                    .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 12))
 
                 Button {
                     Task {
@@ -80,23 +80,26 @@ struct AIToneCommandView: View {
                 .buttonStyle(.plain)
             }
 
-            // Quick suggestions
+            // Quick suggestions – fuse into one morphing glass group
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(suggestions, id: \.self) { suggestion in
-                        Button {
-                            commandText = suggestion
-                            Task {
-                                await processCommand()
+                GlassEffectContainer(spacing: 12) {
+                    HStack(spacing: 8) {
+                        ForEach(suggestions, id: \.self) { suggestion in
+                            Button {
+                                commandText = suggestion
+                                Task {
+                                    await processCommand()
+                                }
+                            } label: {
+                                Text(suggestion)
+                                    .font(.caption)
+                                    .foregroundStyle(.primary)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 12)
+                                    .glassEffect(.regular, in: Capsule())
                             }
-                        } label: {
-                            Text(suggestion)
-                                .font(.caption)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular, in: Capsule())
                     }
                 }
             }
@@ -119,15 +122,14 @@ struct AIToneCommandView: View {
                                         .font(.caption2.weight(.medium))
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
-                                        .background(.purple.opacity(0.2))
                                         .foregroundStyle(.purple)
-                                        .clipShape(Capsule())
+                                        .glassEffect(.regular.tint(.purple.opacity(0.15)), in: Capsule())
                                 }
                             }
                         }
                     }
 
-                    // Apply button
+                    // Apply button – tinted capsule glass
                     Button {
                         processor.applyToEngine(engine)
                     } label: {
@@ -136,11 +138,10 @@ struct AIToneCommandView: View {
                             Text("Apply This Tone")
                         }
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
+                        .foregroundStyle(.primary)
                         .padding(.vertical, 10)
-                        .background(.purple)
-                        .clipShape(Capsule())
+                        .padding(.horizontal, 20)
+                        .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.18)), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }

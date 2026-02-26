@@ -133,15 +133,15 @@ struct GuidedTourView: View {
                 )
                 .padding(.bottom, Spacing.xl)
 
-                // Skip option - consistent glass style
+                // Skip option – capsule glass pill
                 Button {
                     onComplete()
                 } label: {
                     Text("Skip Tour")
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Color.black.opacity(0.6))
-                        .padding(.vertical, 14)
-                        .padding(.horizontal, 24)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 20)
                         .glassEffect(.regular, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -280,24 +280,24 @@ struct GlassProgressBar: View {
 
     var body: some View {
         VStack(spacing: Spacing.sm) {
-            // Step indicators
-            GlassEffectContainer {
+            // Step indicators – use .primary so dots adapt to colour scheme
+            GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 0) {
                     ForEach(0..<steps, id: \.self) { step in
                         Circle()
-                            .fill(step <= currentStep ? Color.black : Color.white.opacity(0.3))
+                            .fill(step <= currentStep ? Color.riffPrimary : Color.primary.opacity(0.2))
                             .frame(width: 10, height: 10)
                             .overlay {
                                 if step == currentStep {
                                     Circle()
-                                        .stroke(Color.black, lineWidth: 2)
+                                        .stroke(Color.riffPrimary, lineWidth: 2)
                                         .frame(width: 18, height: 18)
                                 }
                             }
 
                         if step < steps - 1 {
                             Rectangle()
-                                .fill(step < currentStep ? Color.black : Color.white.opacity(0.2))
+                                .fill(step < currentStep ? Color.riffPrimary : Color.primary.opacity(0.15))
                                 .frame(height: 2)
                         }
                     }
@@ -462,9 +462,9 @@ struct GlassTourNavigation: View {
                             Text("Back")
                                 .font(.headline.weight(.semibold))
                         }
-                        .foregroundStyle(Color.black)
+                        .foregroundStyle(.primary)
                         .padding(.vertical, 14)
-                        .padding(.horizontal, 24)
+                        .padding(.horizontal, 28)
                         .glassEffect(.regular, in: Capsule())
                     }
                     .buttonStyle(.plain)
@@ -477,10 +477,10 @@ struct GlassTourNavigation: View {
                             .font(.headline.weight(.semibold))
                         Image(systemName: "chevron.right")
                     }
-                    .foregroundStyle(Color.black)
+                    .foregroundStyle(.primary)
                     .padding(.vertical, 14)
-                    .padding(.horizontal, 24)
-                    .glassEffect(.regular, in: Capsule())
+                    .padding(.horizontal, 32)
+                    .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.18)), in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .glassEffectID("next_btn", in: namespace)

@@ -199,7 +199,7 @@ final class FFTAnalyzer {
     }
 
     private func updateMagnitudesWithSmoothing(_ newValues: [Float]) {
-        let smoothing: Float = 0.3 // Lower = smoother
+        let smoothing: Float = 0.6 // Higher = faster response (0.6 = responsive, 0.3 = smooth)
 
         if magnitudes.count != newValues.count {
             magnitudes = newValues
@@ -304,39 +304,23 @@ struct FFTSpectrumView: View {
                 }
             }
 
-            // Spectrum Chart
+            // Spectrum Chart - use every other bin for performance (32 bars instead of 64)
             Chart {
-                ForEach(Array(analyzer.magnitudes.enumerated()), id: \.offset) { index, magnitude in
+                ForEach(Array(stride(from: 0, to: analyzer.magnitudes.count, by: 2).enumerated()), id: \.offset) { displayIndex, binIndex in
+                    let magnitude = binIndex < analyzer.magnitudes.count ? analyzer.magnitudes[binIndex] : 0
                     BarMark(
-                        x: .value("Bin", index),
+                        x: .value("Bin", displayIndex),
                         y: .value("Magnitude", magnitude)
                     )
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [barColor(for: index), barColor(for: index).opacity(0.5)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                    .foregroundStyle(barColor(for: binIndex))
                 }
             }
-            .chartXAxis {
-                AxisMarks(values: .stride(by: 8)) { value in
-                    if let index = value.as(Int.self), index < analyzer.frequencies.count {
-                        AxisValueLabel {
-                            Text(formatFrequency(analyzer.frequencies[index]))
-                                .font(.system(size: 8))
-                        }
-                    }
-                }
-            }
-            .chartYAxis {
-                AxisMarks(position: .leading) { _ in
-                    AxisGridLine()
-                }
-            }
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
             .chartYScale(domain: 0...1)
             .frame(height: 150)
+            .drawingGroup() // Flatten rendering for performance
+            .animation(.none, value: analyzer.magnitudes)
 
             // Band energies
             HStack(spacing: 8) {
@@ -345,16 +329,11 @@ struct FFTSpectrumView: View {
                     BandEnergyIndicator(band: band, energy: energy)
                 }
             }
+            .drawingGroup()
+            .animation(.none, value: analyzer.magnitudes)
         }
         .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(red: 0.08, green: 0.08, blue: 0.12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(Color.cyan.opacity(0.3), lineWidth: 1)
-                )
-        )
+        .glassEffect(.regular.tint(.cyan.opacity(0.1)), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func barColor(for index: Int) -> Color {
@@ -457,10 +436,7 @@ struct EducationalSpectrumView: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.black.opacity(0.3))
-        )
+        .glassEffect(.regular.tint(.cyan.opacity(0.08)), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func getEducationalNote() -> String {
@@ -497,16 +473,16 @@ struct MiniSpectrumIndicator: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.cyan)
 
-            // Mini spectrum bars
-            HStack(spacing: 2) {
-                ForEach(0..<16, id: \.self) { index in
-                    let binIndex = index * (analyzer.binCount / 16)
+            // Mini spectrum bars (8 bars for performance)
+            HStack(spacing: 3) {
+                ForEach(0..<8, id: \.self) { index in
+                    let binIndex = index * (analyzer.binCount / 8)
                     let magnitude = binIndex < analyzer.magnitudes.count ?
                         analyzer.magnitudes[binIndex] : 0
 
                     RoundedRectangle(cornerRadius: 1)
-                        .fill(barColor(for: index))
-                        .frame(width: 4, height: 8 + CGFloat(magnitude) * 24)
+                        .fill(barColor8(for: index))
+                        .frame(width: 5, height: 8 + CGFloat(magnitude) * 24)
                 }
             }
             .frame(height: 32)
@@ -527,14 +503,17 @@ struct MiniSpectrumIndicator: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .glassEffect(.regular, in: Capsule())
+        .animation(.none, value: analyzer.magnitudes)
     }
 
-    private func barColor(for index: Int) -> Color {
-        let position = Float(index) / 16.0
-        if position < 0.25 { return .red.opacity(0.8) }
-        if position < 0.5 { return .orange.opacity(0.8) }
-        if position < 0.75 { return .green.opacity(0.8) }
-        return .cyan.opacity(0.8)
+    private func barColor8(for index: Int) -> Color {
+        // 8 bars: indices 0-1 = bass (red), 2-3 = low-mid (orange), 4-5 = mid (green), 6-7 = high (cyan)
+        switch index {
+        case 0, 1: return .red.opacity(0.8)
+        case 2, 3: return .orange.opacity(0.8)
+        case 4, 5: return .green.opacity(0.8)
+        default: return .cyan.opacity(0.8)
+        }
     }
 
     private func formatFrequency(_ freq: Float) -> String {
