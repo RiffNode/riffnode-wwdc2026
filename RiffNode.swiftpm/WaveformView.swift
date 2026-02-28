@@ -311,180 +311,135 @@ struct AudioVisualizationPanel: View {
     }
 }
 
-// MARK: - Bar Visualization
+// MARK: - Bar Visualization (Canvas-based for performance)
 
 struct BarVisualizationView: View {
     let samples: [Float]
 
-    private func getBarSamples() -> [Float] {
-        let barCount = 32
-        guard !samples.isEmpty else {
-            return [Float](repeating: 0, count: barCount)
-        }
+    private let barCount = 32
+    // Smoothed bar heights – persisted across renders via @State
+    @State private var smoothedBars: [Float] = Array(repeating: 0, count: 32)
 
-        if samples.count >= barCount {
-            let samplesPerBar = samples.count / barCount
-            var result: [Float] = []
+    var body: some View {
+        Canvas { context, size in
+            let spacing: CGFloat = 2
+            let padH: CGFloat = 8
+            let barWidth = (size.width - padH * 2 - spacing * CGFloat(barCount - 1)) / CGFloat(barCount)
+            let halfH = size.height / 2
+
             for i in 0..<barCount {
-                let start = i * samplesPerBar
-                let end = min(start + samplesPerBar, samples.count)
-                let maxVal = samples[start..<end].max() ?? 0
-                result.append(maxVal)
+                let h = max(4, CGFloat(smoothedBars[i]) * size.height * 0.85)
+                let x = padH + CGFloat(i) * (barWidth + spacing)
+                let y = halfH - h / 2
+
+                let rect = CGRect(x: x, y: y, width: barWidth, height: h)
+
+                // Base bar fill
+                let brightness = 0.35 + (Double(i) / Double(barCount)) * 0.2
+                context.fill(
+                    Path(roundedRect: rect, cornerRadius: 2),
+                    with: .color(Color(white: brightness, opacity: 0.9))
+                )
+                // Specular highlight on top half
+                let highlightRect = CGRect(x: x, y: y, width: barWidth, height: h * 0.45)
+                context.fill(
+                    Path(roundedRect: highlightRect, cornerRadius: 2),
+                    with: .color(.white.opacity(0.18))
+                )
             }
-            return result
-        } else {
-            var result = [Float](repeating: 0, count: barCount)
-            for (i, sample) in samples.enumerated() {
-                let barIdx = (i * barCount) / samples.count
-                if barIdx < barCount {
-                    result[barIdx] = max(result[barIdx], sample)
-                }
-            }
-            return result
+        }
+        .onChange(of: samples) { _, newSamples in
+            updateSmoothedBars(newSamples)
         }
     }
 
-    var body: some View {
-        GeometryReader { geometry in
-            let barSamples = getBarSamples()
-            let barCount = barSamples.count
+    private func updateSmoothedBars(_ newSamples: [Float]) {
+        guard !newSamples.isEmpty else { return }
+        let samplesPerBar = max(1, newSamples.count / barCount)
+        let smoothing: Float = 0.45   // decay factor — tweak for feel
 
-            HStack(alignment: .center, spacing: 3) {
-                ForEach(Array(barSamples.enumerated()), id: \.offset) { index, sample in
-                    let height = CGFloat(sample) * geometry.size.height * 0.85 + 4
-                    // Dark grey gradient with subtle variation
-                    let brightness = 0.3 + (Double(index) / Double(max(barCount, 1))) * 0.15
-
-                    VStack(spacing: 0) {
-                        Spacer()
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        Color(white: brightness + 0.2, opacity: 0.9),
-                                        Color(white: brightness, opacity: 0.7)
-                                    ],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                            .overlay {
-                                // Specular highlight on each bar
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [.white.opacity(0.3), .clear],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                            }
-                            .frame(height: height)
-                        Spacer()
-                    }
-                }
-            }
-            .padding(.horizontal, 8)
+        for i in 0..<barCount {
+            let start = i * samplesPerBar
+            let end = min(start + samplesPerBar, newSamples.count)
+            guard start < newSamples.count else { break }
+            var peak: Float = 0
+            for j in start..<end { peak = max(peak, newSamples[j]) }
+            smoothedBars[i] = smoothedBars[i] * (1 - smoothing) + peak * smoothing
         }
     }
 }
 
-// MARK: - Circular Visualization
+// MARK: - Circular Visualization (Canvas-based, batched draw calls)
 
 struct CircularVisualizationView: View {
     let samples: [Float]
+    private let barCount = 32   // Reduced from 64 — half the draw calls, same visual quality
 
-    private func getReducedSamples() -> [Float] {
-        let targetCount = 64
-
-        guard !samples.isEmpty else {
-            return [Float](repeating: 0, count: targetCount)
-        }
-
-        if samples.count >= targetCount {
-            let samplesPerPoint = samples.count / targetCount
-            var result: [Float] = []
-            for i in 0..<targetCount {
-                let start = i * samplesPerPoint
-                let end = min(start + samplesPerPoint, samples.count)
-                let maxVal = samples[start..<end].max() ?? 0
-                result.append(maxVal)
-            }
-            return result
-        } else {
-            var result = samples
-            while result.count < targetCount {
-                result.append(0)
-            }
-            return result
-        }
-    }
+    @State private var smoothedBars: [Float] = Array(repeating: 0, count: 32)
 
     var body: some View {
         Canvas { context, size in
-            let centerX: CGFloat = size.width / 2
-            let centerY: CGFloat = size.height / 2
-            let radius: CGFloat = min(size.width, size.height) / 2 - 20
-            let reducedSamples = getReducedSamples()
-            let sampleCount = max(reducedSamples.count, 1)
+            let cx = size.width / 2
+            let cy = size.height / 2
+            let radius = min(size.width, size.height) / 2 - 16
+            let innerR = radius * 0.32
 
-            guard !reducedSamples.isEmpty else { return }
+            guard !smoothedBars.isEmpty else { return }
 
-            // Draw connecting lines for a more cohesive look
+            // Build outer polygon path (filled area) — one fill call
             var outerPath = Path()
+            // Build all bars as a single batched path — one stroke call
+            var barsPath = Path()
 
-            for index in 0..<reducedSamples.count {
-                let sample = reducedSamples[index]
-                let angle: Double = (Double(index) / Double(sampleCount)) * 2.0 * .pi - .pi / 2.0
-                let innerRadius: CGFloat = radius * 0.35
-                let outerRadius: CGFloat = innerRadius + CGFloat(sample) * radius * 0.6 + 8
+            for i in 0..<barCount {
+                let sample = smoothedBars[i]
+                let angle = (Double(i) / Double(barCount)) * 2.0 * .pi - .pi / 2.0
+                let outerR = innerR + CGFloat(sample) * radius * 0.62 + 6
+                let cos_a = cos(angle)
+                let sin_a = sin(angle)
 
-                let cosAngle = cos(angle)
-                let sinAngle = sin(angle)
+                let sx = cx + cos_a * innerR
+                let sy = cy + sin_a * innerR
+                let ex = cx + cos_a * outerR
+                let ey = cy + sin_a * outerR
 
-                let startX: CGFloat = centerX + cosAngle * innerRadius
-                let startY: CGFloat = centerY + sinAngle * innerRadius
-                let endX: CGFloat = centerX + cosAngle * outerRadius
-                let endY: CGFloat = centerY + sinAngle * outerRadius
+                barsPath.move(to: CGPoint(x: sx, y: sy))
+                barsPath.addLine(to: CGPoint(x: ex, y: ey))
 
-                // Draw bar - dark grey with subtle variation
-                var barPath = Path()
-                barPath.move(to: CGPoint(x: startX, y: startY))
-                barPath.addLine(to: CGPoint(x: endX, y: endY))
-
-                let brightness = 0.35 + (Double(index) / Double(sampleCount)) * 0.2
-                let color = Color(white: brightness, opacity: 0.9)
-                context.stroke(barPath, with: .color(color), lineWidth: 3)
-
-                // Build outer path
-                if index == 0 {
-                    outerPath.move(to: CGPoint(x: endX, y: endY))
-                } else {
-                    outerPath.addLine(to: CGPoint(x: endX, y: endY))
-                }
+                if i == 0 { outerPath.move(to: CGPoint(x: ex, y: ey)) }
+                else       { outerPath.addLine(to: CGPoint(x: ex, y: ey)) }
             }
-
-            // Close outer path
             outerPath.closeSubpath()
 
-            // Draw filled area with subtle dark color
-            context.fill(
-                outerPath,
-                with: .color(Color(white: 0.3, opacity: 0.15))
-            )
+            // 1 fill + 1 stroke instead of 64 individual strokes
+            context.fill(outerPath, with: .color(Color(white: 0.3, opacity: 0.12)))
+            context.stroke(barsPath, with: .color(Color(white: 0.55, opacity: 0.85)), lineWidth: 3.5)
 
-            // Center circle with glass effect simulation
-            let innerGlowRect = CGRect(x: centerX - 25, y: centerY - 25, width: 50, height: 50)
-            let innerGlow = Path(ellipseIn: innerGlowRect)
-            context.fill(innerGlow, with: .color(Color(white: 0.4, opacity: 0.2)))
+            // Center decorative circles
+            context.fill(Path(ellipseIn: CGRect(x: cx-22, y: cy-22, width: 44, height: 44)),
+                         with: .color(Color(white: 0.35, opacity: 0.2)))
+            context.fill(Path(ellipseIn: CGRect(x: cx-13, y: cy-13, width: 26, height: 26)),
+                         with: .color(Color(white: 0.5, opacity: 0.55)))
+            context.fill(Path(ellipseIn: CGRect(x: cx-7, y: cy-7, width: 14, height: 14)),
+                         with: .color(Color(white: 0.2, opacity: 0.5)))
+        }
+        .onChange(of: samples) { _, newSamples in
+            updateSmoothedBars(newSamples)
+        }
+    }
 
-            let circleRect = CGRect(x: centerX - 15, y: centerY - 15, width: 30, height: 30)
-            let centerCircle = Path(ellipseIn: circleRect)
-            context.fill(centerCircle, with: .color(Color(white: 0.5, opacity: 0.6)))
+    private func updateSmoothedBars(_ newSamples: [Float]) {
+        guard !newSamples.isEmpty else { return }
+        let samplesPerBar = max(1, newSamples.count / barCount)
+        let smoothing: Float = 0.45
 
-            let innerCircleRect = CGRect(x: centerX - 8, y: centerY - 8, width: 16, height: 16)
-            let innerCircle = Path(ellipseIn: innerCircleRect)
-            context.fill(innerCircle, with: .color(Color(white: 0.2, opacity: 0.5)))
+        for i in 0..<barCount {
+            let start = i * samplesPerBar
+            let end = min(start + samplesPerBar, newSamples.count)
+            guard start < newSamples.count else { break }
+            var peak: Float = 0
+            for j in start..<end { peak = max(peak, newSamples[j]) }
+            smoothedBars[i] = smoothedBars[i] * (1 - smoothing) + peak * smoothing
         }
     }
 }

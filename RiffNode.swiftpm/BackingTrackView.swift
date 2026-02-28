@@ -1,56 +1,25 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-// MARK: - Backing Track View (Glass Media Player)
-// Liquid Glass UI Design - iOS 26+
+// MARK: - Backing Track View
 
 struct BackingTrackView: View {
 
-    // MARK: - Dependencies
-
     @Bindable var engine: AudioEngineManager
-
-    // MARK: - State
 
     @State private var isImporting = false
     @State private var loadedTrackName: String?
     @State private var isLoading = false
 
-    // MARK: - Body
-
     var body: some View {
         GlassCard(cornerRadius: 16) {
-            VStack(spacing: 16) {
-                // Header
-                GlassMediaPlayerHeader(
-                    hasTrack: loadedTrackName != nil,
-                    onImport: { isImporting = true }
-                )
-
-                // Track info, waveform preview, and timeline
-                GlassTrackInfoView(
-                    trackName: loadedTrackName,
-                    isPlaying: engine.isBackingTrackPlaying,
-                    isLoading: isLoading,
-                    currentTime: engine.backingTrackCurrentTime,
-                    duration: engine.backingTrackDuration,
-                    onSeek: { time in
-                        engine.seekBackingTrack(to: time)
-                    }
-                )
-
-                // Transport controls
-                GlassTransportControls(
-                    volume: Binding(
-                        get: { engine.backingTrackVolume },
-                        set: { engine.setBackingTrackVolume($0) }
-                    ),
-                    isPlaying: engine.isBackingTrackPlaying,
-                    hasTrack: loadedTrackName != nil,
-                    isLoading: isLoading,
-                    onPlay: { engine.playBackingTrack() },
-                    onStop: { engine.stopBackingTrack() }
-                )
+            VStack(spacing: 14) {
+                header
+                if let name = loadedTrackName {
+                    nowPlayingContent(trackName: name)
+                } else {
+                    emptyState
+                }
             }
         }
         .fileImporter(
@@ -62,55 +31,9 @@ struct BackingTrackView: View {
         }
     }
 
-    // MARK: - Private Methods
+    // MARK: - Header
 
-    private func handleFileImport(_ result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else {
-                print("No file selected")
-                return
-            }
-
-            isLoading = true
-            let trackName = url.lastPathComponent
-            loadedTrackName = trackName
-
-            Task { @MainActor in
-                do {
-                    // Start accessing the security-scoped resource
-                    let didStartAccessing = url.startAccessingSecurityScopedResource()
-
-                    // Load the track
-                    try await engine.loadBackingTrack(url: url)
-
-                    // Stop accessing after load completes
-                    if didStartAccessing {
-                        url.stopAccessingSecurityScopedResource()
-                    }
-
-                    isLoading = false
-                    print("Successfully loaded: \(trackName)")
-                } catch {
-                    isLoading = false
-                    loadedTrackName = nil
-                    print("Failed to load backing track: \(error.localizedDescription)")
-                }
-            }
-
-        case .failure(let error):
-            print("File import cancelled or failed: \(error.localizedDescription)")
-        }
-    }
-}
-
-// MARK: - Glass Media Player Header
-
-struct GlassMediaPlayerHeader: View {
-    let hasTrack: Bool
-    let onImport: () -> Void
-
-    var body: some View {
+    private var header: some View {
         HStack {
             HStack(spacing: 8) {
                 Image(systemName: "music.note.list")
@@ -118,31 +41,298 @@ struct GlassMediaPlayerHeader: View {
                 Text("Backing Track")
                     .font(.headline)
             }
-
             Spacer()
-
-            Button(action: onImport) {
-                HStack(spacing: 6) {
-                    Image(systemName: hasTrack ? "arrow.triangle.2.circlepath" : "plus")
-                    Text(hasTrack ? "Change" : "Import")
+            Button { isImporting = true } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: loadedTrackName != nil ? "arrow.triangle.2.circlepath" : "plus")
+                    Text(loadedTrackName != nil ? "Change" : "Import")
                 }
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.primary)
                 .padding(.vertical, 6)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 13)
                 .glassEffect(.regular, in: Capsule())
             }
             .buttonStyle(.plain)
         }
     }
+
+    // MARK: - Now Playing
+
+    private func nowPlayingContent(trackName: String) -> some View {
+        VStack(spacing: 14) {
+            // Track identity row
+            HStack(spacing: 14) {
+                trackArtwork
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(formatTrackName(trackName))
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        if engine.isBackingTrackPlaying {
+                            PlayingBarsIndicator()
+                        } else {
+                            Image(systemName: "pause.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(engine.isBackingTrackPlaying ? "Playing" : "Paused")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(engine.isBackingTrackPlaying ? .green : .secondary)
+                    }
+                    Text(fileFormat(trackName))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(formatTime(engine.backingTrackCurrentTime))
+                        .font(.system(size: 18, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.primary)
+                    Text(formatTime(engine.backingTrackDuration))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
+            // ── Through-Effects Toggle ──────────────────────────────
+            ThroughEffectsToggle(
+                isEnabled: engine.backingTrackThroughEffects,
+                onToggle: { engine.toggleBackingTrackThroughEffects() }
+            )
+
+            // Educational hint when mode is active
+            if engine.backingTrackThroughEffects {
+                ThroughEffectsHint(effectsChain: engine.effectsChain)
+            }
+
+            // Timeline scrubber
+            if engine.backingTrackDuration > 0 {
+                TrackTimeline(
+                    currentTime: engine.backingTrackCurrentTime,
+                    duration: engine.backingTrackDuration,
+                    onSeek: { engine.seekBackingTrack(to: $0) }
+                )
+            }
+
+            // Transport controls
+            TransportRow(
+                isPlaying: engine.isBackingTrackPlaying,
+                isLoading: isLoading,
+                volume: Binding(
+                    get: { engine.backingTrackVolume },
+                    set: { engine.setBackingTrackVolume($0) }
+                ),
+                onSkipBack:  { engine.seekBackingTrack(to: max(0, engine.backingTrackCurrentTime - 15)) },
+                onPlayPause: { engine.isBackingTrackPlaying ? engine.stopBackingTrack() : engine.playBackingTrack() },
+                onSkipFwd:   { engine.seekBackingTrack(to: min(engine.backingTrackDuration, engine.backingTrackCurrentTime + 15)) }
+            )
+        }
+    }
+
+    // MARK: - Track Artwork Thumbnail
+
+    private var trackArtwork: some View {
+        ZStack {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.regular)
+                    .tint(.primary)
+            } else {
+                // Animated bars when playing, static icon when paused
+                if engine.isBackingTrackPlaying {
+                    MusicBarsArtwork()
+                } else {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(width: 64, height: 64)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: [Color.riffPrimary.opacity(0.15), Color.purple.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        Button { isImporting = true } label: {
+            VStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(Color.riffPrimary.opacity(0.1))
+                        .frame(width: 52, height: 52)
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 28, weight: .light))
+                        .foregroundStyle(Color.riffPrimary)
+                }
+                Text("Import a backing track")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text("MP3, WAV, or AIFF")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Helpers
+
+    private func formatTrackName(_ name: String) -> String {
+        var n = name
+        if let dot = n.lastIndex(of: ".") { n = String(n[..<dot]) }
+        return n.count > 28 ? String(n.prefix(25)) + "..." : n
+    }
+
+    private func fileFormat(_ name: String) -> String {
+        let ext = (name as NSString).pathExtension.uppercased()
+        return ext.isEmpty ? "Audio" : ext
+    }
+
+    private func formatTime(_ t: TimeInterval) -> String {
+        String(format: "%d:%02d", Int(t) / 60, Int(t) % 60)
+    }
+
+    private func handleFileImport(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result, let url = urls.first else { return }
+        isLoading = true
+        loadedTrackName = url.lastPathComponent
+        Task { @MainActor in
+            do {
+                let accessing = url.startAccessingSecurityScopedResource()
+                try await engine.loadBackingTrack(url: url)
+                if accessing { url.stopAccessingSecurityScopedResource() }
+                isLoading = false
+            } catch {
+                isLoading = false
+                loadedTrackName = nil
+            }
+        }
+    }
 }
 
-// MARK: - Glass Track Info View
+// MARK: - Through Effects Toggle
 
-struct GlassTrackInfoView: View {
-    let trackName: String?
-    let isPlaying: Bool
-    let isLoading: Bool
+struct ThroughEffectsToggle: View {
+    let isEnabled: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 10) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(isEnabled
+                              ? LinearGradient(colors: [Color.orange, Color.red],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                              : LinearGradient(colors: [Color.white.opacity(0.1), Color.white.opacity(0.05)],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: isEnabled ? "guitars.fill" : "guitars")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(isEnabled ? .white : .secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Play Through Pedalboard")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isEnabled ? .primary : .secondary)
+                    Text(isEnabled ? "Music is going through your effects chain" : "Hear how effects shape real music")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                // Toggle pill
+                ZStack {
+                    Capsule()
+                        .fill(isEnabled ? Color.orange.opacity(0.8) : Color.white.opacity(0.15))
+                        .frame(width: 40, height: 24)
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 18, height: 18)
+                        .offset(x: isEnabled ? 8 : -8)
+                        .shadow(radius: 2)
+                }
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isEnabled)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .glassEffect(isEnabled ? .regular.tint(.orange.opacity(0.15)) : .regular,
+                         in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Through Effects Hint
+
+struct ThroughEffectsHint: View {
+    let effectsChain: [EffectNode]
+
+    private var activeEffects: [EffectNode] { effectsChain.filter { $0.isEnabled } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Active effects chips
+            if activeEffects.isEmpty {
+                Label("Enable pedals on the right to hear them on the music", systemImage: "lightbulb.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+            } else {
+                HStack(spacing: 4) {
+                    Image(systemName: "waveform.badge.magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.orange)
+                    Text("Active:")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    ForEach(activeEffects.prefix(4)) { effect in
+                        Text(effect.type.rawValue)
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .glassEffect(.regular.tint(.orange.opacity(0.2)), in: Capsule())
+                    }
+                    if activeEffects.count > 4 {
+                        Text("+\(activeEffects.count - 4)")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+
+            Text("Try toggling the Parametric EQ to hear how cutting or boosting frequencies changes the mix.")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .glassEffect(.regular.tint(.orange.opacity(0.08)), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+// MARK: - Track Timeline
+
+struct TrackTimeline: View {
     let currentTime: TimeInterval
     let duration: TimeInterval
     let onSeek: (TimeInterval) -> Void
@@ -152,259 +342,212 @@ struct GlassTrackInfoView: View {
 
     private var progress: Double {
         guard duration > 0 else { return 0 }
-        return isDragging ? dragProgress : (currentTime / duration)
+        return isDragging ? dragProgress : currentTime / duration
     }
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 16) {
-                // Album art placeholder / waveform indicator - native iOS 26 glass
-                ZStack {
-                    if isLoading {
-                        ProgressView()
-                            .controlSize(.regular)
-                            .tint(.primary)
-                    } else if trackName != nil {
-                        MiniWaveformView(isPlaying: isPlaying)
-                    } else {
-                        Image(systemName: "waveform")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                    }
+        VStack(spacing: 5) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    // Track
+                    Capsule()
+                        .fill(Color.primary.opacity(0.12))
+                        .frame(height: 8)
+
+                    // Fill with glow
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.riffPrimary.opacity(0.6), Color.riffPrimary],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(8, geo.size.width * progress), height: 8)
+                        .shadow(color: Color.riffPrimary.opacity(0.4), radius: 4, x: 0, y: 0)
+
+                    // Scrubber knob
+                    let knobX = max(10, min(geo.size.width - 10, geo.size.width * progress))
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: isDragging ? 18 : 13, height: isDragging ? 18 : 13)
+                        .shadow(color: .black.opacity(0.25), radius: 4)
+                        .position(x: knobX, y: geo.size.height / 2)
+                        .animation(.spring(response: 0.2, dampingFraction: 0.7), value: isDragging)
                 }
-                .frame(width: 64, height: 64)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-
-                // Track info
-                VStack(alignment: .leading, spacing: 6) {
-                    if let name = trackName {
-                        Text(formatTrackName(name))
-                            .font(.subheadline.weight(.semibold))
-                            .lineLimit(1)
-
-                        HStack(spacing: 8) {
-                            // Status indicator
-                            HStack(spacing: 4) {
-                                Circle()
-                                    .fill(isPlaying ? .green : .secondary)
-                                    .frame(width: 6, height: 6)
-                                Text(isPlaying ? "Playing" : "Ready")
-                                    .font(.caption)
-                                    .foregroundStyle(isPlaying ? .green : .secondary)
-                            }
+                .frame(height: 18)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { v in
+                            isDragging = true
+                            dragProgress = max(0, min(1, v.location.x / geo.size.width))
                         }
-                    } else {
-                        Text("No track loaded")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        .onEnded { v in
+                            isDragging = false
+                            onSeek(max(0, min(1, v.location.x / geo.size.width)) * duration)
+                        }
+                )
+            }
+            .frame(height: 18)
 
-                        Text("Import an audio file to jam along")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+            HStack {
+                Text(String(format: "%d:%02d", Int(isDragging ? dragProgress * duration : currentTime) / 60,
+                            Int(isDragging ? dragProgress * duration : currentTime) % 60))
+                Spacer()
+                Text("-" + String(format: "%d:%02d",
+                                  Int(duration - (isDragging ? dragProgress * duration : currentTime)) / 60,
+                                  Int(duration - (isDragging ? dragProgress * duration : currentTime)) % 60))
+            }
+            .font(.system(size: 11, design: .monospaced))
+            .foregroundStyle(.secondary)
+        }
+    }
+}
+
+// MARK: - Transport Row
+
+struct TransportRow: View {
+    let isPlaying: Bool
+    let isLoading: Bool
+    @Binding var volume: Float
+    let onSkipBack: () -> Void
+    let onPlayPause: () -> Void
+    let onSkipFwd: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            // Buttons
+            HStack(spacing: 0) {
+                Spacer()
+
+                // Skip back 15s
+                Button(action: onSkipBack) {
+                    VStack(spacing: 2) {
+                        Image(systemName: "gobackward.15")
+                            .font(.system(size: 20, weight: .medium))
+                    }
+                    .foregroundStyle(.primary)
+                    .frame(width: 52, height: 52)
+                    .glassEffect(.regular, in: Circle())
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // Play / Pause (larger, primary CTA)
+                Button(action: onPlayPause) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.riffPrimary.opacity(0.8), Color.riffPrimary],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 60, height: 60)
+                            .shadow(color: Color.riffPrimary.opacity(0.4), radius: 8, y: 4)
+                        if isLoading {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundStyle(.white)
+                                .offset(x: isPlaying ? 0 : 2) // optical center for play icon
+                                .contentTransition(.symbolEffect(.replace))
+                        }
                     }
                 }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // Skip forward 15s
+                Button(action: onSkipFwd) {
+                    Image(systemName: "goforward.15")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .frame(width: 52, height: 52)
+                        .glassEffect(.regular, in: Circle())
+                }
+                .buttonStyle(.plain)
 
                 Spacer()
             }
 
-            // Timeline scrubber (only shown when track is loaded)
-            if trackName != nil && duration > 0 {
-                VStack(spacing: 6) {
-                    // Progress bar with scrubber
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            // Track background
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Color.primary.opacity(0.15))
-                                .frame(height: 6)
-
-                            // Progress fill
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.riffPrimary.opacity(0.7), Color.riffPrimary],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(width: geometry.size.width * progress, height: 6)
-
-                            // Scrubber knob
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: isDragging ? 16 : 12, height: isDragging ? 16 : 12)
-                                .shadow(color: .black.opacity(0.2), radius: 3)
-                                .position(
-                                    x: max(6, min(geometry.size.width - 6, geometry.size.width * progress)),
-                                    y: 3
-                                )
-                        }
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    isDragging = true
-                                    let newProgress = max(0, min(1, value.location.x / geometry.size.width))
-                                    dragProgress = newProgress
-                                }
-                                .onEnded { value in
-                                    isDragging = false
-                                    let newProgress = max(0, min(1, value.location.x / geometry.size.width))
-                                    onSeek(newProgress * duration)
-                                }
-                        )
-                    }
-                    .frame(height: 16)
-
-                    // Time labels
-                    HStack {
-                        Text(formatTime(isDragging ? dragProgress * duration : currentTime))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.secondary)
-
-                        Spacer()
-
-                        Text(formatTime(duration))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.top, 4)
-                .animation(.spring(duration: 0.2), value: isDragging)
-            }
-        }
-    }
-
-    private func formatTrackName(_ name: String) -> String {
-        // Remove file extension for cleaner display
-        var displayName = name
-        if let dotIndex = displayName.lastIndex(of: ".") {
-            displayName = String(displayName[..<dotIndex])
-        }
-        // Truncate if too long
-        if displayName.count > 30 {
-            displayName = String(displayName.prefix(27)) + "..."
-        }
-        return displayName
-    }
-
-    private func formatTime(_ time: TimeInterval) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-}
-
-// MARK: - Mini Waveform View
-
-/// Extracted waveform visualization with stable bar heights
-private struct MiniWaveformView: View {
-    let isPlaying: Bool
-
-    // Stable heights per bar - computed once
-    private static let barHeights: [CGFloat] = [20, 28, 16, 32, 24]
-
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<5, id: \.self) { i in
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [.primary.opacity(0.6), .primary.opacity(0.3)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(width: 4, height: isPlaying ? Self.barHeights[i] : 8)
-                    .animation(
-                        isPlaying
-                            ? .easeInOut(duration: 0.3 + Double(i) * 0.1)
-                                .repeatForever(autoreverses: true)
-                            : .default,
-                        value: isPlaying
-                    )
-            }
-        }
-    }
-}
-
-// MARK: - Glass Transport Controls
-
-struct GlassTransportControls: View {
-    @Binding var volume: Float
-    let isPlaying: Bool
-    let hasTrack: Bool
-    let isLoading: Bool
-    let onPlay: () -> Void
-    let onStop: () -> Void
-
-    @Namespace private var transportNamespace
-
-    var body: some View {
-        VStack(spacing: 12) {
-            // Centered transport buttons – fuse into one liquid group
-            GlassEffectContainer(spacing: 16) {
-                HStack(spacing: 16) {
-                    // Stop button – circle glass
-                    Button {
-                        onStop()
-                    } label: {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(hasTrack && isPlaying ? Color.primary : Color.secondary)
-                            .frame(width: 48, height: 48)
-                            .contentShape(Circle())
-                            .glassEffect(.regular, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!hasTrack || !isPlaying)
-
-                    // Play/Pause button – tinted circle glass (primary CTA)
-                    Button {
-                        if isPlaying { onStop() } else { onPlay() }
-                    } label: {
-                        ZStack {
-                            if isLoading {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .tint(.primary)
-                            } else {
-                                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                                    .font(.system(size: 22, weight: .bold))
-                                    .foregroundStyle(.primary)
-                            }
-                        }
-                        .frame(width: 56, height: 56)
-                        .contentShape(Circle())
-                        .glassEffect(
-                            hasTrack
-                                ? .regular.tint(Color.riffPrimary.opacity(0.2))
-                                : .regular,
-                            in: Circle()
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!hasTrack)
-                }
-            }
-
-            // Volume slider – native Liquid Glass slider
+            // Volume
             HStack(spacing: 10) {
                 Image(systemName: "speaker.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.primary.opacity(0.6))
-
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
                 Slider(value: $volume, in: 0...1)
-                    .tint(Color.primary)
-
+                    .tint(Color.riffPrimary)
                 Image(systemName: "speaker.wave.3.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.primary.opacity(0.6))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .glassEffect(.regular, in: Capsule())
         }
+    }
+}
+
+// MARK: - Animated Music Bars (artwork when playing)
+
+struct MusicBarsArtwork: View {
+    private static let heights: [[CGFloat]] = [
+        [14, 28, 20, 34, 18, 26],
+        [22, 16, 30, 18, 32, 14],
+        [18, 30, 16, 28, 22, 32]
+    ]
+    @State private var phase = 0
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<6, id: \.self) { i in
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.riffPrimary.opacity(0.9), Color.purple.opacity(0.7)],
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 5, height: Self.heights[phase % 3][i])
+                    .animation(
+                        .easeInOut(duration: 0.25 + Double(i) * 0.05)
+                            .repeatForever(autoreverses: true),
+                        value: phase
+                    )
+            }
+        }
+        .onAppear { phase = 1 }
+    }
+}
+
+// MARK: - Playing Bars Indicator (small, in track info row)
+
+struct PlayingBarsIndicator: View {
+    @State private var phase = false
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<4, id: \.self) { i in
+                Capsule()
+                    .fill(Color.green)
+                    .frame(width: 2.5, height: phase ? CGFloat([6, 10, 8, 12][i]) : CGFloat([10, 6, 12, 8][i]))
+                    .animation(
+                        .easeInOut(duration: 0.3 + Double(i) * 0.07)
+                            .repeatForever(autoreverses: true),
+                        value: phase
+                    )
+            }
+        }
+        .frame(height: 14)
+        .onAppear { phase = true }
     }
 }
 
@@ -413,7 +556,6 @@ struct GlassTransportControls: View {
 #Preview {
     ZStack {
         AdaptiveBackground()
-
         BackingTrackView(engine: AudioEngineManager())
             .padding()
             .frame(width: 400)

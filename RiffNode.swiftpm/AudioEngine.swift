@@ -70,6 +70,12 @@ final class AudioEngineManager: AudioManaging {
     private var backingTrackPlayer: AVAudioPlayerNode?
     private var backingTrackBuffer: AVAudioPCMBuffer?
 
+    // Pre-effects mixer — both guitar and (optionally) backing track feed into this
+    private var fxInputMixer: AVAudioMixerNode?
+
+    /// When true the backing track is routed through the full effects chain
+    private(set) var backingTrackThroughEffects: Bool = false
+
     // Visualization
     private var tapInstalled = false
     
@@ -209,6 +215,11 @@ final class AudioEngineManager: AudioManaging {
         let converter = AVAudioMixerNode()
         formatConverterMixer = converter
         engine.attach(converter)
+
+        // Pre-effects input mixer (guitar converter + optionally backing track feed into here)
+        let fxMixer = AVAudioMixerNode()
+        fxInputMixer = fxMixer
+        engine.attach(fxMixer)
 
         // Create effect units
         effectUnits = EffectUnitsContainer()
@@ -543,6 +554,45 @@ final class AudioEngineManager: AudioManaging {
         backingTrackPlayer?.volume = volume
     }
 
+    /// Toggle whether the backing track is routed through the full effects chain.
+    /// When enabled, users hear exactly how their pedals/EQ affect real music.
+    func toggleBackingTrackThroughEffects() {
+        guard let engine = audioEngine,
+              let player = backingTrackPlayer,
+              let fxMixer = fxInputMixer,
+              let mainMix = mainMixer,
+              let format = processingFormat else { return }
+
+        let wasPlaying = isBackingTrackPlaying
+        let savedPosition = backingTrackCurrentTime
+
+        if wasPlaying {
+            player.stop()
+            stopPlaybackTimer()
+        }
+
+        // Rewire player output
+        if engine.attachedNodes.contains(player) {
+            engine.disconnectNodeOutput(player)
+        }
+
+        backingTrackThroughEffects.toggle()
+
+        if backingTrackThroughEffects {
+            engine.connect(player, to: fxMixer, format: format)
+            print("backingTrack: routed THROUGH effects chain")
+        } else {
+            engine.connect(player, to: mainMix, format: format)
+            print("backingTrack: routed DRY (bypass effects)")
+        }
+
+        backingTrackCurrentTime = savedPosition
+
+        if wasPlaying {
+            playBackingTrack()
+        }
+    }
+
     func seekBackingTrack(to time: TimeInterval) {
         let wasPlaying = isBackingTrackPlaying
 
@@ -627,21 +677,21 @@ final class AudioEngineManager: AudioManaging {
     }
 
     private func connectSignalChain(engine: AVAudioEngine, input: AVAudioInputNode, converter: AVAudioMixerNode, inputFormat: AVAudioFormat, processingFormat: AVAudioFormat) {
-        guard let units = effectUnits, let mixer = mainMixer else { return }
+        guard let units = effectUnits, let mixer = mainMixer, let fxMixer = fxInputMixer else { return }
 
-        // Input -> Converter
+        // Input -> Converter -> fxInputMixer -> effects chain -> mainMixer
         engine.connect(input, to: converter, format: inputFormat)
-        
-        // Always connect core effects in chain, use bypass to control
-        // Converter -> Compressor -> Distortion -> Chorus -> Delay -> Reverb -> Mixer
-        engine.connect(converter, to: units.compressor, format: processingFormat)
+        engine.connect(converter, to: fxMixer, format: processingFormat)
+
+        // fxInputMixer -> Compressor -> Distortion -> Chorus -> Delay -> Reverb -> Mixer
+        engine.connect(fxMixer, to: units.compressor, format: processingFormat)
         engine.connect(units.compressor, to: units.distortion, format: processingFormat)
         engine.connect(units.distortion, to: units.chorus, format: processingFormat)
         engine.connect(units.chorus, to: units.delay, format: processingFormat)
         engine.connect(units.delay, to: units.reverb, format: processingFormat)
         engine.connect(units.reverb, to: mixer, format: processingFormat)
-        
-        print("connectSignalChain: Signal chain connected (core effects in chain, controlled via bypass)")
+
+        print("connectSignalChain: Signal chain connected via fxInputMixer")
     }
 
     private func rebuildAudioChain() {

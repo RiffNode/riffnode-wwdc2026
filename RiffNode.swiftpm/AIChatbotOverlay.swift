@@ -3,7 +3,6 @@ import Observation
 
 // MARK: - Chat Message Model
 
-/// Represents a single message in the AI chatbot conversation
 struct ChatMessage: Identifiable {
     let id: UUID
     let role: Role
@@ -34,51 +33,42 @@ struct ChatMessage: Identifiable {
 
 // MARK: - AI Chatbot Controller
 
-/// Manages the AI chatbot conversation state
 @Observable
 @MainActor
 final class AIChatbotController {
-
-    // MARK: - State
 
     private(set) var messages: [ChatMessage] = []
     private(set) var isProcessing = false
     var inputText: String = ""
 
-    // Suggested prompts for quick access
-    let quickSuggestions = [
-        "Make it heavy",
-        "Add some ambience",
-        "80s clean tone",
-        "Blues crunch"
+    let quickSuggestions: [(icon: String, label: String)] = [
+        ("bolt.fill",        "Heavy metal"),
+        ("water.waves",      "Add reverb"),
+        ("music.note",       "Jazz clean"),
+        ("flame.fill",       "Blues crunch"),
+        ("sparkles",         "80s chorus"),
+        ("waveform",         "Warm lead"),
+        ("moon.stars.fill",  "Ambient pad"),
+        ("guitars.fill",     "Classic rock")
     ]
 
-    // MARK: - Initialization
-
     init() {
-        // Add welcome message
         messages.append(ChatMessage(
             role: .assistant,
-            content: "Hey! I'm your tone assistant. Tell me what sound you're looking for - like \"make it heavy\" or \"add some ambient reverb\" - and I'll dial it in for you!"
+            content: "Hey! I'm your AI tone assistant. Tell me the sound you're after — like \"heavy metal riff\" or \"warm jazz clean\" — and I'll dial it in instantly."
         ))
     }
 
-    // MARK: - Send Message
-
-    /// Send a user message and get AI response
     func sendMessage(_ text: String, processor: SemanticCommandProcessor, engine: AudioEngineManager) async {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        let userMessage = ChatMessage(role: .user, content: text)
-        messages.append(userMessage)
+        messages.append(ChatMessage(role: .user, content: text))
         inputText = ""
         isProcessing = true
 
-        // Process with SemanticCommandProcessor
         let success = await processor.processCommand(text)
 
         if success {
-            // Create response with effect recommendations
             let response = ChatMessage(
                 role: .assistant,
                 content: processor.lastExplanation,
@@ -86,160 +76,36 @@ final class AIChatbotController {
             )
             messages.append(response)
 
-            // Store the response index for later update when applied
             let responseIndex = messages.count - 1
-
-            // Auto-apply after a brief delay for better UX
             try? await Task.sleep(for: .milliseconds(300))
-
-            // Apply to engine
             processor.applyToEngine(engine)
 
-            // Mark as applied
             if responseIndex < messages.count {
                 messages[responseIndex].isApplied = true
             }
         } else {
             messages.append(ChatMessage(
                 role: .assistant,
-                content: "I couldn't quite understand that. Try something like \"warm blues tone\" or \"add more reverb\"."
+                content: "I didn't quite catch that. Try something like \"warm blues tone\" or \"more reverb and delay\"."
             ))
         }
 
         isProcessing = false
     }
 
-    /// Apply effects from a specific message
     func applyEffects(from message: ChatMessage, processor: SemanticCommandProcessor, engine: AudioEngineManager) {
         guard message.appliedEffects != nil else { return }
-
         processor.applyToEngine(engine)
-
-        // Mark message as applied
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
             messages[index].isApplied = true
         }
     }
 
-    /// Clear conversation history
     func clearHistory() {
         messages = [ChatMessage(
             role: .assistant,
-            content: "Conversation cleared. What tone are you looking for?"
+            content: "Fresh start! What tone are you going for?"
         )]
-    }
-}
-
-// MARK: - Chat Message Bubble
-
-struct ChatMessageBubble: View {
-    let message: ChatMessage
-    let onApply: (() -> Void)?
-
-    init(message: ChatMessage, onApply: (() -> Void)? = nil) {
-        self.message = message
-        self.onApply = onApply
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            if message.role == .user {
-                Spacer(minLength: 50)
-            }
-
-            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 8) {
-                // Message content
-                Text(message.content)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .glassEffect(bubbleTint, in: RoundedRectangle(cornerRadius: 16))
-
-                // Effect badges and apply button for AI responses
-                if let effects = message.appliedEffects, !effects.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        // Effect badges
-                        HStack(spacing: 4) {
-                            ForEach(effects.prefix(4), id: \.self) { effect in
-                                EffectBadge(effectName: effect)
-                            }
-                            if effects.count > 4 {
-                                Text("+\(effects.count - 4)")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        // Apply button – tinted capsule glass
-                        if !message.isApplied {
-                            Button {
-                                onApply?()
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                    Text("Apply")
-                                }
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.primary)
-                                .padding(.vertical, 6)
-                                .padding(.horizontal, 14)
-                                .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.18)), in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            HStack(spacing: 4) {
-                                Image(systemName: "checkmark")
-                                Text("Applied")
-                            }
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.green)
-                        }
-                    }
-                }
-            }
-
-            if message.role == .assistant {
-                Spacer(minLength: 50)
-            }
-        }
-    }
-
-    /// Glass tint for the bubble – user messages get an indigo tint,
-    /// assistant messages get a purple tint.  Both render as proper
-    /// Liquid Glass rather than flat colour fills.
-    private var bubbleTint: Glass {
-        if message.role == .user {
-            return .regular.tint(Color.riffPrimary.opacity(0.2))
-        } else {
-            return .regular.tint(.purple.opacity(0.2))
-        }
-    }
-}
-
-// MARK: - Effect Badge
-
-struct EffectBadge: View {
-    let effectName: String
-
-    var body: some View {
-        Text(effectName.uppercased())
-            .font(.system(size: 9, weight: .bold, design: .monospaced))
-            .foregroundStyle(effectColor)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .glassEffect(.regular.tint(effectColor.opacity(0.2)), in: Capsule())
-    }
-
-    private var effectColor: Color {
-        switch effectName.lowercased() {
-        case "reverb", "delay": return .riffAmbience
-        case "distortion", "overdrive", "fuzz": return .riffGain
-        case "chorus", "phaser", "flanger", "tremolo": return .riffModulation
-        case "compressor": return .riffDynamics
-        case "equalizer": return .riffFilter
-        default: return .secondary
-        }
     }
 }
 
@@ -254,44 +120,34 @@ struct AIChatbotOverlayView: View {
     @State private var isMinimized = false
     @FocusState private var inputFocused: Bool
 
-    private let panelWidth: CGFloat = 380
-    private let panelMaxHeight: CGFloat = 500
-    private let minimizedHeight: CGFloat = 60
+    private let panelWidth: CGFloat = 390
+    private let panelMaxHeight: CGFloat = 520
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .trailing, spacing: 12) {
             if isExpanded {
-                // Chat panel
                 VStack(spacing: 0) {
-                    // Header
                     chatHeader
-
                     if !isMinimized {
-                        // Messages
                         messagesScrollView
-
-                        GlassDivider()
-
-                        // Quick suggestions
+                        Divider().opacity(0.3)
                         quickSuggestionsBar
-
-                        // Input field
+                        Divider().opacity(0.3)
                         inputBar
                     }
                 }
                 .frame(width: panelWidth)
-                .frame(maxHeight: isMinimized ? minimizedHeight : panelMaxHeight)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 20))
-                .shadow(color: .black.opacity(0.2), radius: 20, x: 0, y: 10)
+                .frame(maxHeight: isMinimized ? 60 : panelMaxHeight)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22))
+                .shadow(color: .black.opacity(0.25), radius: 24, x: 0, y: 12)
                 .transition(.asymmetric(
-                    insertion: .scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity),
-                    removal: .scale(scale: 0.9, anchor: .bottomTrailing).combined(with: .opacity)
+                    insertion: .scale(scale: 0.92, anchor: .bottomTrailing).combined(with: .opacity),
+                    removal:   .scale(scale: 0.92, anchor: .bottomTrailing).combined(with: .opacity)
                 ))
             }
 
-            // FAB
-            AIChatbotFAB(isExpanded: isExpanded, hasNewMessage: false) {
-                withAnimation(.spring(duration: 0.3)) {
+            AIChatbotFAB(isExpanded: isExpanded) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                     isExpanded.toggle()
                 }
             }
@@ -301,45 +157,64 @@ struct AIChatbotOverlayView: View {
     // MARK: - Header
 
     private var chatHeader: some View {
-        HStack {
-            HStack(spacing: 8) {
+        HStack(spacing: 10) {
+            // AI avatar
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.purple, Color.indigo],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 34, height: 34)
                 Image(systemName: "wand.and.stars")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.purple)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
 
+            VStack(alignment: .leading, spacing: 1) {
                 Text("Tone Assistant")
-                    .font(.headline)
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Apple Intelligence")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
 
-                if controller.isProcessing {
-                    ProgressView()
-                        .controlSize(.small)
-                }
+            if controller.isProcessing {
+                Spacer()
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.purple)
             }
 
             Spacer()
 
-            HStack(spacing: 8) {
-                // Minimize button
+            HStack(spacing: 4) {
                 Button {
-                    withAnimation(.spring(duration: 0.25)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         isMinimized.toggle()
                     }
                 } label: {
                     Image(systemName: isMinimized ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .glassEffect(.regular, in: Circle())
                 }
                 .buttonStyle(.plain)
 
-                // Close button
                 Button {
-                    withAnimation(.spring(duration: 0.3)) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         isExpanded = false
                     }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .glassEffect(.regular, in: Circle())
                 }
                 .buttonStyle(.plain)
             }
@@ -353,7 +228,7 @@ struct AIChatbotOverlayView: View {
     private var messagesScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 12) {
+                LazyVStack(spacing: 10) {
                     ForEach(controller.messages) { message in
                         ChatMessageBubble(message: message) {
                             controller.applyEffects(from: message, processor: processor, engine: engine)
@@ -361,23 +236,43 @@ struct AIChatbotOverlayView: View {
                         .id(message.id)
                     }
 
-                    // Processing indicator
                     if controller.isProcessing {
-                        HStack {
+                        HStack(alignment: .bottom, spacing: 8) {
+                            aiAvatarSmall
                             TypingIndicator()
                             Spacer()
                         }
+                        .padding(.horizontal, 4)
+                        .id("typing")
                     }
                 }
-                .padding()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             }
             .onChange(of: controller.messages.count) { _, _ in
-                if let lastMessage = controller.messages.last {
-                    withAnimation {
-                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                    }
+                withAnimation(.easeOut(duration: 0.2)) {
+                    proxy.scrollTo(controller.messages.last?.id, anchor: .bottom)
                 }
             }
+            .onChange(of: controller.isProcessing) { _, processing in
+                if processing {
+                    withAnimation { proxy.scrollTo("typing", anchor: .bottom) }
+                }
+            }
+        }
+    }
+
+    private var aiAvatarSmall: some View {
+        ZStack {
+            Circle()
+                .fill(LinearGradient(
+                    colors: [Color.purple.opacity(0.8), Color.indigo.opacity(0.8)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ))
+                .frame(width: 26, height: 26)
+            Image(systemName: "wand.and.stars")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
         }
     }
 
@@ -385,27 +280,30 @@ struct AIChatbotOverlayView: View {
 
     private var quickSuggestionsBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            GlassEffectContainer(spacing: 12) {
-                HStack(spacing: 8) {
-                    ForEach(controller.quickSuggestions, id: \.self) { suggestion in
-                        Button {
-                            Task {
-                                await controller.sendMessage(suggestion, processor: processor, engine: engine)
-                            }
-                        } label: {
-                            Text(suggestion)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.primary)
-                                .padding(.vertical, 6)
-                                .padding(.horizontal, 12)
-                                .glassEffect(.regular, in: Capsule())
+            HStack(spacing: 6) {
+                ForEach(controller.quickSuggestions, id: \.label) { suggestion in
+                    Button {
+                        Task {
+                            await controller.sendMessage(suggestion.label, processor: processor, engine: engine)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(controller.isProcessing)
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: suggestion.icon)
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(suggestion.label)
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .foregroundStyle(.primary)
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 11)
+                        .glassEffect(.regular, in: Capsule())
                     }
+                    .buttonStyle(.plain)
+                    .disabled(controller.isProcessing)
+                    .opacity(controller.isProcessing ? 0.5 : 1)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
     }
@@ -413,10 +311,15 @@ struct AIChatbotOverlayView: View {
     // MARK: - Input Bar
 
     private var inputBar: some View {
-        HStack(spacing: 8) {
-            TextField("Describe your tone...", text: $controller.inputText)
+        let inputBinding = Binding<String>(
+            get: { controller.inputText },
+            set: { controller.inputText = $0 }
+        )
+        return HStack(spacing: 10) {
+            TextField("Describe your tone...", text: inputBinding, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))
+                .lineLimit(1...3)
                 .focused($inputFocused)
                 .onSubmit {
                     Task {
@@ -430,52 +333,222 @@ struct AIChatbotOverlayView: View {
                     await controller.sendMessage(controller.inputText, processor: processor, engine: engine)
                 }
             } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(
-                        controller.inputText.isEmpty || controller.isProcessing
-                            ? .secondary
-                            : Color.riffPrimary
-                    )
+                ZStack {
+                    Circle()
+                        .fill(
+                            controller.inputText.isEmpty || controller.isProcessing
+                                ? AnyShapeStyle(.quaternary)
+                                : AnyShapeStyle(LinearGradient(
+                                    colors: [Color.purple, Color.indigo],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ))
+                        )
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(
+                            controller.inputText.isEmpty || controller.isProcessing
+                                ? Color.secondary
+                                : Color.white
+                        )
+                }
             }
             .buttonStyle(.plain)
             .disabled(controller.inputText.isEmpty || controller.isProcessing)
+            .animation(.easeInOut(duration: 0.15), value: controller.inputText.isEmpty)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+}
+
+// MARK: - Chat Message Bubble
+
+struct ChatMessageBubble: View {
+    let message: ChatMessage
+    let onApply: (() -> Void)?
+
+    @State private var showAppliedFlash = false
+
+    init(message: ChatMessage, onApply: (() -> Void)? = nil) {
+        self.message = message
+        self.onApply = onApply
+    }
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            if message.role == .user {
+                Spacer(minLength: 48)
+            }
+
+            if message.role == .assistant {
+                // AI avatar
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: [Color.purple.opacity(0.85), Color.indigo.opacity(0.85)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing
+                        ))
+                        .frame(width: 26, height: 26)
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .alignmentGuide(.bottom) { d in d[.bottom] }
+            }
+
+            VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
+                // Message text
+                Text(message.content)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 9)
+                    .glassEffect(bubbleTint, in: RoundedRectangle(cornerRadius: 18))
+
+                // Effect badges + apply button
+                if let effects = message.appliedEffects, !effects.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        // Badges
+                        HStack(spacing: 4) {
+                            ForEach(effects.prefix(5), id: \.self) { effect in
+                                EffectBadge(effectName: effect)
+                            }
+                            if effects.count > 5 {
+                                Text("+\(effects.count - 5)")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        // Apply / Applied state
+                        if message.isApplied {
+                            HStack(spacing: 5) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                                Text("Applied to pedalboard")
+                                    .foregroundStyle(.green)
+                            }
+                            .font(.system(size: 11, weight: .medium))
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        } else {
+                            Button {
+                                withAnimation(.spring(response: 0.3)) {
+                                    showAppliedFlash = true
+                                }
+                                onApply?()
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "wand.and.sparkles")
+                                    Text("Apply to pedalboard")
+                                }
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.vertical, 7)
+                                .padding(.horizontal, 14)
+                                .background(
+                                    Capsule().fill(
+                                        LinearGradient(
+                                            colors: [Color.purple, Color.indigo],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            if message.role == .assistant {
+                Spacer(minLength: 48)
+            }
+        }
+    }
+
+    private var bubbleTint: Glass {
+        message.role == .user
+            ? .regular.tint(Color.indigo.opacity(0.22))
+            : .regular.tint(Color.purple.opacity(0.12))
+    }
+}
+
+// MARK: - Effect Badge
+
+struct EffectBadge: View {
+    let effectName: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: effectIcon)
+                .font(.system(size: 8, weight: .bold))
+            Text(effectName.uppercased())
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+        }
+        .foregroundStyle(effectColor)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .glassEffect(.regular.tint(effectColor.opacity(0.18)), in: Capsule())
+    }
+
+    private var effectColor: Color {
+        switch effectName.lowercased() {
+        case "reverb", "delay":                             return .riffAmbience
+        case "distortion", "overdrive", "fuzz":            return .riffGain
+        case "chorus", "phaser", "flanger", "tremolo":     return .riffModulation
+        case "compressor":                                  return .riffDynamics
+        case "equalizer":                                   return .riffFilter
+        default:                                            return .secondary
+        }
+    }
+
+    private var effectIcon: String {
+        switch effectName.lowercased() {
+        case "reverb":      return "water.waves"
+        case "delay":       return "clock.arrow.circlepath"
+        case "distortion":  return "bolt.fill"
+        case "overdrive":   return "flame.fill"
+        case "fuzz":        return "waveform.path.ecg"
+        case "chorus":      return "sparkles"
+        case "compressor":  return "arrow.up.and.down.circle"
+        case "equalizer":   return "slider.horizontal.3"
+        default:            return "music.note"
+        }
     }
 }
 
 // MARK: - Typing Indicator
 
 struct TypingIndicator: View {
-    @State private var animationPhase = 0.0
+    @State private var phase: Double = 0
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(0..<3) { index in
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
                 Circle()
-                    .fill(Color.purple.opacity(0.6))
-                    .frame(width: 8, height: 8)
-                    .offset(y: sin(animationPhase + Double(index) * 0.5) * 4)
+                    .fill(Color.purple.opacity(0.7))
+                    .frame(width: 7, height: 7)
+                    .offset(y: CGFloat(sin(phase + Double(i) * 0.8)) * 4)
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .glassEffect(.regular.tint(.purple.opacity(0.15)), in: RoundedRectangle(cornerRadius: 16))
+        .padding(.vertical, 11)
+        .glassEffect(.regular.tint(.purple.opacity(0.12)), in: RoundedRectangle(cornerRadius: 16))
         .onAppear {
-            withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
-                animationPhase = .pi * 2
+            withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
+                phase = .pi * 2
             }
         }
     }
 }
 
-// MARK: - AI Chatbot FAB (Floating Action Button)
+// MARK: - Floating Action Button
 
 struct AIChatbotFAB: View {
     let isExpanded: Bool
-    let hasNewMessage: Bool
     let action: () -> Void
 
     @State private var isHovered = false
@@ -483,32 +556,42 @@ struct AIChatbotFAB: View {
     var body: some View {
         Button(action: action) {
             ZStack {
-                // Pure Liquid Glass circle – no colour tint
-                Circle()
-                    .fill(.clear)
-                    .frame(width: 56, height: 56)
-                    .glassEffect(.regular, in: Circle())
-
-                // Icon – use .primary so it adapts to the glass backdrop
-                Image(systemName: isExpanded ? "xmark" : "wand.and.stars")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(.primary)
-
-                // New-message badge
-                if hasNewMessage && !isExpanded {
+                // Gradient fill when closed, glass when expanded
+                if !isExpanded {
                     Circle()
-                        .fill(.red)
-                        .frame(width: 12, height: 12)
-                        .offset(x: 18, y: -18)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.purple, Color.indigo],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+                } else {
+                    Circle()
+                        .fill(.clear)
+                        .frame(width: 56, height: 56)
+                        .glassEffect(.regular, in: Circle())
                 }
+
+                Image(systemName: isExpanded ? "xmark" : "wand.and.stars")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(isExpanded ? Color.primary : Color.white)
+                    .contentTransition(.symbolEffect(.replace))
             }
         }
         .buttonStyle(.plain)
-        .shadow(color: .black.opacity(isHovered ? 0.18 : 0.1), radius: isHovered ? 12 : 8, x: 0, y: 4)
-        .scaleEffect(isHovered ? 1.05 : 1.0)
-        .animation(.spring(duration: 0.2), value: isHovered)
+        .shadow(
+            color: isExpanded ? .black.opacity(0.1) : .purple.opacity(0.4),
+            radius: isHovered ? 14 : 8,
+            x: 0, y: 4
+        )
+        .scaleEffect(isHovered ? 1.06 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isExpanded)
         .onHover { isHovered = $0 }
         .help("AI Tone Assistant")
+        .accessibilityLabel(isExpanded ? "Close Tone Assistant" : "Open Tone Assistant")
     }
 }
 
@@ -517,7 +600,6 @@ struct AIChatbotFAB: View {
 #Preview {
     ZStack {
         AdaptiveBackground()
-
         VStack {
             Spacer()
             HStack {
