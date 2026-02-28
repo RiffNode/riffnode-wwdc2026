@@ -51,10 +51,13 @@ struct EffectInfoModel: EffectInfoProviding, Identifiable {
     let howToUse: String
     let signalChainPosition: String
     let famousUsers: String
-    
+    /// Non-nil when this effect is available in the app's pedalboard
+    let effectType: EffectType?
+
     /// Initialize from EffectType - reusing existing educational content
     /// Following DRY Principle
     init(from effectType: EffectType) {
+        self.effectType = effectType
         self.name = effectType.rawValue
         self.icon = effectType.icon
         self.color = effectType.color
@@ -64,9 +67,10 @@ struct EffectInfoModel: EffectInfoProviding, Identifiable {
         self.signalChainPosition = effectType.signalChainPosition
         self.famousUsers = effectType.famousExamples
     }
-    
-    /// Manual initialization for effects not in EffectType
+
+    /// Manual initialization for effects not in EffectType (educational-only)
     init(name: String, icon: String, color: Color, function: String, sound: String, howToUse: String, signalChainPosition: String, famousUsers: String) {
+        self.effectType = nil
         self.name = name
         self.icon = icon
         self.color = color
@@ -287,9 +291,9 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
             name: "Uni-Vibe",
             icon: "sun.max.fill",
             color: .orange,
-            function: "Unique mix of chorus and phaser.",
-            sound: "Throbbing, psychedelic pulse. Warm and organic.",
-            howToUse: "Classic psychedelic tones, expressive leads.",
+            function: "A vintage photo-optical vibrato/phaser effect. It uses a rotating light and photocells to create a warm, organic modulation quite different from a standard phaser.",
+            sound: "Throbbing, psychedelic pulse. Warmer and more organic than a typical phaser.",
+            howToUse: "Classic psychedelic tones, expressive leads. Associated with 60s/70s rock.",
             signalChainPosition: "AFTER DIRT - Before time effects.",
             famousUsers: "Jimi Hendrix, Robin Trower, David Gilmour"
         ))

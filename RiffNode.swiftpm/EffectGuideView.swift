@@ -8,12 +8,14 @@ struct EffectGuideView: View {
     // MARK: - Dependencies
 
     private let guideService: EffectGuideServiceProtocol
+    var engine: AudioEngineManager?
 
     // MARK: - State
 
     @State private var selectedCategoryIndex: Int = 0
     @State private var expandedEffectId: UUID? = nil
     @State private var selectedSection: LearnSection = .effects
+    @State private var addedEffectId: UUID? = nil
 
     enum LearnSection: String, CaseIterable {
         case science = "Sound Science"
@@ -22,8 +24,9 @@ struct EffectGuideView: View {
 
     // MARK: - Initialization
 
-    init(guideService: EffectGuideServiceProtocol = EffectGuideService.shared) {
+    init(guideService: EffectGuideServiceProtocol = EffectGuideService.shared, engine: AudioEngineManager? = nil) {
         self.guideService = guideService
+        self.engine = engine
     }
 
     // MARK: - Computed Properties
@@ -98,10 +101,20 @@ struct EffectGuideView: View {
                                     if let effectModel = effect as? EffectInfoModel {
                                         GlassEffectCardView(
                                             effect: effectModel,
-                                            isExpanded: expandedEffectId == effectModel.id
+                                            isExpanded: expandedEffectId == effectModel.id,
+                                            justAdded: addedEffectId == effectModel.id
                                         ) {
                                             withAnimation(.spring(duration: 0.3)) {
                                                 expandedEffectId = expandedEffectId == effectModel.id ? nil : effectModel.id
+                                            }
+                                        } onTryEffect: { type in
+                                            if let eng = engine {
+                                                eng.addEffect(type)
+                                                addedEffectId = effectModel.id
+                                                Task { @MainActor in
+                                                    try? await Task.sleep(for: .milliseconds(1500))
+                                                    addedEffectId = nil
+                                                }
                                             }
                                         }
                                     }
@@ -315,9 +328,9 @@ struct GlassEffectCategoryVisualization: View {
                         drawDistortionEffect(context: context, size: size, midY: midY, time: time, color: category.color)
                     case "modulation":
                         drawModulationEffect(context: context, size: size, midY: midY, time: time, color: category.color)
-                    case "time / ambience":
+                    case "time & ambience":
                         drawTimeEffect(context: context, size: size, midY: midY, time: time, color: category.color)
-                    case "filter / pitch":
+                    case "filter & pitch":
                         drawFilterEffect(context: context, size: size, midY: midY, time: time, color: category.color)
                     default:
                         drawGenericWaveform(context: context, size: size, midY: midY, time: time, color: category.color)
@@ -482,7 +495,9 @@ struct GlassEffectCategoryVisualization: View {
 struct GlassEffectCardView: View {
     let effect: EffectInfoModel
     let isExpanded: Bool
+    var justAdded: Bool = false
     let onTap: () -> Void
+    var onTryEffect: ((EffectType) -> Void)? = nil
 
     var body: some View {
         GlassCard(cornerRadius: 12, padding: 0) {
@@ -490,11 +505,33 @@ struct GlassEffectCardView: View {
                 // Header - clean, minimal design
                 Button(action: onTap) {
                     HStack(spacing: 12) {
+                        // Color dot for the effect category
+                        Circle()
+                            .fill(effect.color.opacity(0.8))
+                            .frame(width: 8, height: 8)
+
                         Text(effect.name)
                             .font(.headline)
                             .foregroundStyle(.primary)
 
                         Spacer()
+
+                        // "Try It" badge if effect is in the app
+                        if let effectType = effect.effectType, onTryEffect != nil {
+                            if justAdded {
+                                Label("Added!", systemImage: "checkmark.circle.fill")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.green)
+                                    .transition(.scale.combined(with: .opacity))
+                            } else {
+                                Text(effectType.abbreviation)
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(effect.color)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .glassEffect(.regular.tint(effect.color.opacity(0.15)), in: Capsule())
+                            }
+                        }
 
                         Text(isExpanded ? "Less" : "More")
                             .font(.subheadline)
@@ -505,12 +542,16 @@ struct GlassEffectCardView: View {
                 .buttonStyle(.plain)
 
                 if isExpanded {
-                    GlassEffectCardDetails(effect: effect)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    GlassEffectCardDetails(
+                        effect: effect,
+                        onTryEffect: onTryEffect
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
         .animation(.spring(duration: 0.3), value: isExpanded)
+        .animation(.spring(duration: 0.3), value: justAdded)
     }
 }
 
@@ -518,6 +559,7 @@ struct GlassEffectCardView: View {
 
 struct GlassEffectCardDetails: View {
     let effect: EffectInfoModel
+    var onTryEffect: ((EffectType) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -554,6 +596,25 @@ struct GlassEffectCardDetails: View {
                 GlassEffectArtistsSection(
                     artists: effect.famousUsers
                 )
+
+                // Try on Pedalboard - only for effects available in the app
+                if let effectType = effect.effectType, let tryAction = onTryEffect {
+                    Button {
+                        tryAction(effectType)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("Add to Pedalboard")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundStyle(effect.color)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .glassEffect(.regular.tint(effect.color.opacity(0.15)), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding()
         }

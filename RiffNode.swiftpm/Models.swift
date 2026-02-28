@@ -182,17 +182,17 @@ enum EffectType: String, CaseIterable, Identifiable, Codable, Sendable {
     /// Recommended order in signal chain (lower = earlier)
     var recommendedOrder: Int {
         switch self {
+        case .fuzz: return 0        // Vintage fuzz pedals are buffer-sensitive — first in chain
         case .compressor: return 1
         case .equalizer: return 2
         case .overdrive: return 3
         case .distortion: return 4
-        case .fuzz: return 5
-        case .phaser: return 6
-        case .chorus: return 7
-        case .flanger: return 8
-        case .tremolo: return 9
-        case .delay: return 10
-        case .reverb: return 11
+        case .phaser: return 5
+        case .chorus: return 6
+        case .flanger: return 7
+        case .tremolo: return 8
+        case .delay: return 9
+        case .reverb: return 10
         }
     }
     
@@ -312,9 +312,9 @@ enum EffectType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .equalizer:
             return "Every professional guitarist uses EQ to shape their signature tone"
         case .overdrive:
-            return "Stevie Ray Vaughan, John Mayer, Blues Breakers"
+            return "Stevie Ray Vaughan, John Mayer, Eric Clapton, AC/DC (amp-driven crunch)"
         case .distortion:
-            return "Metallica, AC/DC, Van Halen, Nirvana"
+            return "Metallica, Nirvana (Kurt Cobain's Boss DS-1), Smashing Pumpkins, Green Day"
         case .fuzz:
             return "Jimi Hendrix, Jack White, The Black Keys"
         case .chorus:
@@ -324,7 +324,7 @@ enum EffectType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .flanger:
             return "Eddie Van Halen, Heart 'Barracuda'"
         case .tremolo:
-            return "Green Day 'Boulevard of Broken Dreams', Surf Rock"
+            return "Dick Dale (Surf Rock), My Bloody Valentine, Green Day 'Boulevard of Broken Dreams'"
         case .delay:
             return "U2 'Where The Streets Have No Name', Pink Floyd"
         case .reverb:

@@ -406,7 +406,7 @@ struct MainInterfaceView: View {
                                 engine: engine
                             )
                         case .learnEffects:
-                            EffectGuideView()
+                            EffectGuideView(engine: engine)
                         }
                     }
                     .animation(.smooth(duration: 0.25), value: selectedTab)

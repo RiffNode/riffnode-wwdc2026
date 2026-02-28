@@ -18,49 +18,56 @@ struct GuidedTourView: View {
         TourStep(
             title: "Welcome to RiffNode",
             subtitle: "Your Guitar Effects Playground",
-            content: "Ever wondered how guitarists create those amazing sounds? From the crunchy distortion of rock to the spacey echoes of ambient music - it's all about effects pedals.",
+            content: "Ever wondered how guitarists create those amazing sounds? From the crunchy distortion of rock to the spacey echoes of ambient music — it's all about effects pedals.",
             highlightEffect: nil,
             actionLabel: "Let's Explore"
         ),
         TourStep(
             title: "The Signal Chain",
             subtitle: "How Sound Flows",
-            content: "Your guitar signal flows through a chain of effects, each one transforming the sound. The order matters - distortion before reverb sounds very different from reverb before distortion!",
+            content: "Your guitar signal flows through a chain of effects, each one transforming the sound. The order matters — distortion before reverb sounds very different from reverb before distortion!",
             highlightEffect: nil,
             actionLabel: "Show Me"
         ),
         TourStep(
+            title: "Overdrive",
+            subtitle: "Warm & Dynamic",
+            content: "Overdrive simulates a tube amp being pushed hard — warm, natural, and responsive. Unlike distortion, it reacts to how hard you play. Play softly for clean tones, dig in hard for crunch. The foundation of blues and classic rock.",
+            highlightEffect: .overdrive,
+            actionLabel: "Feel the Warmth"
+        ),
+        TourStep(
             title: "Distortion",
             subtitle: "The Sound of Rock",
-            content: "Distortion clips your audio signal, creating that gritty, aggressive tone. From subtle warmth to full metal crunch - this effect defined rock music. Used by Metallica, AC/DC, and Nirvana.",
+            content: "Distortion hard-clips your audio signal for a gritty, aggressive tone. More intense than overdrive — consistent high gain regardless of dynamics. Metallica, Nirvana, and Smashing Pumpkins all built their sound here.",
             highlightEffect: .distortion,
             actionLabel: "Hear It"
         ),
         TourStep(
+            title: "Chorus",
+            subtitle: "Shimmer & Width",
+            content: "Chorus makes one guitar sound like several playing together, slightly out of tune. It creates a lush, shimmering quality. The secret behind Nirvana's 'Come As You Are' and countless 80s hits.",
+            highlightEffect: .chorus,
+            actionLabel: "Hear Chorus"
+        ),
+        TourStep(
             title: "Delay",
             subtitle: "Echoes in Time",
-            content: "Delay repeats your notes like an echo. Short delays add thickness, longer delays create rhythmic patterns. Think U2's 'Where The Streets Have No Name' - that's delay magic!",
+            content: "Delay repeats your notes like an echo. Short delays add thickness, longer delays create rhythmic patterns. Think U2's 'Where The Streets Have No Name' — that's delay magic!",
             highlightEffect: .delay,
             actionLabel: "Try Delay"
         ),
         TourStep(
             title: "Reverb",
             subtitle: "Creating Space",
-            content: "Reverb simulates how sound bounces in physical spaces. A small room, a concert hall, or a massive cathedral - reverb puts your guitar anywhere. Essential for that 'polished' sound.",
+            content: "Reverb simulates how sound bounces in physical spaces. A small room, a concert hall, or a massive cathedral — reverb puts your guitar anywhere. Essential for that polished, professional sound.",
             highlightEffect: .reverb,
             actionLabel: "Add Space"
         ),
         TourStep(
-            title: "Chorus",
-            subtitle: "Shimmer & Width",
-            content: "Chorus makes one guitar sound like several playing together, slightly out of tune. It creates a lush, shimmering quality. The secret behind Nirvana's 'Come As You Are'.",
-            highlightEffect: .chorus,
-            actionLabel: "Hear Chorus"
-        ),
-        TourStep(
             title: "You're Ready!",
             subtitle: "Start Creating",
-            content: "Now you understand the basics of guitar effects. Experiment with different combinations, adjust the knobs, and discover your own signature sound. There are no wrong answers - only new discoveries!",
+            content: "Now you understand the basics of guitar effects. Experiment with combinations, adjust the knobs, and discover your own signature sound. There are no wrong answers — only new discoveries!",
             highlightEffect: nil,
             actionLabel: "Start Playing"
         )
@@ -90,6 +97,12 @@ struct GuidedTourView: View {
                     if let effectType = step.highlightEffect {
                         GlassEffectDemoView(effectType: effectType, isActive: showingEffect)
                             .frame(height: 180)
+                            .transition(.scale.combined(with: .opacity))
+                    } else if currentStep == 1 {
+                        // Signal Chain diagram for "The Signal Chain" step
+                        GlassSignalChainDiagram()
+                            .frame(height: 80)
+                            .padding(.horizontal, Spacing.lg)
                             .transition(.scale.combined(with: .opacity))
                     }
 
@@ -486,6 +499,74 @@ struct GlassTourNavigation: View {
                 .glassEffectID("next_btn", in: namespace)
             }
         }
+    }
+}
+
+// MARK: - Glass Signal Chain Diagram
+
+struct GlassSignalChainDiagram: View {
+    @State private var animationPhase: Double = 0
+    @State private var signalPosition: Double = 0
+
+    private let stages: [(label: String, color: Color)] = [
+        ("IN", .secondary),
+        ("DIRT", .riffGain),
+        ("MOD", .riffModulation),
+        ("TIME", .riffAmbience),
+        ("OUT", .riffPrimary)
+    ]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                let segmentWidth = size.width / CGFloat(stages.count)
+                let midY = size.height / 2
+
+                // Draw connecting lines between stages
+                for i in 0..<(stages.count - 1) {
+                    let x1 = segmentWidth * CGFloat(i) + segmentWidth * 0.75
+                    let x2 = segmentWidth * CGFloat(i + 1) + segmentWidth * 0.25
+                    var linePath = Path()
+                    linePath.move(to: CGPoint(x: x1, y: midY))
+                    linePath.addLine(to: CGPoint(x: x2, y: midY))
+                    context.stroke(linePath, with: .color(.primary.opacity(0.2)), lineWidth: 2)
+                }
+
+                // Animated signal dot traveling along the chain
+                let signalT = (time * 0.6).truncatingRemainder(dividingBy: 1.0)
+                let totalWidth = size.width * 0.8
+                let startX = size.width * 0.1
+                let signalX = startX + CGFloat(signalT) * totalWidth
+                let signalStage = Int(signalT * Double(stages.count - 1))
+                let stageColor = stages[min(signalStage, stages.count - 1)].color
+                context.fill(
+                    Path(ellipseIn: CGRect(x: signalX - 5, y: midY - 5, width: 10, height: 10)),
+                    with: .color(stageColor.opacity(0.9))
+                )
+                // Glow
+                context.fill(
+                    Path(ellipseIn: CGRect(x: signalX - 9, y: midY - 9, width: 18, height: 18)),
+                    with: .color(stageColor.opacity(0.3))
+                )
+            }
+            .overlay {
+                HStack(spacing: 0) {
+                    ForEach(Array(stages.enumerated()), id: \.offset) { i, stage in
+                        VStack(spacing: 4) {
+                            Text(stage.label)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(stage.color)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .glassEffect(.regular.tint(stage.color.opacity(0.15)), in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+        }
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
