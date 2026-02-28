@@ -938,8 +938,8 @@ final class AudioEngineManager: AudioManaging {
             outputLevel = inputLevel * 0.9
             waveformSamples = data.waveform
 
-            // Feed audio samples to analyzers every 3rd frame (~10 Hz for FFT)
-            // This reduces CPU load while still providing responsive analysis
+            // Feed audio samples to FFT/chord every 3rd frame (~10 Hz at 30fps base rate)
+            // 10fps is more than enough for educational spectrum + pitch display
             frameCounter += 1
             if frameCounter >= 3 && !data.samples.isEmpty && data.samples.count >= 2048 {
                 frameCounter = 0
@@ -950,8 +950,8 @@ final class AudioEngineManager: AudioManaging {
                 }
             }
 
-            // 16ms = ~60fps for smooth waveform visualization
-            try? await Task.sleep(for: .milliseconds(16))
+            // 33ms = ~30fps — half the @Observable update rate vs 60fps, no perceptible difference
+            try? await Task.sleep(for: .milliseconds(33))
         }
     }
 

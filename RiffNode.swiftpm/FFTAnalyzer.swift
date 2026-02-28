@@ -48,6 +48,12 @@ final class FFTAnalyzer {
     private var realPart: [Float] = []
     private var imagPart: [Float] = []
 
+    // Pre-allocated intermediate buffers — reused every analyze() call to avoid heap churn
+    private var _outReal: [Float] = []
+    private var _outImag: [Float] = []
+    private var _magRaw: [Float] = []
+    private var _magDB: [Float] = []
+
     /// Flag indicating if FFT setup was successful
     private var isSetupValid: Bool = false
 
@@ -80,9 +86,13 @@ final class FFTAnalyzer {
         window = [Float](repeating: 0, count: fftSize)
         vDSP_hann_window(&window, vDSP_Length(fftSize), Int32(vDSP_HANN_NORM))
 
-        // Allocate buffers
+        // Allocate buffers (once — reused every analyze() call)
         realPart = [Float](repeating: 0, count: fftSize)
         imagPart = [Float](repeating: 0, count: fftSize)
+        _outReal = [Float](repeating: 0, count: fftSize)
+        _outImag = [Float](repeating: 0, count: fftSize)
+        _magRaw  = [Float](repeating: 0, count: fftSize / 2)
+        _magDB   = [Float](repeating: 0, count: fftSize / 2)
 
         // Mark setup as valid
         isSetupValid = true
@@ -124,40 +134,31 @@ final class FFTAnalyzer {
         // Apply Hanning window
         vDSP_vmul(inputSamples, 1, window, 1, &inputSamples, 1, vDSP_Length(fftSize))
 
-        // Prepare for DFT (real input, imaginary = 0)
+        // Prepare for DFT — copy input into realPart, zero imagPart (reuse pre-allocated buffers)
         realPart = inputSamples
-        imagPart = [Float](repeating: 0, count: fftSize)
+        vDSP_vclr(&imagPart, 1, vDSP_Length(fftSize))
 
-        // Output buffers
-        var outReal = [Float](repeating: 0, count: fftSize)
-        var outImag = [Float](repeating: 0, count: fftSize)
+        // Perform FFT — write into pre-allocated output buffers (no allocation)
+        vDSP_DFT_Execute(setup, realPart, imagPart, &_outReal, &_outImag)
 
-        // Perform FFT
-        vDSP_DFT_Execute(setup, realPart, imagPart, &outReal, &outImag)
-
-        // Calculate magnitudes (only first half - Nyquist)
+        // Calculate magnitudes — write into pre-allocated _magRaw (no allocation)
         let halfSize = fftSize / 2
-        var magnitudesRaw = [Float](repeating: 0, count: halfSize)
-
-        // PERF: vDSP_zvabs computes sqrt(re²+im²) for all bins in one vectorized call
-        // ~10x faster than the equivalent scalar sqrt loop
-        outReal.withUnsafeBufferPointer { realBuf in
-            outImag.withUnsafeBufferPointer { imagBuf in
+        _outReal.withUnsafeBufferPointer { realBuf in
+            _outImag.withUnsafeBufferPointer { imagBuf in
                 var splitComplex = DSPSplitComplex(
                     realp: UnsafeMutablePointer(mutating: realBuf.baseAddress!),
                     imagp: UnsafeMutablePointer(mutating: imagBuf.baseAddress!)
                 )
-                vDSP_zvabs(&splitComplex, 1, &magnitudesRaw, 1, vDSP_Length(halfSize))
+                vDSP_zvabs(&splitComplex, 1, &_magRaw, 1, vDSP_Length(halfSize))
             }
         }
 
-        // Convert to decibels and normalize
-        var magnitudesDB = [Float](repeating: 0, count: halfSize)
+        // Convert to dB — write into pre-allocated _magDB (no allocation)
         var reference: Float = 1.0
-        vDSP_vdbcon(magnitudesRaw, 1, &reference, &magnitudesDB, 1, vDSP_Length(halfSize), 0)
+        vDSP_vdbcon(_magRaw, 1, &reference, &_magDB, 1, vDSP_Length(halfSize), 0)
 
         // Bin the frequencies for display
-        let binnedMagnitudes = binMagnitudes(magnitudesDB, fromSize: halfSize, toSize: binCount)
+        let binnedMagnitudes = binMagnitudes(_magDB, fromSize: halfSize, toSize: binCount)
 
         // Normalize to 0-1 range (vectorized)
         let normalizedMagnitudes = normalizeMagnitudes(binnedMagnitudes)
@@ -165,7 +166,7 @@ final class FFTAnalyzer {
         // Find peak using vDSP (vectorized max search)
         var peakVal: Float = 0
         var peakIdx: vDSP_Length = 0
-        vDSP_maxvi(magnitudesRaw, 1, &peakVal, &peakIdx, vDSP_Length(halfSize))
+        vDSP_maxvi(_magRaw, 1, &peakVal, &peakIdx, vDSP_Length(halfSize))
         let freqResolution = Float(sampleRate) / Float(fftSize)
         peakFrequency = Float(peakIdx) * freqResolution
         peakMagnitude = normalizedMagnitudes.max() ?? 0
@@ -474,19 +475,30 @@ struct MiniSpectrumIndicator: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.cyan)
 
-            // Mini spectrum bars (8 bars for performance)
-            HStack(spacing: 3) {
-                ForEach(0..<8, id: \.self) { index in
-                    let binIndex = index * (analyzer.binCount / 8)
-                    let magnitude = binIndex < analyzer.magnitudes.count ?
-                        analyzer.magnitudes[binIndex] : 0
-
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(barColor8(for: index))
-                        .frame(width: 5, height: 8 + CGFloat(magnitude) * 24)
+            // Mini spectrum — single Canvas draw call instead of 8 SwiftUI views
+            let mags = analyzer.magnitudes
+            let barColors: [Color] = [
+                .red.opacity(0.8), .red.opacity(0.8),
+                .orange.opacity(0.8), .orange.opacity(0.8),
+                .green.opacity(0.8), .green.opacity(0.8),
+                .cyan.opacity(0.8), .cyan.opacity(0.8)
+            ]
+            Canvas { context, size in
+                let barCount = 8
+                let barW = (size.width - CGFloat(barCount - 1) * 3) / CGFloat(barCount)
+                for i in 0..<barCount {
+                    let binIdx = i * (mags.count / max(barCount, 1))
+                    let mag = CGFloat(binIdx < mags.count ? mags[binIdx] : 0)
+                    let barH = max(4, 8 + mag * 24)
+                    let x = CGFloat(i) * (barW + 3)
+                    let rect = CGRect(x: x, y: size.height - barH, width: barW, height: barH)
+                    context.fill(
+                        Path(roundedRect: rect, cornerRadius: 1),
+                        with: .color(barColors[i])
+                    )
                 }
             }
-            .frame(height: 32)
+            .frame(width: 67, height: 32)
 
             Spacer()
 
@@ -507,13 +519,12 @@ struct MiniSpectrumIndicator: View {
         .animation(.none, value: analyzer.magnitudes)
     }
 
-    private func barColor8(for index: Int) -> Color {
-        // 8 bars: indices 0-1 = bass (red), 2-3 = low-mid (orange), 4-5 = mid (green), 6-7 = high (cyan)
+    private func miniBarColor(_ index: Int) -> Color {
         switch index {
         case 0, 1: return .red.opacity(0.8)
         case 2, 3: return .orange.opacity(0.8)
         case 4, 5: return .green.opacity(0.8)
-        default: return .cyan.opacity(0.8)
+        default:   return .cyan.opacity(0.8)
         }
     }
 
