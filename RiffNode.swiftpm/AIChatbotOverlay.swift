@@ -120,6 +120,18 @@ struct AIChatbotOverlayView: View {
     @State private var isMinimized = false
     @FocusState private var inputFocused: Bool
 
+    // Drag-to-reposition state
+    @State private var committedOffset: CGSize = .zero   // persisted after drag ends
+    @State private var liveOffset: CGSize = .zero        // delta during active drag
+    @State private var isDragging = false
+
+    private var totalOffset: CGSize {
+        CGSize(
+            width:  committedOffset.width  + liveOffset.width,
+            height: committedOffset.height + liveOffset.height
+        )
+    }
+
     private let panelWidth: CGFloat = 390
     private let panelMaxHeight: CGFloat = 520
 
@@ -127,6 +139,7 @@ struct AIChatbotOverlayView: View {
         VStack(alignment: .trailing, spacing: 12) {
             if isExpanded {
                 VStack(spacing: 0) {
+                    dragHandle
                     chatHeader
                     if !isMinimized {
                         messagesScrollView
@@ -137,9 +150,16 @@ struct AIChatbotOverlayView: View {
                     }
                 }
                 .frame(width: panelWidth)
-                .frame(maxHeight: isMinimized ? 60 : panelMaxHeight)
+                .frame(maxHeight: isMinimized ? 84 : panelMaxHeight)
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22))
-                .shadow(color: .black.opacity(0.25), radius: 24, x: 0, y: 12)
+                .shadow(
+                    color: isDragging ? .black.opacity(0.38) : .black.opacity(0.25),
+                    radius: isDragging ? 36 : 24,
+                    x: 0,
+                    y: isDragging ? 20 : 12
+                )
+                .scaleEffect(isDragging ? 1.018 : 1.0)
+                .animation(.spring(response: 0.25, dampingFraction: 0.75), value: isDragging)
                 .transition(.asymmetric(
                     insertion: .scale(scale: 0.92, anchor: .bottomTrailing).combined(with: .opacity),
                     removal:   .scale(scale: 0.92, anchor: .bottomTrailing).combined(with: .opacity)
@@ -152,6 +172,47 @@ struct AIChatbotOverlayView: View {
                 }
             }
         }
+        .offset(totalOffset)
+    }
+
+    // MARK: - Drag Handle
+
+    private var dragHandle: some View {
+        HStack {
+            Spacer()
+            Capsule()
+                .fill(Color.secondary.opacity(isDragging ? 0.55 : 0.28))
+                .frame(width: 38, height: 4)
+                .animation(.easeInOut(duration: 0.15), value: isDragging)
+            Spacer()
+        }
+        .frame(height: 22)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 4, coordinateSpace: .global)
+                .onChanged { value in
+                    if !isDragging {
+                        isDragging = true
+                    }
+                    liveOffset = value.translation
+                }
+                .onEnded { value in
+                    committedOffset = CGSize(
+                        width:  committedOffset.width  + value.translation.width,
+                        height: committedOffset.height + value.translation.height
+                    )
+                    liveOffset = .zero
+                    isDragging = false
+                }
+        )
+        // Double-tap snaps back to original bottom-right corner
+        .onTapGesture(count: 2) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.72)) {
+                committedOffset = .zero
+                liveOffset = .zero
+            }
+        }
+        .help("Drag to move • Double-tap to reset position")
     }
 
     // MARK: - Header
