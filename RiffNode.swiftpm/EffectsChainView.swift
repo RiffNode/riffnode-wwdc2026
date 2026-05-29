@@ -96,7 +96,8 @@ struct GlassSignalChainView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             signalChainContent
         }
-        // Dark pedalboard surface – no glass here
+        .scrollBounceBehavior(.basedOnSize)
+        // Dark pedalboard surface
         .background(
             RoundedRectangle(cornerRadius: 18)
                 .fill(
@@ -118,6 +119,24 @@ struct GlassSignalChainView: View {
                     lineWidth: 1
                 )
         )
+        // Trailing fade — tells the user there's more content to scroll to
+        .overlay(alignment: .trailing) {
+            if engine.effectsChain.count > 4 {
+                LinearGradient(
+                    colors: [Color(white: 0.09).opacity(0), Color(white: 0.09)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: 48)
+                .clipShape(
+                    .rect(
+                        bottomTrailingRadius: 18,
+                        topTrailingRadius: 18
+                    )
+                )
+                .allowsHitTesting(false)
+            }
+        }
         .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
         .padding(.horizontal)
     }

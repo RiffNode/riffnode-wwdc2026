@@ -1,4 +1,5 @@
 import AVFoundation
+import AudioToolbox
 import Observation
 import os
 import SwiftUI
@@ -122,15 +123,23 @@ final class AudioEngineManager: AudioManaging {
     }
 
     private func setupDefaultEffectsChain() {
-        // Default chain following recommended signal chain order
+        // Start with a clean 6-pedal chain. The AI adds missing pedals on demand.
         effectsChain = [
-            EffectNode(type: .compressor, isEnabled: false),
-            EffectNode(type: .overdrive, isEnabled: false),
-            EffectNode(type: .distortion, isEnabled: true),
-            EffectNode(type: .chorus, isEnabled: false),
-            EffectNode(type: .delay, isEnabled: false),
-            EffectNode(type: .reverb, isEnabled: true)
+            EffectNode(type: .compressor,  isEnabled: false),
+            EffectNode(type: .overdrive,   isEnabled: false),
+            EffectNode(type: .distortion,  isEnabled: true),
+            EffectNode(type: .chorus,      isEnabled: false),
+            EffectNode(type: .delay,       isEnabled: false),
+            EffectNode(type: .reverb,      isEnabled: true),
         ]
+    }
+
+    /// Ensure an effect type exists in the chain, inserting it in the correct
+    /// signal-chain position if it's missing. Called by the AI before enabling.
+    func ensureEffectInChain(_ type: EffectType) {
+        guard !effectsChain.contains(where: { $0.type == type }) else { return }
+        effectsChain.append(EffectNode(type: type, isEnabled: false))
+        effectsChain.sort { $0.type.recommendedOrder < $1.type.recommendedOrder }
     }
 
     // MARK: - AudioEngineProtocol Implementation
@@ -800,41 +809,82 @@ final class AudioEngineManager: AudioManaging {
 
         switch effect.type {
         case .compressor:
-            // AVAudioUnitDistortion used as compressor simulation
-            // (AVFoundation doesn't have a native compressor, using distortion with low settings)
-            break
-            
+            // Apple Dynamics Processor parameters (set via C AU API):
+            //   param 0 = Threshold    (-40 to +20 dB,  default -20)
+            //   param 1 = HeadRoom     (0.1 to 40 dB,   default 5)  — relates to ratio
+            //   param 4 = AttackTime   (0.0001 to 0.2s, default 0.001)
+            //   param 5 = ReleaseTime  (0.01 to 3s,     default 0.024)
+            //   param 6 = MasterGain   (-40 to +40 dB,  default 0)  — makeup gain
+            let threshold = effect.parameters["threshold"] ?? -20
+            let ratio     = effect.parameters["ratio"]     ?? 4
+            let attackMs  = effect.parameters["attack"]    ?? 10
+            let releaseMs = effect.parameters["release"]   ?? 100
+            // Map ratio (1–20) to headRoom (40–2 dB): higher ratio = tighter = less headroom
+            let headRoom  = max(2.0, min(40.0, 40.0 / ratio))
+            let au = units.compressor.audioUnit
+            AudioUnitSetParameter(au, 0, kAudioUnitScope_Global, 0, threshold, 0)
+            AudioUnitSetParameter(au, 1, kAudioUnitScope_Global, 0, headRoom, 0)
+            AudioUnitSetParameter(au, 4, kAudioUnitScope_Global, 0, attackMs / 1000.0, 0)
+            AudioUnitSetParameter(au, 5, kAudioUnitScope_Global, 0, releaseMs / 1000.0, 0)
+
         case .equalizer:
             if let eq = units.equalizer {
+                // 10 bands: [0]=32Hz [1]=64Hz [2]=125Hz [3]=250Hz [4]=500Hz
+                //           [5]=1kHz [6]=2kHz [7]=4kHz  [8]=8kHz  [9]=16kHz
+                // Bass   → band[0] (32Hz  lowShelf  — broad bass shelf)
+                // Mid    → band[4] (500Hz parametric — classic mid-range)
+                // Treble → band[9] (16kHz highShelf  — natural treble shelf)
                 eq.bands[0].gain = effect.parameters["bass"] ?? 0
-                eq.bands[1].gain = effect.parameters["mid"] ?? 0
-                eq.bands[2].gain = effect.parameters["treble"] ?? 0
+                eq.bands[4].gain = effect.parameters["mid"] ?? 0
+                eq.bands[9].gain = effect.parameters["treble"] ?? 0
             }
-            
+
         case .overdrive:
-            units.overdrive.wetDryMix = effect.parameters["level"] ?? 50
-            
+            // drive * level/100 → wetDryMix (drive sets saturation amount, level scales output)
+            let drive = effect.parameters["drive"] ?? 30
+            let level = effect.parameters["level"] ?? 50
+            units.overdrive.wetDryMix = max(0, min(100, drive * (level / 100.0)))
+
         case .distortion:
-            units.distortion.wetDryMix = effect.parameters["level"] ?? 50
-            
+            let drive = effect.parameters["drive"] ?? 50
+            let level = effect.parameters["level"] ?? 50
+            units.distortion.wetDryMix = max(0, min(100, drive * (level / 100.0)))
+
         case .fuzz:
-            units.fuzz.wetDryMix = effect.parameters["level"] ?? 50
-            
+            let fuzzAmt = effect.parameters["fuzz"] ?? 70
+            let level = effect.parameters["level"] ?? 50
+            units.fuzz.wetDryMix = max(0, min(100, fuzzAmt * (level / 100.0)))
+
         case .chorus:
-            // Using delay with short time to simulate chorus
-            break
-            
+            // mix → wetDryMix; rate → approximate delayTime (higher rate = shorter delay)
+            let mix = effect.parameters["mix"] ?? 50
+            let rate = effect.parameters["rate"] ?? 1.0
+            units.chorus.wetDryMix = max(0, min(100, mix))
+            // Map 0.1–10 Hz → 50ms–5ms delay (chorus range)
+            let chorusDelay = max(0.005, min(0.05, 0.05 / Double(rate)))
+            units.chorus.delayTime = chorusDelay
+
         case .phaser:
-            // Simulated through distortion preset
-            break
-            
+            // depth → wetDryMix; rate stored in parameters but phaser has no delayTime
+            let depth = effect.parameters["depth"] ?? 50
+            units.phaser.wetDryMix = max(0, min(100, depth))
+
         case .flanger:
-            // Simulated through delay with feedback
-            break
-            
+            // depth → wetDryMix; rate → delayTime (flanger: very short 1–20ms delay)
+            let depth = effect.parameters["depth"] ?? 50
+            let rate = effect.parameters["rate"] ?? 0.3
+            let feedback = effect.parameters["feedback"] ?? 50
+            units.flanger.wetDryMix = max(0, min(100, depth))
+            // Map 0.1–2 Hz → 20ms–1ms delay
+            let flangerDelay = max(0.001, min(0.02, 0.002 / Double(rate)))
+            units.flanger.delayTime = flangerDelay
+            // feedback: unit is -100 to 100; map 0–100 → -80 to 80
+            units.flanger.feedback = (feedback - 50.0) * 1.6
+
         case .tremolo:
-            // Simulated through volume modulation
-            break
+            // depth → wetDryMix; rate is stored but AVAudioUnitDistortion has no LFO
+            let depth = effect.parameters["depth"] ?? 50
+            units.tremolo.wetDryMix = max(0, min(100, depth))
 
         case .delay:
             units.delay.delayTime = TimeInterval(effect.parameters["time"] ?? 0.3)
@@ -843,9 +893,32 @@ final class AudioEngineManager: AudioManaging {
 
         case .reverb:
             units.reverb.wetDryMix = effect.parameters["wetDryMix"] ?? 40
+            if let decay = effect.parameters["decay"] {
+                selectReverbPreset(decaySeconds: decay)
+            }
         }
     }
-    
+
+    // MARK: - Reverb Preset Selection
+
+    /// Select an appropriate AVAudioUnitReverb preset based on decay time
+    private func selectReverbPreset(decaySeconds: Float) {
+        guard let units = effectUnits else { return }
+        let preset: AVAudioUnitReverbPreset
+        if decaySeconds < 0.8 {
+            preset = .smallRoom
+        } else if decaySeconds < 1.5 {
+            preset = .mediumRoom
+        } else if decaySeconds < 2.5 {
+            preset = .mediumHall
+        } else if decaySeconds < 4.0 {
+            preset = .largeHall
+        } else {
+            preset = .cathedral
+        }
+        units.reverb.loadFactoryPreset(preset)
+    }
+
     /// Sync bypass state for all effects
     private func syncBypassStates() {
         guard let units = effectUnits else { return }
@@ -974,8 +1047,8 @@ final class AudioEngineManager: AudioManaging {
 // Following Single Responsibility: Only manages audio unit instances
 
 private final class EffectUnitsContainer {
-    // Dynamics
-    let compressor: AVAudioUnitDistortion
+    // Dynamics — real Apple Dynamics Processor AU (not a distortion simulation)
+    let compressor: AVAudioUnitEffect
     
     // Filter & Pitch
     let equalizer: AVAudioUnitEQ?
@@ -996,10 +1069,15 @@ private final class EffectUnitsContainer {
     let reverb: AVAudioUnitReverb
 
     init() {
-        // Dynamics - Compressor (simulated with low distortion)
-        compressor = AVAudioUnitDistortion()
-        compressor.loadFactoryPreset(.speechWaves)
-        compressor.wetDryMix = 30
+        // Dynamics — Apple's real Dynamics Processor (hardware compressor AU)
+        let compDesc = AudioComponentDescription(
+            componentType: kAudioUnitType_Effect,
+            componentSubType: kAudioUnitSubType_DynamicsProcessor,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0
+        )
+        compressor = AVAudioUnitEffect(audioComponentDescription: compDesc)
         compressor.bypass = true
         
         // 10-band Parametric EQ

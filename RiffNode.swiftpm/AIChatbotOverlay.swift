@@ -9,6 +9,7 @@ struct ChatMessage: Identifiable {
     let content: String
     let timestamp: Date
     var appliedEffects: [String]?
+    var commandMode: String?  // "preset", "additive", "remove"
     var isApplied: Bool = false
 
     enum Role {
@@ -21,13 +22,15 @@ struct ChatMessage: Identifiable {
         role: Role,
         content: String,
         timestamp: Date = Date(),
-        appliedEffects: [String]? = nil
+        appliedEffects: [String]? = nil,
+        commandMode: String? = nil
     ) {
         self.id = id
         self.role = role
         self.content = content
         self.timestamp = timestamp
         self.appliedEffects = appliedEffects
+        self.commandMode = commandMode
     }
 }
 
@@ -49,7 +52,11 @@ final class AIChatbotController {
         ("sparkles",         "80s chorus"),
         ("waveform",         "Warm lead"),
         ("moon.stars.fill",  "Ambient pad"),
-        ("guitars.fill",     "Classic rock")
+        ("guitars.fill",     "Classic rock"),
+        ("waveform.path.ecg","Add fuzz"),
+        ("clock.arrow.circlepath", "Add delay"),
+        ("arrow.up.and.down.circle", "Add compressor"),
+        ("speaker.wave.3",   "Surf rock")
     ]
 
     init() {
@@ -69,10 +76,22 @@ final class AIChatbotController {
         let success = await processor.processCommand(text)
 
         if success {
+            // For remove/additive/delete commands show what was affected
+            let affectedEffects: [String]
+            switch processor.lastCommandMode {
+            case "remove":
+                affectedEffects = processor.lastDisabledEffects
+            case "delete":
+                affectedEffects = processor.lastDeletedEffects
+            default:
+                affectedEffects = processor.lastEnabledEffects
+            }
+
             let response = ChatMessage(
                 role: .assistant,
                 content: processor.lastExplanation,
-                appliedEffects: processor.lastEnabledEffects
+                appliedEffects: affectedEffects.isEmpty ? nil : affectedEffects,
+                commandMode: processor.lastCommandMode
             )
             messages.append(response)
 
@@ -84,9 +103,12 @@ final class AIChatbotController {
                 messages[responseIndex].isApplied = true
             }
         } else {
+            let fallbackMsg = processor.lastExplanation.isEmpty
+                ? "Try \"add reverb\", \"heavy metal\", \"more bass\", or \"remove delay\"."
+                : processor.lastExplanation
             messages.append(ChatMessage(
                 role: .assistant,
-                content: "I didn't quite catch that. Try something like \"warm blues tone\" or \"more reverb and delay\"."
+                content: fallbackMsg
             ))
         }
 
@@ -101,7 +123,8 @@ final class AIChatbotController {
         }
     }
 
-    func clearHistory() {
+    func clearHistory(processor: SemanticCommandProcessor? = nil) {
+        processor?.resetConversation()
         messages = [ChatMessage(
             role: .assistant,
             content: "Fresh start! What tone are you going for?"
@@ -471,10 +494,25 @@ struct ChatMessageBubble: View {
                 // Effect badges + apply button
                 if let effects = message.appliedEffects, !effects.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        // Badges
-                        HStack(spacing: 4) {
+                        // Mode label + badges
+                        HStack(spacing: 6) {
+                            if let mode = message.commandMode, mode != "preset" {
+                                let label = mode == "remove" ? "BYPASSED" : mode == "delete" ? "DELETED" : mode == "set" ? "SET" : "ADDED"
+                                let color: Color = (mode == "remove" || mode == "delete") ? .orange : .green
+                                Text(label)
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(color)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule().fill(((mode == "remove" || mode == "delete") ? Color.orange : Color.green).opacity(0.15))
+                                    )
+                            }
                             ForEach(effects.prefix(5), id: \.self) { effect in
-                                EffectBadge(effectName: effect)
+                                EffectBadge(
+                                    effectName: effect,
+                                    isRemoving: message.commandMode == "remove" || message.commandMode == "delete"
+                                )
                             }
                             if effects.count > 5 {
                                 Text("+\(effects.count - 5)")
@@ -488,8 +526,15 @@ struct ChatMessageBubble: View {
                             HStack(spacing: 5) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
-                                Text("Applied to pedalboard")
-                                    .foregroundStyle(.green)
+                                Text({
+                                    switch message.commandMode {
+                                    case "remove":  return "Bypassed on pedalboard"
+                                    case "delete":  return "Deleted from pedalboard"
+                                    case "set":     return "Parameter updated"
+                                    default:        return "Applied to pedalboard"
+                                    }
+                                }())
+                                .foregroundStyle(.green)
                             }
                             .font(.system(size: 11, weight: .medium))
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -500,9 +545,24 @@ struct ChatMessageBubble: View {
                                 }
                                 onApply?()
                             } label: {
+                                let isDestructive = message.commandMode == "remove" || message.commandMode == "delete"
                                 HStack(spacing: 5) {
-                                    Image(systemName: "wand.and.sparkles")
-                                    Text("Apply to pedalboard")
+                                    Image(systemName: {
+                                        switch message.commandMode {
+                                        case "delete": return "trash"
+                                        case "remove": return "minus.circle"
+                                        case "set":    return "slider.horizontal.3"
+                                        default:       return "wand.and.sparkles"
+                                        }
+                                    }())
+                                    Text({
+                                        switch message.commandMode {
+                                        case "delete": return "Delete from pedalboard"
+                                        case "remove": return "Bypass effect"
+                                        case "set":    return "Apply parameter"
+                                        default:       return "Apply to pedalboard"
+                                        }
+                                    }())
                                 }
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(.white)
@@ -511,7 +571,9 @@ struct ChatMessageBubble: View {
                                 .background(
                                     Capsule().fill(
                                         LinearGradient(
-                                            colors: [Color.purple, Color.indigo],
+                                            colors: isDestructive
+                                                ? [Color.orange, Color.red.opacity(0.8)]
+                                                : [Color.purple, Color.indigo],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
@@ -541,18 +603,19 @@ struct ChatMessageBubble: View {
 
 struct EffectBadge: View {
     let effectName: String
+    var isRemoving: Bool = false
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: effectIcon)
+            Image(systemName: isRemoving ? "minus.circle" : effectIcon)
                 .font(.system(size: 8, weight: .bold))
             Text(effectName.uppercased())
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
         }
-        .foregroundStyle(effectColor)
+        .foregroundStyle(isRemoving ? Color.orange : effectColor)
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
-        .glassEffect(.regular.tint(effectColor.opacity(0.18)), in: Capsule())
+        .glassEffect(.regular.tint((isRemoving ? Color.orange : effectColor).opacity(0.18)), in: Capsule())
     }
 
     private var effectColor: Color {
