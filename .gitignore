@@ -1,17 +1,4 @@
-# Swift Package Manager
+.DS_Store
 .build/
-*.resolved
-
-# Xcode
 *.xcuserstate
 xcuserdata/
-*.xcworkspace/xcuserdata/
-DerivedData/
-*.moved-aside
-*.xccheckout
-*.xcscmblueprint
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
