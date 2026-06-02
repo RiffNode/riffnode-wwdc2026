@@ -333,6 +333,15 @@ struct MainInterfaceView: View {
     @State private var showingPerformanceMode = false
     @State private var performanceController = PerformanceModeController()
 
+    // Chord AI Bridge
+    @State private var chordSuggestionTask: Task<Void, Never>?
+    @State private var chordAISuggestion: String?
+    @State private var chordAIPrompt: String?
+    @State private var lastSuggestedChord = ""
+
+    // Gesture Control (main view)
+    @State private var gestureControlEnabled = false
+
     enum MainTab: String, CaseIterable {
         case pedalboard = "Pedalboard"
         case parametricEQ = "Parametric EQ"
@@ -374,6 +383,11 @@ struct MainInterfaceView: View {
                         CompactChordBadge(detector: chordDetector)
 
                         BackingTrackView(engine: engine)
+
+                        GestureControlPill(
+                            controller: gestureController,
+                            isEnabled: $gestureControlEnabled
+                        )
                     }
                 }
                 .padding(Spacing.md)
@@ -425,14 +439,33 @@ struct MainInterfaceView: View {
                 .frame(minWidth: 400, minHeight: 500)
                 #endif
         }
-        // AI Chatbot Overlay - floating panel accessible from anywhere
+        // AI Chatbot Overlay + Chord Suggestion Chip
         .overlay(alignment: .bottomTrailing) {
-            AIChatbotOverlayView(
-                controller: chatbotController,
-                processor: semanticProcessor,
-                engine: engine,
-                isExpanded: $showingChatbot
-            )
+            VStack(alignment: .trailing, spacing: Spacing.sm) {
+                if let suggestion = chordAISuggestion, let prompt = chordAIPrompt {
+                    ChordSuggestionChip(
+                        suggestion: suggestion,
+                        onApply: {
+                            chatbotController.inputText = prompt
+                            showingChatbot = true
+                            withAnimation(.spring(duration: 0.3)) { chordAISuggestion = nil }
+                            lastSuggestedChord = chordDetector.detectedChord
+                        },
+                        onDismiss: {
+                            withAnimation(.spring(duration: 0.3)) { chordAISuggestion = nil }
+                            lastSuggestedChord = chordDetector.detectedChord
+                        }
+                    )
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+
+                AIChatbotOverlayView(
+                    controller: chatbotController,
+                    processor: semanticProcessor,
+                    engine: engine,
+                    isExpanded: $showingChatbot
+                )
+            }
             .padding(Spacing.lg)
         }
         // Performance Mode - fullscreen pedalboard with gesture control
@@ -444,6 +477,19 @@ struct MainInterfaceView: View {
                 presets: presetService.presets,
                 onExit: { showingPerformanceMode = false }
             )
+        }
+        .onChange(of: chordDetector.detectedChord) { _, newChord in
+            scheduleChordSuggestion(newChord)
+        }
+        .onChange(of: gestureControlEnabled) { _, enabled in
+            Task {
+                if enabled {
+                    try? await gestureController.start()
+                    gestureControlEnabled = gestureController.isRunning
+                } else {
+                    gestureController.stop()
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .enterPerformanceMode)) { _ in
             showingPerformanceMode = true
@@ -458,14 +504,13 @@ struct MainInterfaceView: View {
         gestureController.onGestureDetected = { gesture in
             handleGesture(gesture)
         }
+        gestureController.onMouthOpenValueChanged = { [engine] value in
+            engine.setExpressionValue(value, for: .equalizer)
+        }
     }
 
     private func setupAudioAnalysis() {
-        // Cancel any existing analysis task
         analysisTask?.cancel()
-
-        // Connect audio samples to analyzers via callback
-        // This is more efficient than polling - samples are pushed when available
         engine.onAudioSamplesAvailable = { [fftAnalyzer, chordDetector] samples in
             if samples.count >= 2048 {
                 fftAnalyzer.analyze(samples: samples)
@@ -475,22 +520,74 @@ struct MainInterfaceView: View {
     }
 
     private func handleGesture(_ gesture: VisionGestureController.Gesture) {
+        let presets = presetService.presets
         switch gesture {
         case .headNodDown:
-            if let firstEnabled = engine.effectsChain.first(where: { $0.isEnabled }) {
-                engine.toggleEffect(firstEnabled)
-            }
+            guard !presets.isEmpty else { return }
+            let next = (performanceController.currentPresetIndex + 1) % presets.count
+            performanceController.currentPresetIndex = next
+            engine.applyPreset(presets[next])
+
         case .headNodUp:
-            break
-        case .headTiltLeft, .headTiltRight:
-            if let first = engine.effectsChain.first {
-                engine.toggleEffect(first)
-            }
+            guard !presets.isEmpty else { return }
+            let prev = (performanceController.currentPresetIndex - 1 + presets.count) % presets.count
+            performanceController.currentPresetIndex = prev
+            engine.applyPreset(presets[prev])
+
+        case .headTiltLeft:
+            engine.effectsChain.filter { $0.isEnabled }.forEach { engine.toggleEffect($0) }
+
+        case .headTiltRight:
+            engine.effectsChain.filter { !$0.isEnabled }.forEach { engine.toggleEffect($0) }
+
         case .mouthOpen:
-            break
+            if let gainEffect = engine.effectsChain.first(where: {
+                [.overdrive, .distortion, .fuzz].contains($0.type)
+            }) { engine.toggleEffect(gainEffect) }
+
         case .eyebrowRaise:
-            break
+            if let comp = engine.effectsChain.first(where: { $0.type == .compressor }) {
+                engine.toggleEffect(comp)
+            }
         }
+    }
+
+    // MARK: - Chord AI Bridge
+
+    private func scheduleChordSuggestion(_ newChord: String) {
+        guard newChord != "—", newChord != lastSuggestedChord else {
+            chordSuggestionTask?.cancel()
+            if newChord == "—" { withAnimation { chordAISuggestion = nil } }
+            return
+        }
+        chordSuggestionTask?.cancel()
+        chordSuggestionTask = Task {
+            // Debounce: wait 2s for chord to stabilise
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            guard chordDetector.confidence > 0.55 else { return }
+            guard chordDetector.detectedChord == newChord else { return }
+            withAnimation(.spring(duration: 0.4)) {
+                chordAISuggestion = chordToDisplayText(newChord)
+                chordAIPrompt    = chordToAIPrompt(newChord)
+            }
+        }
+    }
+
+    private func chordToDisplayText(_ chord: String) -> String {
+        if chord.contains("Major") { return "Detected \(chord) — clean tone?" }
+        if chord.contains("7")     { return "Detected \(chord) — bluesy drive?" }
+        if chord.contains("5")     { return "Detected \(chord) — rock crunch?" }
+        if chord.contains("m")     { return "Detected \(chord) — warm blues?" }
+        return "Detected \(chord) — AI tone?"
+    }
+
+    private func chordToAIPrompt(_ chord: String) -> String {
+        if chord.contains("Major") { return "bright clean tone for playing \(chord)" }
+        if chord.contains("7")     { return "bluesy overdrive for \(chord)" }
+        if chord.contains("5")     { return "heavy rock crunch for \(chord) power chord" }
+        if chord.contains("m")     { return "warm blues tone for \(chord)" }
+        return "suggest a matching tone for playing \(chord)"
     }
 }
 
@@ -1248,6 +1345,103 @@ struct GlassStatusRow: View {
                     .foregroundStyle(isPositive ? .green : .red)
             }
         }
+    }
+}
+
+// MARK: - Chord Suggestion Chip
+// Appears above the chatbot FAB when a chord is detected with high confidence.
+// Lets the user one-tap into an AI tone suggestion without interrupting their playing.
+
+struct ChordSuggestionChip: View {
+    let suggestion: String
+    let onApply: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "music.note")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.purple)
+
+            Text(suggestion)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            Button(action: onApply) {
+                Text("Apply")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.purple.opacity(0.85), in: Capsule())
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .glassEffect(.regular.tint(.purple.opacity(0.12)), in: Capsule())
+    }
+}
+
+// MARK: - Gesture Control Pill
+// Compact toggle in the left panel. Shows face-detection status when active.
+
+struct GestureControlPill: View {
+    @Bindable var controller: VisionGestureController
+    @Binding var isEnabled: Bool
+
+    var body: some View {
+        Button {
+            isEnabled.toggle()
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "eye.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(isEnabled ? .purple : .secondary)
+                    .symbolEffect(.pulse, options: .repeating, value: isEnabled && controller.faceDetected)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Gesture Control")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    Text(statusText)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(statusColor)
+                }
+
+                Spacer()
+
+                Circle()
+                    .fill(statusColor.opacity(0.8))
+                    .frame(width: 7, height: 7)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .glassEffect(
+                .regular.tint(isEnabled ? .purple.opacity(0.1) : .clear),
+                in: Capsule()
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var statusText: String {
+        guard isEnabled else { return "Tap to enable" }
+        return controller.faceDetected ? "Face Detected" : "Looking for face..."
+    }
+
+    private var statusColor: Color {
+        guard isEnabled else { return .secondary }
+        return controller.faceDetected ? .green : .orange
     }
 }
 
