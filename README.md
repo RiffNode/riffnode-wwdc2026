@@ -35,6 +35,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 ## Why RiffNode
 
 - **No guitar? Still playable.** A built-in demo riff is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
+- **Always something to jam with.** A built-in drums-and-bass groove (Em · C · G · D, 112 BPM) is also synthesized on device – or import your own song and send it through your pedals.
 - **See the sound.** A live waveform, IN/OUT meters, a tuner, chord detection and a frequency map react to every note – and explain in plain words what they mean for your tone.
 - **Hands-free control.** Vision face tracking turns head nods, tilts and an open mouth into preset changes, bypass and a wah-style expression pedal.
 - **Describe the tone, get the tone.** Foundation Models translates "warm jazz clean" or "heavy metal riff" into real effect parameters, entirely on device – and shows each step live as it picks pedals and dials in settings.
@@ -50,7 +51,8 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 | 3 | Tap **No guitar? Try the Demo Riff** (`⌘D`) | A riff plays through your pedals; the visualizer, spectrum and chord detector come alive |
 | 4 | Tap a pedal, or double-tap to bypass it | The sound and the spectrum change instantly; the notch announces the change |
 | 5 | Open the **Tone Assistant** (`⌘J`) and tap *Ambient pad* | Watch it pick pedals and settings step by step, then rebuild the chain |
-| 6 | Turn on **Gesture Control** and nod | Presets switch hands-free, with feedback in the notch |
+| 6 | Tap **Built-in groove** in Jam Track | Drums and bass in the same key and tempo as the riff |
+| 7 | Turn on **Gesture Control** and nod | Presets switch hands-free, with feedback in the notch |
 
 > [!TIP]
 > Plug a guitar into any USB audio interface to play through the same chain live. The built-in microphone also works for quick tests.
@@ -151,7 +153,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 
 - **Swift 6 audio taps** – tap blocks are global, non-isolated functions writing into a lock-protected buffer, so no `@MainActor` closure ever runs on the audio thread.
 - **Responsive start-up** – `AVAudioSession` activation runs off the main thread.
-- **Demo riff** – Karplus–Strong plucked-string synthesis with a seeded generator renders the same original power-chord riff on every run, with no bundled audio files.
+- **Demo riff and groove** – Karplus–Strong plucked strings, plus synthesized kick, snare, hi-hat and bass, render on device with seeded generators – no bundled audio files. Imported songs are converted to the engine's sample rate with `AVAudioConverter`.
 - **Real-time modulation DSP** – a custom `AUAudioUnit` processes in place on the audio thread with no allocation or locks; parameters cross threads through `Synchronization.Atomic`.
 - **Fast on-device AI** – a compact `@Generable` schema (up to five pedals, three settings each) and a fresh, prewarmed session per request keep responses to a few seconds and never overflow the 4K context window.
 
@@ -197,7 +199,7 @@ RiffNode.swiftpm/
 │   ├── Models/             Effect, preset, EQ and analysis models
 │   └── Protocols/          AudioManaging, EffectsChainManaging, PresetProviding …
 ├── Data/
-│   ├── Audio/              AudioEngineManager, DemoRiffSynthesizer, DSP/ModulationAudioUnit
+│   ├── Audio/              AudioEngineManager, DemoRiffSynthesizer, JamTrackSynthesizer, DSP/
 │   ├── Analysis/           FFTAnalyzer, ChordDetector
 │   ├── Vision/             VisionGestureController
 │   ├── AI/                 SemanticCommandProcessor

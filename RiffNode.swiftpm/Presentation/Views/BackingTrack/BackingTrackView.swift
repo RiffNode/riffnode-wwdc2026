@@ -10,12 +10,13 @@ struct BackingTrackView: View {
     @Bindable var engine: AudioEngineManager
 
     @State private var isImporting = false
-    @State private var loadedTrackName: String?
     @State private var isLoading = false
+    /// Name shown while an imported file is still loading.
+    @State private var pendingTrackName: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let name = loadedTrackName {
+            if let name = engine.backingTrackName ?? pendingTrackName {
                 player(trackName: name)
             } else {
                 emptyRow
@@ -30,34 +31,45 @@ struct BackingTrackView: View {
         ) { result in
             handleFileImport(result)
         }
-        .animation(.smooth(duration: 0.25), value: loadedTrackName)
+        .animation(.smooth(duration: 0.25), value: engine.backingTrackName)
     }
 
     // MARK: - Empty
 
     private var emptyRow: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "music.note.list")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Color.riffPrimary)
-                .frame(width: 36, height: 36)
-                .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.12)), in: RoundedRectangle(cornerRadius: 10))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: "music.note.list")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.riffPrimary)
+                    .frame(width: 36, height: 36)
+                    .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.12)), in: RoundedRectangle(cornerRadius: 10))
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Jam Track")
-                    .font(.headline)
-                Text("Play along with a song")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Jam Track")
+                        .font(.headline)
+                    Text("Play along with a groove or your own song")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
-            Spacer(minLength: 0)
-
-            Button("Import", systemImage: "plus") { isImporting = true }
-                .buttonStyle(.glass)
-                .controlSize(.small)
+            HStack(spacing: 8) {
+                Button("Built-in groove", systemImage: "play.fill", action: playBuiltInGroove)
+                    .buttonStyle(.glassProminent)
+                    .tint(.riffPrimary)
+                    .disabled(!engine.canPlayDemoRiff)
+                Button("Import", systemImage: "square.and.arrow.down") { isImporting = true }
+                    .buttonStyle(.glass)
+            }
+            .controlSize(.small)
         }
+    }
+
+    private func playBuiltInGroove() {
+        guard (try? engine.loadBuiltInJamTrack()) != nil else { return }
+        engine.playBackingTrack()
     }
 
     // MARK: - Player
@@ -88,7 +100,10 @@ struct BackingTrackView: View {
                     Text(formatTrackName(trackName))
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
-                    Text("\(formatTime(engine.backingTrackCurrentTime)) / \(formatTime(engine.backingTrackDuration))")
+                    // The groove shows its chords so you know what to play over it
+                    Text(engine.isBuiltInJamTrack
+                         ? JamTrackSynthesizer.subtitle
+                         : "\(formatTime(engine.backingTrackCurrentTime)) / \(formatTime(engine.backingTrackDuration))")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -96,10 +111,12 @@ struct BackingTrackView: View {
                 Spacer(minLength: 0)
 
                 Menu {
-                    Button("Choose Another Song", systemImage: "arrow.triangle.2.circlepath") { isImporting = true }
+                    Button("Import a Song", systemImage: "square.and.arrow.down") { isImporting = true }
+                    if !engine.isBuiltInJamTrack {
+                        Button("Use Built-in Groove", systemImage: "metronome", action: playBuiltInGroove)
+                    }
                     Button("Remove", systemImage: "xmark", role: .destructive) {
-                        engine.stopBackingTrack()
-                        loadedTrackName = nil
+                        engine.unloadBackingTrack()
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -110,7 +127,7 @@ struct BackingTrackView: View {
                 .accessibilityLabel("Jam track options")
             }
 
-            if engine.backingTrackDuration > 0 {
+            if engine.backingTrackDuration > 0 && !engine.isBuiltInJamTrack {
                 TrackTimeline(
                     currentTime: engine.backingTrackCurrentTime,
                     duration: engine.backingTrackDuration,
@@ -163,17 +180,13 @@ struct BackingTrackView: View {
     private func handleFileImport(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result, let url = urls.first else { return }
         isLoading = true
-        loadedTrackName = url.lastPathComponent
+        pendingTrackName = url.deletingPathExtension().lastPathComponent
         Task { @MainActor in
-            do {
-                let accessing = url.startAccessingSecurityScopedResource()
-                try await engine.loadBackingTrack(url: url)
-                if accessing { url.stopAccessingSecurityScopedResource() }
-                isLoading = false
-            } catch {
-                isLoading = false
-                loadedTrackName = nil
-            }
+            let accessing = url.startAccessingSecurityScopedResource()
+            try? await engine.loadBackingTrack(url: url)
+            if accessing { url.stopAccessingSecurityScopedResource() }
+            isLoading = false
+            pendingTrackName = nil
         }
     }
 }

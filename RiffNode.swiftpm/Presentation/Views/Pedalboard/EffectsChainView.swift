@@ -5,9 +5,23 @@ import SwiftUI
 
 struct EffectsChainView: View {
     @Bindable var engine: AudioEngineManager
-    @State private var selectedEffect: EffectNode?
+    /// Selection is kept by ID and resolved against the live chain: presets and the AI
+    /// replace every node, and editing a stale node would change nothing you can hear.
+    @State private var selectedEffectID: UUID?
+
+    private var selectedEffect: EffectNode? {
+        engine.effectsChain.first { $0.id == selectedEffectID }
+    }
+
+    private var selection: Binding<EffectNode?> {
+        Binding(
+            get: { selectedEffect },
+            set: { selectedEffectID = $0?.id }
+        )
+    }
 
     var body: some View {
+        ScrollView {
         VStack(spacing: 16) {
             // Header – plain row, no glass on the title; buttons are capsule glass
             HStack {
@@ -66,23 +80,48 @@ struct EffectsChainView: View {
             }
             .padding(.horizontal)
 
-            // Signal chain visualization
-            GlassSignalChainView(
-                engine: engine,
-                selectedEffect: $selectedEffect
-            )
+            if engine.effectsChain.isEmpty {
+                ContentUnavailableView {
+                    Label("Your pedalboard is empty", systemImage: "cable.connector.horizontal")
+                } description: {
+                    Text("Add a pedal, pick a preset, or ask the Tone Assistant for a sound.")
+                }
+                .padding(.vertical, Spacing.xl)
+            } else {
+                // Signal chain visualization
+                GlassSignalChainView(
+                    engine: engine,
+                    selectedEffect: selection
+                )
 
-            // Parameter controls for selected effect
-            if let effect = selectedEffect {
-                GlassPedalControlsView(effect: effect, engine: engine)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                        removal: .opacity
-                    ))
+                Text("Tap a pedal to tweak it · Double-tap to switch it on or off")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+
+                // Parameter controls for the selected pedal
+                if let effect = selectedEffect {
+                    GlassPedalControlsView(effect: effect, engine: engine)
+                        .id(effect.id)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                }
             }
         }
         .padding()
-        .animation(.spring(duration: 0.3), value: selectedEffect?.id)
+        }
+        .animation(.spring(duration: 0.3), value: selectedEffectID)
+        .onAppear(perform: ensureSelection)
+        .onChange(of: engine.effectsChain.map(\.id)) { _, _ in ensureSelection() }
+    }
+
+    /// Keep a pedal selected so its knobs are always on screen – prefer one that's switched on.
+    private func ensureSelection() {
+        guard selectedEffect == nil else { return }
+        selectedEffectID = (engine.effectsChain.first(where: \.isEnabled) ?? engine.effectsChain.first)?.id
     }
 }
 
@@ -290,7 +329,7 @@ struct GlassPedalControlsView: View {
     @State private var showingInfo = false
 
     var body: some View {
-        GlassCard(tint: effect.type.color, cornerRadius: 16) {
+        GlassCard(tint: effect.type.color.opacity(0.18), cornerRadius: 16) {
             VStack(spacing: 16) {
                 // Header
                 HStack {

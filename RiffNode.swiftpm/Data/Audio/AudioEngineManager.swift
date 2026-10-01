@@ -92,6 +92,10 @@ final class AudioEngineManager: AudioManaging {
 
     /// When true the backing track is routed through the full effects chain
     private(set) var backingTrackThroughEffects: Bool = false
+    /// The loaded backing track is the synthesized groove rather than an imported song.
+    private(set) var isBuiltInJamTrack = false
+    /// Display name of the loaded backing track (nil when none is loaded).
+    private(set) var backingTrackName: String?
 
     // Audition – hear one effect on its own, A/B against the dry riff (Learn tab)
     private(set) var auditionEffect: EffectType?
@@ -513,13 +517,72 @@ final class AudioEngineManager: AudioManaging {
         }
 
         try file.read(into: buffer)
-        backingTrackBuffer = buffer
+        // The player is wired at the engine's format and does not resample:
+        // a 44.1 kHz song on a 48 kHz device must be converted first.
+        backingTrackBuffer = try convertToProcessingFormat(buffer)
+        backingTrackName = url.deletingPathExtension().lastPathComponent
 
         // Calculate duration
         backingTrackDuration = Double(frameCount) / fileFormat.sampleRate
+        isBuiltInJamTrack = false
         backingTrackCurrentTime = 0
 
         print("loadBackingTrack: Loaded \(frameCount) frames, duration: \(backingTrackDuration)s")
+    }
+
+    /// Loads the built-in drums-and-bass groove (see JamTrackSynthesizer).
+    func loadBuiltInJamTrack() throws {
+        guard let format = processingFormat else { throw AudioEngineError.engineNotSetup }
+        let samples = JamTrackSynthesizer.render(sampleRate: format.sampleRate)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
+              let channels = buffer.floatChannelData else { throw AudioEngineError.bufferCreationFailed }
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        for channel in 0..<Int(format.channelCount) {
+            samples.withUnsafeBufferPointer { source in
+                channels[channel].update(from: source.baseAddress!, count: samples.count)
+            }
+        }
+        stopBackingTrack()
+        backingTrackBuffer = buffer
+        backingTrackDuration = Double(samples.count) / format.sampleRate
+        backingTrackCurrentTime = 0
+        isBuiltInJamTrack = true
+        backingTrackName = JamTrackSynthesizer.title
+    }
+
+    /// Stops and forgets the backing track.
+    func unloadBackingTrack() {
+        stopBackingTrack()
+        backingTrackBuffer = nil
+        backingTrackName = nil
+        backingTrackDuration = 0
+        backingTrackCurrentTime = 0
+        isBuiltInJamTrack = false
+    }
+
+    private func convertToProcessingFormat(_ buffer: AVAudioPCMBuffer) throws -> AVAudioPCMBuffer {
+        guard let target = processingFormat, buffer.format != target else { return buffer }
+        guard let converter = AVAudioConverter(from: buffer.format, to: target) else {
+            throw AudioEngineError.bufferCreationFailed
+        }
+        let ratio = target.sampleRate / buffer.format.sampleRate
+        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1024
+        guard let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else {
+            throw AudioEngineError.bufferCreationFailed
+        }
+        nonisolated(unsafe) var consumed = false
+        var conversionError: NSError?
+        converter.convert(to: output, error: &conversionError) { _, status in
+            if consumed {
+                status.pointee = .endOfStream
+                return nil
+            }
+            consumed = true
+            status.pointee = .haveData
+            return buffer
+        }
+        if let conversionError { throw conversionError }
+        return output
     }
 
     func playBackingTrack() {
@@ -551,6 +614,8 @@ final class AudioEngineManager: AudioManaging {
                 player.scheduleBuffer(segmentBuffer, at: nil, options: [])
             }
         }
+        // Then loop the whole track, so a jam never just stops
+        player.scheduleBuffer(buffer, at: nil, options: [.loops])
 
         player.volume = backingTrackVolume
         player.play()
