@@ -88,8 +88,13 @@ final class MainViewModel {
         gestureController.onMouthOpenValueChanged = { [engine] value in
             engine.setExpressionValue(value, for: .equalizer)
         }
-        engine.onAudioSamplesAvailable = { [fftAnalyzer, chordDetector] samples in
+        engine.onAudioSamplesAvailable = { [engine, fftAnalyzer, chordDetector] samples in
             if samples.count >= 2048 {
+                // Analysers default to 44.1 kHz; most devices run at 48 kHz, which would
+                // shift every detected pitch by ~1.5 semitones.
+                let sampleRate = engine.analysisSampleRate
+                if fftAnalyzer.sampleRate != sampleRate { fftAnalyzer.sampleRate = sampleRate }
+                if chordDetector.sampleRate != Float(sampleRate) { chordDetector.sampleRate = Float(sampleRate) }
                 fftAnalyzer.analyze(samples: samples)
                 chordDetector.analyze(samples: samples)
             }
@@ -172,6 +177,7 @@ final class MainViewModel {
     }
 
     func chainDidChange(from old: ChainSnapshot, to new: ChainSnapshot) {
+        guard engine.auditionEffect == nil else { return }  // Learn-tab previews aren't edits
         if old.ids == new.ids {
             let changed = zip(engine.effectsChain, zip(old.enabled, new.enabled))
                 .filter { $1.0 != $1.1 }

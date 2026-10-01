@@ -37,13 +37,24 @@ final class AudioEngineManager: AudioManaging {
     /// This callback runs on MainActor for thread safety with @Observable analyzers
     var onAudioSamplesAvailable: (@MainActor ([Float]) -> Void)?
 
+    /// Sample rate of the audio handed to `onAudioSamplesAvailable` (mic and demo riff share it).
+    var analysisSampleRate: Double {
+        processingFormat?.sampleRate ?? inputNode?.outputFormat(forBus: 0).sampleRate ?? 44100
+    }
+
     /// Latest audio samples buffer for analysis
     private(set) var latestAudioSamples: [Float] = []
     private let analysisBufferSize = 4096
 
     // MARK: - Effects Chain (EffectsChainManaging)
 
-    var effectsChain: [EffectNode] = []
+    /// Adding, removing, reordering or replacing pedals (presets, AI) rewires the audio graph.
+    var effectsChain: [EffectNode] = [] {
+        didSet { scheduleAudioChainRebuild() }
+    }
+    /// The pedal order currently wired into the audio graph (nil = not wired yet).
+    @ObservationIgnored private var connectedEffectOrder: [EffectType]?
+    @ObservationIgnored private var isChainRebuildScheduled = false
 
     /// The most recently applied preset, and a counter that bumps on every apply
     /// (so re-applying the same preset is still observable).
@@ -81,6 +92,11 @@ final class AudioEngineManager: AudioManaging {
 
     /// When true the backing track is routed through the full effects chain
     private(set) var backingTrackThroughEffects: Bool = false
+
+    // Audition – hear one effect on its own, A/B against the dry riff (Learn tab)
+    private(set) var auditionEffect: EffectType?
+    private(set) var isAuditionBypassed = false
+    @ObservationIgnored private var auditionSnapshot: (chain: [EffectNode], eqBands: [EQBand], startedDemo: Bool)?
 
     // Demo riff – a synthesized guitar that stands in for a real one
     private(set) var isDemoRiffPlaying = false
@@ -241,11 +257,12 @@ final class AudioEngineManager: AudioManaging {
         engine.attach(fxMixer)
 
         // Create effect units
-        effectUnits = EffectUnitsContainer()
+        effectUnits = try await EffectUnitsContainer.make()
         guard let units = effectUnits else { return }
 
         // Attach all effects to engine
         attachAllEffects(to: engine, units: units)
+        applyParametricEQ()
         
         // Create and attach backing track player
         let player = AVAudioPlayerNode()
@@ -359,55 +376,46 @@ final class AudioEngineManager: AudioManaging {
 
     // MARK: - Parametric EQ Control
 
-    /// Update a specific EQ band's parameters
-    /// - Parameters:
-    ///   - bandIndex: Index of the band (0-9 for 10-band EQ)
-    ///   - frequency: Center frequency in Hz
-    ///   - gain: Gain in dB (-24 to +24)
-    ///   - q: Q factor (bandwidth)
-    func updateEQBand(index bandIndex: Int, frequency: Float, gain: Float, q: Float) {
-        guard let eq = effectUnits?.equalizer,
-              bandIndex >= 0 && bandIndex < eq.bands.count else {
-            return
+    /// The 10-band parametric EQ curve. Lives in the engine (not the view) so it survives
+    /// tab switches, and so AI and expression changes to bass/mid/treble show on the curve.
+    var parametricEQBands: [EQBand] = EQBand.defaultBands {
+        didSet {
+            guard parametricEQBands != oldValue else { return }
+            applyParametricEQ()
+            // Shaping the curve should be audible: make sure the EQ pedal is on the board
+            if parametricEQBands != EQBand.defaultBands { activateEqualizerPedal() }
         }
-
-        let band = eq.bands[bandIndex]
-        band.frequency = frequency
-        band.gain = gain
-        band.bandwidth = q
-        band.bypass = false
-
-        print("updateEQBand: Band \(bandIndex) - freq: \(frequency)Hz, gain: \(gain)dB, Q: \(q)")
-    }
-
-    /// Update all EQ bands at once from an array of band configurations
-    /// - Parameter bands: Array of tuples containing (frequency, gain, q, isEnabled)
-    func updateAllEQBands(_ bands: [(frequency: Float, gain: Float, q: Float, isEnabled: Bool)]) {
-        guard let eq = effectUnits?.equalizer else { return }
-
-        for (index, config) in bands.enumerated() where index < eq.bands.count {
-            eq.bands[index].frequency = config.frequency
-            eq.bands[index].gain = config.gain
-            eq.bands[index].bandwidth = config.q
-            eq.bands[index].bypass = !config.isEnabled
-        }
-
-        print("updateAllEQBands: Updated \(bands.count) bands")
     }
 
     /// Reset all EQ bands to flat (0 dB)
     func resetEQ() {
+        parametricEQBands = EQBand.defaultBands
+    }
+
+    private func applyParametricEQ() {
         guard let eq = effectUnits?.equalizer else { return }
-
-        let frequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
-        for (index, freq) in frequencies.enumerated() where index < eq.bands.count {
-            eq.bands[index].frequency = freq
-            eq.bands[index].gain = 0
-            eq.bands[index].bandwidth = 1.0
-            eq.bands[index].bypass = false
+        for (index, band) in parametricEQBands.enumerated() where index < eq.bands.count {
+            let unitBand = eq.bands[index]
+            unitBand.filterType = band.type.audioUnitFilterType
+            unitBand.frequency = band.frequency
+            unitBand.gain = band.gain
+            unitBand.bandwidth = Self.octaves(forQ: band.q)
+            unitBand.bypass = !band.isEnabled
         }
+    }
 
-        print("resetEQ: All bands reset to flat")
+    private func activateEqualizerPedal() {
+        ensureEffectInChain(.equalizer)
+        if let node = effectsChain.first(where: { $0.type == .equalizer }), !node.isEnabled {
+            toggleEffect(node)
+        }
+    }
+
+    /// AVAudioUnitEQ measures bandwidth in octaves; the UI uses Q.
+    /// BW = 2/ln2 · asinh(1 / 2Q), clamped to the unit's 0.05–5 octave range.
+    private static func octaves(forQ q: Float) -> Float {
+        let bandwidth = 2 / log(2) * asinh(1 / (2 * max(q, 0.01)))
+        return min(max(bandwidth, 0.05), 5)
     }
 
     // MARK: - Expression/CV Control
@@ -660,6 +668,49 @@ final class AudioEngineManager: AudioManaging {
         }
     }
 
+    // MARK: - Audition (Learn tab)
+
+    /// Plays the demo riff through `type` alone, with settings exaggerated enough to hear
+    /// clearly. The player's chain and EQ are saved and restored by `stopAudition()`.
+    func startAudition(_ type: EffectType) {
+        guard canPlayDemoRiff else { return }
+
+        if auditionSnapshot == nil {
+            let savedChain = effectsChain.map {
+                EffectNode(id: $0.id, type: $0.type, isEnabled: $0.isEnabled, parameters: $0.parameters)
+            }
+            auditionSnapshot = (savedChain, parametricEQBands, !isDemoRiffPlaying)
+        }
+
+        var parameters = type.defaultParameters
+        for (key, value) in type.auditionParameters { parameters[key] = value }
+        effectsChain = [EffectNode(type: type, isEnabled: true, parameters: parameters)]
+        if let node = effectsChain.first { applyEffectParameters(node) }
+
+        auditionEffect = type
+        isAuditionBypassed = false
+        startDemoRiff()
+    }
+
+    /// A/B: bypass the auditioned pedal to hear the dry riff, or bring it back.
+    func setAuditionBypassed(_ bypassed: Bool) {
+        guard let type = auditionEffect, let node = effectsChain.first(where: { $0.type == type }) else { return }
+        if node.isEnabled == bypassed { toggleEffect(node) }
+        isAuditionBypassed = bypassed
+    }
+
+    func stopAudition() {
+        guard let snapshot = auditionSnapshot else { return }
+        auditionSnapshot = nil
+        auditionEffect = nil
+        isAuditionBypassed = false
+        if snapshot.startedDemo { stopDemoRiff() }
+        effectsChain = snapshot.chain
+        parametricEQBands = snapshot.eqBands
+        for effect in effectsChain { applyEffectParameters(effect) }
+        syncBypassStates()
+    }
+
     // MARK: - Demo Riff
 
     /// True once the effects chain exists, i.e. there is somewhere to send the riff.
@@ -772,133 +823,81 @@ final class AudioEngineManager: AudioManaging {
     }
 
     private func connectSignalChain(engine: AVAudioEngine, input: AVAudioInputNode, converter: AVAudioMixerNode, inputFormat: AVAudioFormat, processingFormat: AVAudioFormat) {
-        guard let units = effectUnits, let mixer = mainMixer, let fxMixer = fxInputMixer else { return }
+        guard let fxMixer = fxInputMixer else { return }
 
-        // Input -> Converter -> fxInputMixer -> effects chain -> mainMixer
+        // Input -> Converter -> fxInputMixer. The backing track and demo riff also
+        // feed fxInputMixer, so everything entering it passes through the pedals.
         engine.connect(input, to: converter, format: inputFormat)
         engine.connect(converter, to: fxMixer, format: processingFormat)
 
-        // fxInputMixer -> Compressor -> Distortion -> Chorus -> Delay -> Reverb -> Mixer
-        engine.connect(fxMixer, to: units.compressor, format: processingFormat)
-        engine.connect(units.compressor, to: units.distortion, format: processingFormat)
-        engine.connect(units.distortion, to: units.chorus, format: processingFormat)
-        engine.connect(units.chorus, to: units.delay, format: processingFormat)
-        engine.connect(units.delay, to: units.reverb, format: processingFormat)
-        engine.connect(units.reverb, to: mixer, format: processingFormat)
-
-        print("connectSignalChain: Signal chain connected via fxInputMixer")
+        // fxInputMixer -> every pedal in effectsChain order -> mainMixer
+        connectedEffectOrder = nil
+        rebuildAudioChain()
     }
 
+    /// Wires fxInputMixer through **every** pedal in `effectsChain` (enabled or not) in order.
+    /// Enabling or bypassing a pedal then only flips `bypass` – no reconnection, no dropout.
+    /// Rewiring happens only when the chain's composition or order actually changes.
     private func rebuildAudioChain() {
         guard let engine = audioEngine,
               let mixer = mainMixer,
-              let input = inputNode,
-              let converter = formatConverterMixer,
-              let units = effectUnits else {
-            print("rebuildAudioChain: Missing required components, skipping")
-            return
-        }
+              let fxMixer = fxInputMixer,
+              let units = effectUnits,
+              let format = processingFormat else { return }
+
+        let order = effectsChain.map(\.type)
+        guard order != connectedEffectOrder else { return }
 
         let wasRunning = engine.isRunning
-        print("rebuildAudioChain: Starting rebuild, wasRunning=\(wasRunning)")
+        let resumeBackingTrack = isBackingTrackPlaying
+        if resumeBackingTrack { stopBackingTrack() }
+        if wasRunning { engine.stop() }
 
-        if wasRunning {
-            engine.stop()
+        // Tear down the old pedal wiring (input -> converter -> fxInputMixer stays intact)
+        engine.disconnectNodeOutput(fxMixer)
+        for unit in units.allUnits where engine.attachedNodes.contains(unit) {
+            engine.disconnectNodeOutput(unit)
         }
 
-        // Remove visualization tap if installed
-        if tapInstalled {
-            mixer.removeTap(onBus: 0)
-            tapInstalled = false
-        }
-
-        // Safely disconnect nodes
-        disconnectAllEffects(engine: engine, converter: converter, units: units)
-
-        // Get formats
-        let inputFormat = input.outputFormat(forBus: 0)
-        guard inputFormat.sampleRate > 0 && inputFormat.channelCount > 0 else {
-            print("rebuildAudioChain: Invalid input format, skipping")
-            return
-        }
-        
-        let format = processingFormat ?? AVAudioFormat(
-            standardFormatWithSampleRate: inputFormat.sampleRate,
-            channels: 2
-        ) ?? inputFormat
-
-        // Reconnect: Input -> Converter -> fxInputMixer, so the backing track
-        // and demo riff (which feed fxInputMixer) stay routed through the effects
-        engine.connect(input, to: converter, format: inputFormat)
-
-        // Build chain based on enabled effects
-        var currentNode: AVAudioNode = converter
-        if let fxMixer = fxInputMixer {
-            engine.disconnectNodeOutput(fxMixer)
-            engine.connect(converter, to: fxMixer, format: format)
-            currentNode = fxMixer
-        }
-        var enabledEffectCount = 0
-
-        for effectNode in effectsChain where effectNode.isEnabled {
-            guard let unit = units.audioUnit(for: effectNode.type) else { continue }
+        var currentNode: AVAudioNode = fxMixer
+        for type in order {
+            guard let unit = units.audioUnit(for: type) else { continue }
             engine.connect(currentNode, to: unit, format: format)
             currentNode = unit
-            enabledEffectCount += 1
-            applyEffectParameters(effectNode)
         }
-
-        // Connect final node to mixer
         engine.connect(currentNode, to: mixer, format: format)
+        connectedEffectOrder = order
 
-        print("rebuildAudioChain: Rebuilt with \(enabledEffectCount) enabled effects")
+        // Newly added pedals (AI, presets, Add Pedal) start from their own settings
+        for effect in effectsChain { applyEffectParameters(effect) }
+        syncBypassStates()
+        print("rebuildAudioChain: Wired \(order.count) pedals: \(order.map(\.abbreviation).joined(separator: " → "))")
 
-        if wasRunning {
-            engine.prepare()
-            do {
-                try engine.start()
-                // Stopping the engine halts player nodes; resume the demo loop
-                if isDemoRiffPlaying, let player = demoRiffPlayer, let buffer = demoRiffBuffer {
-                    player.stop()
-                    player.scheduleBuffer(buffer, at: nil, options: [.loops])
-                    player.play()
-                }
-                print("rebuildAudioChain: Engine restarted successfully")
-            } catch {
-                print("rebuildAudioChain: Failed to restart engine: \(error)")
+        guard wasRunning else { return }
+        engine.prepare()
+        do {
+            try engine.start()
+            // Stopping the engine halts player nodes; resume what was playing
+            if isDemoRiffPlaying, let player = demoRiffPlayer, let buffer = demoRiffBuffer {
+                player.stop()
+                player.scheduleBuffer(buffer, at: nil, options: [.loops])
+                player.play()
             }
+            if resumeBackingTrack { playBackingTrack() }
+        } catch {
+            isRunning = false
+            print("rebuildAudioChain: Failed to restart engine: \(error)")
         }
     }
-    
-    private func disconnectAllEffects(engine: AVAudioEngine, converter: AVAudioMixerNode, units: EffectUnitsContainer) {
-        // Disconnect format converter
-        if engine.attachedNodes.contains(converter) {
-            engine.disconnectNodeOutput(converter)
-        }
-        engine.disconnectNodeInput(converter)
-        
-        // Disconnect all effect units
-        let allUnits: [AVAudioUnit] = [
-            units.compressor,
-            units.overdrive,
-            units.distortion,
-            units.fuzz,
-            units.chorus,
-            units.phaser,
-            units.flanger,
-            units.tremolo,
-            units.delay,
-            units.reverb
-        ]
-        
-        for unit in allUnits {
-            if engine.attachedNodes.contains(unit) {
-                engine.disconnectNodeOutput(unit)
-            }
-        }
-        
-        if let eq = units.equalizer, engine.attachedNodes.contains(eq) {
-            engine.disconnectNodeOutput(eq)
+
+    /// Coalesces several edits in one turn of the run loop (e.g. append + sort) into one rewire.
+    private func scheduleAudioChainRebuild() {
+        guard !isChainRebuildScheduled else { return }
+        isChainRebuildScheduled = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.isChainRebuildScheduled = false
+            self.rebuildAudioChain()
         }
     }
 
@@ -926,16 +925,15 @@ final class AudioEngineManager: AudioManaging {
             AudioUnitSetParameter(au, 5, kAudioUnitScope_Global, 0, releaseMs / 1000.0, 0)
 
         case .equalizer:
-            if let eq = units.equalizer {
-                // 10 bands: [0]=32Hz [1]=64Hz [2]=125Hz [3]=250Hz [4]=500Hz
-                //           [5]=1kHz [6]=2kHz [7]=4kHz  [8]=8kHz  [9]=16kHz
-                // Bass   → band[0] (32Hz  lowShelf  — broad bass shelf)
-                // Mid    → band[4] (500Hz parametric — classic mid-range)
-                // Treble → band[9] (16kHz highShelf  — natural treble shelf)
-                eq.bands[0].gain = effect.parameters["bass"] ?? 0
-                eq.bands[4].gain = effect.parameters["mid"] ?? 0
-                eq.bands[9].gain = effect.parameters["treble"] ?? 0
-            }
+            // The EQ pedal's bass / mid / treble knobs (used by the AI and the
+            // mouth-wah) drive bands 0, 4 and 9 of the shared parametric curve,
+            // so the change is both audible and visible on the EQ tab.
+            guard effect.isEnabled else { break }
+            var bands = parametricEQBands
+            bands[0].gain = effect.parameters["bass"] ?? 0
+            bands[4].gain = effect.parameters["mid"] ?? 0
+            bands[9].gain = effect.parameters["treble"] ?? 0
+            parametricEQBands = bands
 
         case .overdrive:
             // drive * level/100 → wetDryMix (drive sets saturation amount, level scales output)
@@ -954,35 +952,27 @@ final class AudioEngineManager: AudioManaging {
             units.fuzz.wetDryMix = max(0, min(100, fuzzAmt * (level / 100.0)))
 
         case .chorus:
-            // mix → wetDryMix; rate → approximate delayTime (higher rate = shorter delay)
-            let mix = effect.parameters["mix"] ?? 50
-            let rate = effect.parameters["rate"] ?? 1.0
-            units.chorus.wetDryMix = max(0, min(100, mix))
-            // Map 0.1–10 Hz → 50ms–5ms delay (chorus range)
-            let chorusDelay = max(0.005, min(0.05, 0.05 / Double(rate)))
-            units.chorus.delayTime = chorusDelay
+            let kernel = units.chorusKernel
+            kernel.rate = effect.parameters["rate"] ?? 1.0          // 0.1–10 Hz
+            kernel.depth = (effect.parameters["depth"] ?? 50) / 100
+            kernel.mix = (effect.parameters["mix"] ?? 50) / 100
 
         case .phaser:
-            // depth → wetDryMix; rate stored in parameters but phaser has no delayTime
-            let depth = effect.parameters["depth"] ?? 50
-            units.phaser.wetDryMix = max(0, min(100, depth))
+            let kernel = units.phaserKernel
+            kernel.rate = effect.parameters["rate"] ?? 0.5          // 0.1–5 Hz
+            kernel.depth = (effect.parameters["depth"] ?? 50) / 100
+            kernel.feedback = (effect.parameters["feedback"] ?? 30) / 100 * 0.9
 
         case .flanger:
-            // depth → wetDryMix; rate → delayTime (flanger: very short 1–20ms delay)
-            let depth = effect.parameters["depth"] ?? 50
-            let rate = effect.parameters["rate"] ?? 0.3
-            let feedback = effect.parameters["feedback"] ?? 50
-            units.flanger.wetDryMix = max(0, min(100, depth))
-            // Map 0.1–2 Hz → 20ms–1ms delay
-            let flangerDelay = max(0.001, min(0.02, 0.002 / Double(rate)))
-            units.flanger.delayTime = flangerDelay
-            // feedback: unit is -100 to 100; map 0–100 → -80 to 80
-            units.flanger.feedback = (feedback - 50.0) * 1.6
+            let kernel = units.flangerKernel
+            kernel.rate = effect.parameters["rate"] ?? 0.3          // 0.1–2 Hz
+            kernel.depth = (effect.parameters["depth"] ?? 50) / 100
+            kernel.feedback = (effect.parameters["feedback"] ?? 50) / 100 * 0.9
 
         case .tremolo:
-            // depth → wetDryMix; rate is stored but AVAudioUnitDistortion has no LFO
-            let depth = effect.parameters["depth"] ?? 50
-            units.tremolo.wetDryMix = max(0, min(100, depth))
+            let kernel = units.tremoloKernel
+            kernel.rate = effect.parameters["rate"] ?? 5.0          // 0.5–15 Hz
+            kernel.depth = (effect.parameters["depth"] ?? 50) / 100
 
         case .delay:
             units.delay.delayTime = TimeInterval(effect.parameters["time"] ?? 0.3)
@@ -1032,10 +1022,9 @@ final class AudioEngineManager: AudioManaging {
         units.overdrive.bypass = !enabledTypes.contains(.overdrive)
         units.distortion.bypass = !enabledTypes.contains(.distortion)
         units.fuzz.bypass = !enabledTypes.contains(.fuzz)
-        units.chorus.bypass = !enabledTypes.contains(.chorus)
-        units.phaser.bypass = !enabledTypes.contains(.phaser)
-        units.flanger.bypass = !enabledTypes.contains(.flanger)
-        units.tremolo.bypass = !enabledTypes.contains(.tremolo)
+        for type in [EffectType.chorus, .phaser, .flanger, .tremolo] {
+            units.setBypass(for: type, bypassed: !enabledTypes.contains(type))
+        }
         units.delay.bypass = !enabledTypes.contains(.delay)
         units.reverb.bypass = !enabledTypes.contains(.reverb)
         units.equalizer?.bypass = !enabledTypes.contains(.equalizer)
@@ -1156,17 +1145,35 @@ private final class EffectUnitsContainer {
     let distortion: AVAudioUnitDistortion
     let fuzz: AVAudioUnitDistortion
     
-    // Modulation (simulated using available units)
-    let chorus: AVAudioUnitDelay
-    let phaser: AVAudioUnitDistortion
-    let flanger: AVAudioUnitDelay
-    let tremolo: AVAudioUnitDistortion
+    // Modulation – real LFO-driven DSP (see ModulationAudioUnit)
+    let chorus: AVAudioUnit
+    let phaser: AVAudioUnit
+    let flanger: AVAudioUnit
+    let tremolo: AVAudioUnit
+    let chorusKernel: ModulationKernel
+    let phaserKernel: ModulationKernel
+    let flangerKernel: ModulationKernel
+    let tremoloKernel: ModulationKernel
+
+    /// Modulation units are custom Audio Units, which AVFoundation instantiates asynchronously.
+    static func make() async throws -> EffectUnitsContainer {
+        let chorus = try await ModulationAudioUnit.make(.chorus)
+        let phaser = try await ModulationAudioUnit.make(.phaser)
+        let flanger = try await ModulationAudioUnit.make(.flanger)
+        let tremolo = try await ModulationAudioUnit.make(.tremolo)
+        return EffectUnitsContainer(chorus: chorus, phaser: phaser, flanger: flanger, tremolo: tremolo)
+    }
     
     // Time & Ambience
     let delay: AVAudioUnitDelay
     let reverb: AVAudioUnitReverb
 
-    init() {
+    private init(
+        chorus chorusUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
+        phaser phaserUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
+        flanger flangerUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
+        tremolo tremoloUnit: (unit: AVAudioUnit, kernel: ModulationKernel)
+    ) {
         // Dynamics — Apple's real Dynamics Processor (hardware compressor AU)
         let compDesc = AudioComponentDescription(
             componentType: kAudioUnitType_Effect,
@@ -1210,31 +1217,13 @@ private final class EffectUnitsContainer {
         fuzz.wetDryMix = 70
         fuzz.bypass = true
         
-        // Chorus (simulated with short delay)
-        chorus = AVAudioUnitDelay()
-        chorus.delayTime = 0.02  // 20ms for chorus effect
-        chorus.feedback = 20
-        chorus.wetDryMix = 40
-        chorus.bypass = true
-        
-        // Phaser (simulated)
-        phaser = AVAudioUnitDistortion()
-        phaser.loadFactoryPreset(.speechCosmicInterference)
-        phaser.wetDryMix = 50
-        phaser.bypass = true
-        
-        // Flanger (simulated with very short delay and high feedback)
-        flanger = AVAudioUnitDelay()
-        flanger.delayTime = 0.005  // 5ms for flanger
-        flanger.feedback = 60
-        flanger.wetDryMix = 50
-        flanger.bypass = true
-        
-        // Tremolo (simulated)
-        tremolo = AVAudioUnitDistortion()
-        tremolo.loadFactoryPreset(.speechGoldenPi)
-        tremolo.wetDryMix = 50
-        tremolo.bypass = true
+        (chorus, chorusKernel) = chorusUnit
+        (phaser, phaserKernel) = phaserUnit
+        (flanger, flangerKernel) = flangerUnit
+        (tremolo, tremoloKernel) = tremoloUnit
+        for unit in [chorus, phaser, flanger, tremolo] {
+            unit.auAudioUnit.shouldBypassEffect = true
+        }
 
         // Delay
         delay = AVAudioUnitDelay()
@@ -1248,6 +1237,11 @@ private final class EffectUnitsContainer {
         reverb.loadFactoryPreset(.mediumHall)
         reverb.wetDryMix = 40
         reverb.bypass = true
+    }
+
+    /// Every unit, so wiring code can disconnect them all without listing them again.
+    var allUnits: [AVAudioUnit] {
+        EffectType.allCases.compactMap { audioUnit(for: $0) }
     }
 
     func audioUnit(for type: EffectType) -> AVAudioUnit? {
@@ -1281,13 +1275,13 @@ private final class EffectUnitsContainer {
         case .fuzz:
             fuzz.bypass = bypassed
         case .chorus:
-            chorus.bypass = bypassed
+            chorus.auAudioUnit.shouldBypassEffect = bypassed
         case .phaser:
-            phaser.bypass = bypassed
+            phaser.auAudioUnit.shouldBypassEffect = bypassed
         case .flanger:
-            flanger.bypass = bypassed
+            flanger.auAudioUnit.shouldBypassEffect = bypassed
         case .tremolo:
-            tremolo.bypass = bypassed
+            tremolo.auAudioUnit.shouldBypassEffect = bypassed
         case .delay:
             delay.bypass = bypassed
         case .reverb:

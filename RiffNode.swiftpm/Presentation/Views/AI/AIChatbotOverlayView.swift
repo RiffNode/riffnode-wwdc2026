@@ -11,6 +11,7 @@ struct AIChatbotOverlayView: View {
 
     @State private var isMinimized = false
     @FocusState private var inputFocused: Bool
+    @Namespace private var glassNamespace
 
     // Drag-to-reposition state
     @State private var committedOffset: CGSize = .zero   // persisted after drag ends
@@ -28,6 +29,8 @@ struct AIChatbotOverlayView: View {
     private let panelMaxHeight: CGFloat = 520
 
     var body: some View {
+        // One container so the button and panel morph into each other as Liquid Glass
+        GlassEffectContainer(spacing: 16) {
         VStack(alignment: .trailing, spacing: 12) {
             if isExpanded {
                 VStack(spacing: 0) {
@@ -35,8 +38,11 @@ struct AIChatbotOverlayView: View {
                     chatHeader
                     if !isMinimized {
                         messagesScrollView
-                        Divider().opacity(0.3)
-                        quickSuggestionsBar
+                        // The starter cards already offer these on first open
+                        if controller.messages.count > 1 {
+                            Divider().opacity(0.3)
+                            quickSuggestionsBar
+                        }
                         Divider().opacity(0.3)
                         inputBar
                     }
@@ -44,6 +50,7 @@ struct AIChatbotOverlayView: View {
                 .frame(width: panelWidth)
                 .frame(maxHeight: isMinimized ? 84 : panelMaxHeight)
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 22))
+                .glassEffectID("panel", in: glassNamespace)
                 .shadow(
                     color: isDragging ? .black.opacity(0.38) : .black.opacity(0.25),
                     radius: isDragging ? 36 : 24,
@@ -58,11 +65,17 @@ struct AIChatbotOverlayView: View {
                 ))
             }
 
-            AIChatbotFAB(isExpanded: isExpanded) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            AIChatbotFAB(
+                isExpanded: isExpanded,
+                isThinking: controller.isProcessing,
+                usesAppleIntelligence: processor.isAvailable,
+                namespace: glassNamespace
+            ) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     isExpanded.toggle()
                 }
             }
+        }
         }
         .offset(totalOffset)
     }
@@ -111,28 +124,22 @@ struct AIChatbotOverlayView: View {
 
     private var chatHeader: some View {
         HStack(spacing: 10) {
-            // AI avatar
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.purple, Color.indigo],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 34, height: 34)
-                Image(systemName: "wand.and.stars")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
+            AssistantAvatar(size: 34, usesAppleIntelligence: processor.isAvailable)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Tone Assistant")
                     .font(.system(size: 15, weight: .semibold))
-                Text("Apple Intelligence")
+                // Honest status: only claim Apple Intelligence when it is actually answering
+                Text(processor.isAvailable ? "Apple Intelligence · on device" : "Offline tone matcher")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.secondary)
+                    .help(processor.unavailableReason ?? "Runs entirely on this device")
+                if let reason = processor.unavailableReason {
+                    Text(reason)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
             }
 
             if controller.isProcessing {
@@ -157,19 +164,8 @@ struct AIChatbotOverlayView: View {
                         .glassEffect(.regular, in: Circle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isMinimized ? "Expand chat" : "Collapse chat")
 
-                Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        isExpanded = false
-                    }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
-                        .glassEffect(.regular, in: Circle())
-                }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 16)
@@ -183,17 +179,27 @@ struct AIChatbotOverlayView: View {
             ScrollView {
                 LazyVStack(spacing: 10) {
                     ForEach(controller.messages) { message in
-                        ChatMessageBubble(message: message) {
+                        ChatMessageBubble(message: message, assistantUsesAppleIntelligence: processor.isAvailable) {
                             controller.applyEffects(from: message, processor: processor, engine: engine)
                         }
                         .id(message.id)
                     }
 
+                    // First open: big, tappable starting points instead of empty space
+                    if controller.messages.count == 1 && !controller.isProcessing {
+                        starterCards
+                            .transition(.opacity)
+                    }
+
                     if controller.isProcessing {
                         HStack(alignment: .bottom, spacing: 8) {
                             aiAvatarSmall
-                            TypingIndicator()
-                            Spacer()
+                            if processor.thinkingSteps.isEmpty {
+                                TypingIndicator()
+                            } else {
+                                ThinkingStepsView(steps: processor.thinkingSteps)
+                            }
+                            Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 4)
                         .id("typing")
@@ -212,21 +218,58 @@ struct AIChatbotOverlayView: View {
                     withAnimation { proxy.scrollTo("typing", anchor: .bottom) }
                 }
             }
+            .onChange(of: processor.thinkingSteps.count) { _, _ in
+                withAnimation { proxy.scrollTo("typing", anchor: .bottom) }
+            }
         }
     }
 
     private var aiAvatarSmall: some View {
-        ZStack {
-            Circle()
-                .fill(LinearGradient(
-                    colors: [Color.purple.opacity(0.8), Color.indigo.opacity(0.8)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                ))
-                .frame(width: 26, height: 26)
-            Image(systemName: "wand.and.stars")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white)
+        AssistantAvatar(size: 26, usesAppleIntelligence: processor.isAvailable)
+    }
+
+    // MARK: - Starter Cards
+
+    private var starterCards: some View {
+        let starters: [(icon: String, title: String, detail: String, tint: Color)] = [
+            ("bolt.fill", "Heavy metal", "Tight, high-gain riffs", .red),
+            ("music.note", "Jazz clean", "Warm and round", .blue),
+            ("moon.stars.fill", "Ambient pad", "Huge reverb and echoes", .purple),
+            ("flame.fill", "Blues crunch", "Edge-of-breakup drive", .orange)
+        ]
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Try one, or describe your own sound")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 34)
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                ForEach(starters, id: \.title) { starter in
+                    Button {
+                        Task { await controller.sendMessage(starter.title, processor: processor, engine: engine) }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Image(systemName: starter.icon)
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(starter.tint)
+                            Text(starter.title)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            Text(starter.detail)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .glassEffect(.regular.tint(starter.tint.opacity(0.08)).interactive(), in: RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.leading, 34)
         }
+        .padding(.top, 4)
     }
 
     // MARK: - Quick Suggestions
@@ -320,12 +363,15 @@ struct AIChatbotOverlayView: View {
 
 struct ChatMessageBubble: View {
     let message: ChatMessage
+    /// For messages without a recorded responder (the greeting): what's answering now.
+    var assistantUsesAppleIntelligence = false
     let onApply: (() -> Void)?
 
     @State private var showAppliedFlash = false
 
-    init(message: ChatMessage, onApply: (() -> Void)? = nil) {
+    init(message: ChatMessage, assistantUsesAppleIntelligence: Bool = false, onApply: (() -> Void)? = nil) {
         self.message = message
+        self.assistantUsesAppleIntelligence = assistantUsesAppleIntelligence
         self.onApply = onApply
     }
 
@@ -336,19 +382,11 @@ struct ChatMessageBubble: View {
             }
 
             if message.role == .assistant {
-                // AI avatar
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(
-                            colors: [Color.purple.opacity(0.85), Color.indigo.opacity(0.85)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        ))
-                        .frame(width: 26, height: 26)
-                    Image(systemName: "wand.and.stars")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                .alignmentGuide(.bottom) { d in d[.bottom] }
+                AssistantAvatar(
+                    size: 26,
+                    usesAppleIntelligence: message.responder.map { $0 == .appleIntelligence } ?? assistantUsesAppleIntelligence
+                )
+                    .alignmentGuide(.bottom) { d in d[.bottom] }
             }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
@@ -359,6 +397,17 @@ struct ChatMessageBubble: View {
                     .padding(.horizontal, 13)
                     .padding(.vertical, 9)
                     .glassEffect(bubbleTint, in: RoundedRectangle(cornerRadius: 18))
+
+                // Which engine answered
+                if let responder = message.responder {
+                    Label(
+                        responder == .appleIntelligence ? "Apple Intelligence" : "Offline tone matcher",
+                        systemImage: responder == .appleIntelligence ? "apple.intelligence" : "bolt.fill"
+                    )
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .padding(.leading, 4)
+                }
 
                 // Effect badges + apply button
                 if let effects = message.appliedEffects, !effects.isEmpty {
@@ -538,53 +587,146 @@ struct TypingIndicator: View {
     }
 }
 
+// MARK: - Assistant Avatar
+
+/// The assistant's face: the Apple Intelligence glyph when the on-device model is answering,
+/// a wand for the offline matcher – the same mark as the floating button.
+struct AssistantAvatar: View {
+    let size: CGFloat
+    let usesAppleIntelligence: Bool
+
+    var body: some View {
+        Image(systemName: usesAppleIntelligence ? "apple.intelligence" : "wand.and.stars")
+            .font(.system(size: size * 0.48, weight: .semibold))
+            .foregroundStyle(LinearGradient(colors: [.purple, .pink, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: size, height: size)
+            .glassEffect(.regular.tint(.purple.opacity(0.12)), in: Circle())
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Thinking Steps
+// What the assistant is doing right now, built from the model's streamed output.
+
+struct ThinkingStepsView: View {
+    let steps: [SemanticCommandProcessor.ThinkingStep]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(steps) { step in
+                HStack(spacing: 8) {
+                    ZStack {
+                        if step.isDone {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .transition(.scale.combined(with: .opacity))
+                        } else {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .tint(.purple)
+                        }
+                    }
+                    .font(.system(size: 12))
+                    .frame(width: 14, height: 14)
+
+                    Text(step.text)
+                        .font(.system(size: 12, weight: step.isDone ? .regular : .semibold))
+                        .foregroundStyle(step.isDone ? .secondary : .primary)
+                        .contentTransition(.numericText())
+                        .lineLimit(2)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .glassEffect(.regular.tint(.purple.opacity(0.1)), in: RoundedRectangle(cornerRadius: 16))
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: steps)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Tone Assistant is working: " + (steps.last?.text ?? ""))
+    }
+}
+
 // MARK: - Floating Action Button
+// A labelled Liquid Glass capsule, so it reads as "Tone Assistant" rather than a mystery
+// icon. It morphs into the chat panel, and shows a glowing ring while the AI is thinking.
 
 struct AIChatbotFAB: View {
     let isExpanded: Bool
+    let isThinking: Bool
+    let usesAppleIntelligence: Bool
+    let namespace: Namespace.ID
     let action: () -> Void
 
     @State private var isHovered = false
+    @State private var ringRotation: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var symbol: String {
+        if isExpanded { return "xmark" }
+        return usesAppleIntelligence ? "apple.intelligence" : "wand.and.stars"
+    }
 
     var body: some View {
         Button(action: action) {
-            ZStack {
-                // Gradient fill when closed, glass when expanded
-                if !isExpanded {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.purple, Color.indigo],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 56, height: 56)
-                } else {
-                    Circle()
-                        .fill(.clear)
-                        .frame(width: 56, height: 56)
-                        .glassEffect(.regular, in: Circle())
-                }
-
-                Image(systemName: isExpanded ? "xmark" : "wand.and.stars")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(isExpanded ? Color.primary : Color.white)
+            HStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(isExpanded ? AnyShapeStyle(.secondary) : AnyShapeStyle(assistantGradient))
                     .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.pulse, options: .repeating, isActive: isThinking && !reduceMotion)
+
+                if !isExpanded {
+                    Text(isThinking ? "Thinking…" : "Tone Assistant")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .contentTransition(.opacity)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
+                }
+            }
+            .padding(.horizontal, isExpanded ? 0 : 18)
+            .frame(width: isExpanded ? 48 : nil, height: 48)
+            .contentShape(Capsule())
+            .glassEffect(.regular.tint(.purple.opacity(isExpanded ? 0 : 0.18)).interactive(), in: Capsule())
+            .glassEffectID("fab", in: namespace)
+            // Apple Intelligence–style glow ring while the model works
+            .overlay {
+                if isThinking {
+                    Capsule()
+                        .strokeBorder(
+                            AngularGradient(
+                                colors: [.purple, .pink, .orange, .cyan, .purple],
+                                center: .center,
+                                angle: .degrees(ringRotation)
+                            ),
+                            lineWidth: 2.5
+                        )
+                        .blur(radius: 0.5)
+                        .transition(.opacity)
+                        .onAppear {
+                            guard !reduceMotion else { return }
+                            withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
+                                ringRotation = 360
+                            }
+                        }
+                        .onDisappear { ringRotation = 0 }
+                }
             }
         }
         .buttonStyle(.plain)
-        .shadow(
-            color: isExpanded ? .black.opacity(0.1) : .purple.opacity(0.4),
-            radius: isHovered ? 14 : 8,
-            x: 0, y: 4
-        )
-        .scaleEffect(isHovered ? 1.06 : 1.0)
+        .shadow(color: .purple.opacity(isExpanded ? 0 : 0.25), radius: isHovered ? 14 : 8, y: 4)
+        .scaleEffect(isHovered ? 1.04 : 1.0)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isExpanded)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isExpanded)
+        .animation(.easeInOut(duration: 0.25), value: isThinking)
         .onHover { isHovered = $0 }
-        .help("AI Tone Assistant")
+        .help("Tone Assistant (⌘J)")
         .accessibilityLabel(isExpanded ? "Close Tone Assistant" : "Open Tone Assistant")
+        .accessibilityValue(isThinking ? "Thinking" : "")
+    }
+
+    private var assistantGradient: LinearGradient {
+        LinearGradient(colors: [.purple, .pink, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 }
 

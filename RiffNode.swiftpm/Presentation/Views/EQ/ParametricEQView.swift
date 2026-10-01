@@ -6,8 +6,9 @@ import SwiftUI
 
 struct ParametricEQView: View {
     @Bindable var engine: AudioEngineManager
+    /// Live spectrum drawn behind the curve, so you can see which frequencies you are shaping.
+    var analyzer: FFTAnalyzer?
     @State private var selectedBand: Int? = nil
-    @State private var bands: [EQBand] = EQBand.defaultBands
     @State private var isAnalyzerActive = true
 
     var body: some View {
@@ -15,9 +16,8 @@ struct ParametricEQView: View {
             // Header with analyzer toggle and presets
             GlassEQHeader(
                 isAnalyzerActive: $isAnalyzerActive,
-                bands: $bands,
+                bands: $engine.parametricEQBands,
                 onReset: {
-                    bands = EQBand.defaultBands
                     engine.resetEQ()
                 }
             )
@@ -38,12 +38,18 @@ struct ParametricEQView: View {
                     // Grid
                     GlassEQGridView()
 
+                    // Live input spectrum behind the curve
+                    if isAnalyzerActive, let analyzer {
+                        EQSpectrumOverlay(analyzer: analyzer)
+                            .transition(.opacity)
+                    }
+
                     // Smooth frequency response curve with fill
-                    GlassEQCurveView(bands: bands, selectedBand: selectedBand)
+                    GlassEQCurveView(bands: engine.parametricEQBands, selectedBand: selectedBand)
 
                     // Draggable band nodes - tap to select, drag to adjust
                     GlassEQBandNodes(
-                        bands: $bands,
+                        bands: $engine.parametricEQBands,
                         selectedBand: $selectedBand
                     )
 
@@ -59,11 +65,12 @@ struct ParametricEQView: View {
                     }
                 }
                 .frame(height: 320)
+                .animation(.easeInOut(duration: 0.2), value: isAnalyzerActive)
             }
 
             // Selected band controls - compact inline controls
             if let selected = selectedBand {
-                GlassEQBandControls(band: $bands[selected])
+                GlassEQBandControls(band: $engine.parametricEQBands[selected])
                     .transition(.asymmetric(
                         insertion: .move(edge: .bottom).combined(with: .opacity),
                         removal: .opacity
@@ -71,22 +78,46 @@ struct ParametricEQView: View {
             }
         }
         .animation(.spring(duration: 0.25), value: selectedBand)
-        // Sync EQ bands with audio engine whenever they change
-        .onChange(of: bands) { _, newBands in
-            syncEQToEngine(newBands)
-        }
-        .onAppear {
-            // Initial sync on appear
-            syncEQToEngine(bands)
-        }
     }
+}
 
-    /// Sync the UI EQ bands to the audio engine
-    private func syncEQToEngine(_ bands: [EQBand]) {
-        let bandConfigs = bands.map { band in
-            (frequency: band.frequency, gain: band.gain, q: band.q, isEnabled: band.isEnabled)
+// MARK: - EQ Spectrum Overlay
+// Draws the live FFT on the same log-frequency axis as the EQ curve.
+
+private struct EQSpectrumOverlay: View {
+    let analyzer: FFTAnalyzer
+
+    var body: some View {
+        Canvas { context, size in
+            let magnitudes = analyzer.logMagnitudes
+            let frequencies = analyzer.logFrequencies
+            guard magnitudes.count > 1, magnitudes.count == frequencies.count else { return }
+
+            let logMin = log10(Float(20)), logMax = log10(Float(20000))
+            func x(_ frequency: Float) -> CGFloat {
+                let logFreq = log10(max(frequency, 20))
+                return 30 + CGFloat((logFreq - logMin) / (logMax - logMin)) * (size.width - 40)
+            }
+
+            var path = Path()
+            path.move(to: CGPoint(x: x(max(frequencies[0], 20)), y: size.height))
+            for (frequency, magnitude) in zip(frequencies, magnitudes) {
+                // Ignore the bottom ~25 dB (noise floor) so the shape of the sound stands out,
+                // and keep it below the curve so the EQ stays the focus
+                let level = CGFloat(min(max((magnitude - 0.3) / 0.7, 0), 1))
+                let y = size.height - level * size.height * 0.7
+                path.addLine(to: CGPoint(x: x(frequency), y: y))
+            }
+            path.addLine(to: CGPoint(x: x(frequencies.last ?? 20000), y: size.height))
+            path.closeSubpath()
+
+            context.fill(path, with: .linearGradient(
+                Gradient(colors: [Color.cyan.opacity(0.28), Color.cyan.opacity(0.02)]),
+                startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)
+            ))
         }
-        engine.updateAllEQBands(bandConfigs)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

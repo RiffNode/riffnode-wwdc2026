@@ -75,7 +75,7 @@ struct MainInterfaceView: View {
                             EffectsChainView(engine: engine)
                         case .parametricEQ:
                             ScrollView {
-                                ParametricEQView(engine: engine)
+                                ParametricEQView(engine: engine, analyzer: viewModel.fftAnalyzer)
                                     .padding()
                             }
                         case .aiTools:
@@ -187,6 +187,10 @@ private struct MainKeyboardShortcuts: View {
                 .keyboardShortcut(.leftArrow, modifiers: .command)
             Button("Quick Controls", action: viewModel.notch.toggle)
                 .keyboardShortcut("k", modifiers: .command)
+            Button("Tone Assistant") {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { viewModel.showingChatbot.toggle() }
+            }
+            .keyboardShortcut("j", modifiers: .command)
             ForEach(Array(MainViewModel.MainTab.allCases.enumerated()), id: \.offset) { index, tab in
                 Button(tab.rawValue) { viewModel.selectedTab = tab }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)

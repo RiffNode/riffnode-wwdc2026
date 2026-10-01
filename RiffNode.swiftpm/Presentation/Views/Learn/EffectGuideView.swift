@@ -102,7 +102,8 @@ struct EffectGuideView: View {
                                         GlassEffectCardView(
                                             effect: effectModel,
                                             isExpanded: expandedEffectId == effectModel.id,
-                                            justAdded: addedEffectId == effectModel.id
+                                            justAdded: addedEffectId == effectModel.id,
+                                            engine: engine
                                         ) {
                                             withAnimation(.spring(duration: 0.3)) {
                                                 expandedEffectId = expandedEffectId == effectModel.id ? nil : effectModel.id
@@ -129,6 +130,8 @@ struct EffectGuideView: View {
         }
         .animation(.smooth(duration: 0.25), value: selectedSection)
         .animation(.smooth(duration: 0.25), value: selectedCategoryIndex)
+        // Leaving Learn hands the player's own pedalboard back
+        .onDisappear { engine?.stopAudition() }
     }
 }
 
@@ -496,6 +499,7 @@ struct GlassEffectCardView: View {
     let effect: EffectInfoModel
     let isExpanded: Bool
     var justAdded: Bool = false
+    var engine: AudioEngineManager? = nil
     let onTap: () -> Void
     var onTryEffect: ((EffectType) -> Void)? = nil
 
@@ -544,6 +548,7 @@ struct GlassEffectCardView: View {
                 if isExpanded {
                     GlassEffectCardDetails(
                         effect: effect,
+                        engine: engine,
                         onTryEffect: onTryEffect
                     )
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -559,6 +564,7 @@ struct GlassEffectCardView: View {
 
 struct GlassEffectCardDetails: View {
     let effect: EffectInfoModel
+    var engine: AudioEngineManager? = nil
     var onTryEffect: ((EffectType) -> Void)? = nil
 
     var body: some View {
@@ -569,6 +575,11 @@ struct GlassEffectCardDetails: View {
                 .frame(height: 1)
 
             VStack(alignment: .leading, spacing: 16) {
+                // Hear it first – sound before reading
+                if let effectType = effect.effectType, let engine {
+                    EffectAuditionPanel(type: effectType, tint: effect.color, engine: engine)
+                }
+
                 // What It Does
                 GlassEffectInfoSection(
                     title: "What It Does",
@@ -780,5 +791,82 @@ struct EffectsListView: View {
         AdaptiveBackground()
 
         EffectGuideView()
+    }
+}
+
+// MARK: - Effect Audition Panel
+// "Hear it" – plays the demo riff through this pedal alone, with an A/B switch,
+// so the difference is heard in seconds instead of read about.
+
+struct EffectAuditionPanel: View {
+    let type: EffectType
+    let tint: Color
+    @Bindable var engine: AudioEngineManager
+
+    private var isAuditioning: Bool { engine.auditionEffect == type }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Button {
+                    if isAuditioning { engine.stopAudition() } else { engine.startAudition(type) }
+                } label: {
+                    Label(isAuditioning ? "Stop" : "Hear it", systemImage: isAuditioning ? "stop.fill" : "play.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isAuditioning ? .white : tint)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(isAuditioning ? tint : tint.opacity(0.15), in: Capsule())
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(ScaleButtonStyle())
+                .disabled(!engine.canPlayDemoRiff)
+                .accessibilityHint("Plays a demo riff through the \(type.rawValue) alone")
+
+                if isAuditioning {
+                    // A/B switch
+                    Picker("Compare", selection: Binding(
+                        get: { engine.isAuditionBypassed },
+                        set: { engine.setAuditionBypassed($0) }
+                    )) {
+                        Text("With \(type.abbreviation)").tag(false)
+                        Text("Dry").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 200)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+
+                    NotchLevelIndicator(level: engine.inputLevel, tint: tint)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            Text(engine.canPlayDemoRiff ? type.listenFor : "Start the engine to hear this effect.")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(isAuditioning ? .primary : .secondary)
+        }
+        .padding(12)
+        .background(tint.opacity(isAuditioning ? 0.12 : 0.06), in: RoundedRectangle(cornerRadius: 12))
+        .animation(.smooth(duration: 0.25), value: isAuditioning)
+    }
+}
+
+/// Tiny live level bars so you can see the riff is playing.
+private struct NotchLevelIndicator: View {
+    let level: Float
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<4, id: \.self) { index in
+                Capsule()
+                    .fill(tint)
+                    .frame(width: 3, height: max(4, CGFloat(level) * 40 * (1 - CGFloat(index) * 0.15)))
+            }
+        }
+        .frame(height: 18)
+        .animation(.easeOut(duration: 0.08), value: level)
+        .accessibilityHidden(true)
     }
 }

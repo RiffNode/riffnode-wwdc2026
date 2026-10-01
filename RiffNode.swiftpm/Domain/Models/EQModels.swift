@@ -1,4 +1,5 @@
 import SwiftUI
+import AVFoundation
 
 // MARK: - EQ Band Model
 
@@ -34,6 +35,16 @@ struct EQBand: Identifiable, Equatable {
             case .peak: return "PK"
             case .highShelf: return "HS"
             case .lowPass: return "LP"
+            }
+        }
+
+        var audioUnitFilterType: AVAudioUnitEQFilterType {
+            switch self {
+            case .highPass: return .highPass
+            case .lowShelf: return .lowShelf
+            case .peak: return .parametric
+            case .highShelf: return .highShelf
+            case .lowPass: return .lowPass
             }
         }
 

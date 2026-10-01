@@ -11,6 +11,8 @@ struct ChatMessage: Identifiable {
     var appliedEffects: [String]?
     var commandMode: String?  // "preset", "additive", "remove"
     var isApplied: Bool = false
+    /// Which engine answered (assistant replies only).
+    var responder: SemanticCommandProcessor.Responder?
 
     enum Role {
         case user
@@ -23,7 +25,8 @@ struct ChatMessage: Identifiable {
         content: String,
         timestamp: Date = Date(),
         appliedEffects: [String]? = nil,
-        commandMode: String? = nil
+        commandMode: String? = nil,
+        responder: SemanticCommandProcessor.Responder? = nil
     ) {
         self.id = id
         self.role = role
@@ -31,6 +34,7 @@ struct ChatMessage: Identifiable {
         self.timestamp = timestamp
         self.appliedEffects = appliedEffects
         self.commandMode = commandMode
+        self.responder = responder
     }
 }
 
@@ -73,7 +77,11 @@ final class AIChatbotController {
         inputText = ""
         isProcessing = true
 
-        let success = await processor.processCommand(text)
+        // Send the live pedalboard with the request so the model can make relative changes
+        let pedalboard = engine.effectsChain
+            .map { "\($0.type.rawValue.lowercased()) \($0.isEnabled ? "on" : "off")" }
+            .joined(separator: ", ")
+        let success = await processor.processCommand(text, pedalboard: pedalboard)
 
         if success {
             // For remove/additive/delete commands show what was affected
@@ -91,7 +99,8 @@ final class AIChatbotController {
                 role: .assistant,
                 content: processor.lastExplanation,
                 appliedEffects: affectedEffects.isEmpty ? nil : affectedEffects,
-                commandMode: processor.lastCommandMode
+                commandMode: processor.lastCommandMode,
+                responder: processor.lastResponder
             )
             messages.append(response)
 
@@ -108,7 +117,8 @@ final class AIChatbotController {
                 : processor.lastExplanation
             messages.append(ChatMessage(
                 role: .assistant,
-                content: fallbackMsg
+                content: fallbackMsg,
+                responder: processor.lastResponder
             ))
         }
 

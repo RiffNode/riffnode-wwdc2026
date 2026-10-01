@@ -487,3 +487,41 @@ struct BackingTrackState {
         volume: 0.5
     )
 }
+
+// MARK: - Audition
+
+extension EffectType {
+    /// Settings strong enough to hear clearly when auditioning the pedal on its own.
+    var auditionParameters: [String: Float] {
+        switch self {
+        case .compressor: return ["threshold": -30, "ratio": 8]
+        case .equalizer: return ["bass": -10, "mid": 8, "treble": -10]
+        case .overdrive: return ["drive": 70, "tone": 60, "level": 70]
+        case .distortion: return ["drive": 85, "tone": 45, "level": 65]
+        case .fuzz: return ["fuzzAmount": 85, "tone": 50, "level": 60]
+        case .chorus: return ["rate": 1.2, "depth": 85, "mix": 60]
+        case .phaser: return ["rate": 0.6, "depth": 85, "feedback": 60]
+        case .flanger: return ["rate": 0.3, "depth": 90, "feedback": 70]
+        case .tremolo: return ["rate": 6, "depth": 85]
+        case .delay: return ["time": 0.4, "feedback": 50, "mix": 50]
+        case .reverb: return ["wetDryMix": 70, "mix": 70]
+        }
+    }
+
+    /// One sentence telling the listener what changes when the pedal is on.
+    var listenFor: String {
+        switch self {
+        case .compressor: return "Listen for every note landing at the same, even volume."
+        case .equalizer: return "Listen for the sound turning thin and nasal, like a telephone."
+        case .overdrive: return "Listen for a warm grit on the edges of each chord."
+        case .distortion: return "Listen for the notes turning thick, loud and sustained."
+        case .fuzz: return "Listen for a buzzy, broken-speaker roar."
+        case .chorus: return "Listen for a shimmer, as if two guitars play slightly out of tune."
+        case .phaser: return "Listen for a slow, swirling whoosh moving through the sound."
+        case .flanger: return "Listen for a jet-plane sweep rising and falling."
+        case .tremolo: return "Listen for the volume pulsing up and down in time."
+        case .delay: return "Listen for each chord echoing back a moment later."
+        case .reverb: return "Listen for the sound blooming into a large room."
+        }
+    }
+}

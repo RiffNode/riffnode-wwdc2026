@@ -19,7 +19,9 @@ final class FFTAnalyzer {
     let binCount: Int = 64
 
     /// Sample rate (will be set from audio engine)
-    var sampleRate: Double = 44100
+    var sampleRate: Double = 44100 {
+        didSet { frequencies = calculateFrequencyLabels() }
+    }
 
     // MARK: - Output Data
 
@@ -40,6 +42,12 @@ final class FFTAnalyzer {
 
     /// Cached band energies — updated once per analyze() call, not per SwiftUI render
     private(set) var cachedBandEnergies: [String: Float] = [:]
+
+    /// Log-spaced spectrum (20 Hz – 20 kHz), matching how we hear and how EQs are drawn.
+    /// `logMagnitudes` is 0–1 (−80…0 dBFS); `logFrequencies` holds each point's centre in Hz.
+    private(set) var logMagnitudes: [Float] = []
+    private(set) var logFrequencies: [Float] = []
+    private let logPointCount = 96
 
     // MARK: - FFT Setup (Accelerate/vDSP)
 
@@ -153,7 +161,13 @@ final class FFTAnalyzer {
             }
         }
 
-        // Convert to dB — write into pre-allocated _magDB (no allocation)
+        // Scale to full-scale amplitude: a sine at 1.0 → 1.0. FFT bins grow with N/2 and the
+        // Hann window halves the gain, so divide by N/4. Without this, normal guitar levels
+        // sit far above 0 dB and every bar clips at the top.
+        var amplitudeScale: Float = 4 / Float(fftSize)
+        vDSP_vsmul(_magRaw, 1, &amplitudeScale, &_magRaw, 1, vDSP_Length(halfSize))
+
+        // Convert to dBFS — write into pre-allocated _magDB (no allocation)
         var reference: Float = 1.0
         vDSP_vdbcon(_magRaw, 1, &reference, &_magDB, 1, vDSP_Length(halfSize), 0)
 
@@ -174,12 +188,46 @@ final class FFTAnalyzer {
 
         // Update output with vectorized smoothing
         updateMagnitudesWithSmoothing(normalizedMagnitudes)
+        updateLogSpectrum(fromDecibels: _magDB, binCount: halfSize, resolution: freqResolution)
 
         // Cache band energies once per analysis cycle (not per render frame)
         cachedBandEnergies = computeBandEnergies()
     }
 
     // MARK: - Helpers
+
+    /// Resamples the dB spectrum onto log-spaced points; each point takes the loudest FFT bin
+    /// within its fraction of an octave (or the nearest bin at low frequencies, where bins are wide).
+    private func updateLogSpectrum(fromDecibels decibels: [Float], binCount: Int, resolution: Float) {
+        guard resolution > 0, binCount > 1 else { return }
+        let minFreq: Float = 20, maxFreq: Float = 20000
+        let ratio = pow(maxFreq / minFreq, 1 / Float(logPointCount - 1))
+        let halfStep = sqrt(ratio)
+
+        var frequencies = [Float](repeating: 0, count: logPointCount)
+        var values = [Float](repeating: 0, count: logPointCount)
+        for i in 0..<logPointCount {
+            let centre = minFreq * pow(ratio, Float(i))
+            let low = max(1, Int((centre / halfStep / resolution).rounded(.down)))
+            let high = min(binCount - 1, max(low, Int((centre * halfStep / resolution).rounded(.up))))
+            var loudest: Float = -.infinity
+            if low <= high {
+                for bin in low...high { loudest = max(loudest, decibels[bin]) }
+            }
+            frequencies[i] = centre
+            values[i] = (min(max(loudest, -80), 0) + 80) / 80
+        }
+
+        logFrequencies = frequencies
+        if logMagnitudes.count == values.count {
+            // Fast attack, slower release – reads like an analyzer, not a flicker
+            for i in values.indices {
+                let previous = logMagnitudes[i]
+                values[i] = values[i] > previous ? values[i] : previous * 0.82 + values[i] * 0.18
+            }
+        }
+        logMagnitudes = values
+    }
 
     private func binMagnitudes(_ input: [Float], fromSize: Int, toSize: Int) -> [Float] {
         var output = [Float](repeating: 0, count: toSize)

@@ -37,8 +37,8 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 - **No guitar? Still playable.** A built-in demo riff is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
 - **See the sound.** A live waveform, a 32-band spectrum, IN/OUT meters and a tuner react to every note.
 - **Hands-free control.** Vision face tracking turns head nods, tilts and an open mouth into preset changes, bypass and a wah-style expression pedal.
-- **Describe the tone, get the tone.** Foundation Models translates "warm jazz clean" or "heavy metal riff" into real effect parameters, entirely on device.
-- **Learn by doing.** A guided tour, sound-science visualizations and an effect guide explain what each pedal does, where it goes in the chain, and who made it famous.
+- **Describe the tone, get the tone.** Foundation Models translates "warm jazz clean" or "heavy metal riff" into real effect parameters, entirely on device – and shows each step live as it picks pedals and dials in settings.
+- **Learn by listening.** Every effect in the guide has a **Hear it** button: the demo riff plays through that pedal alone, with an A/B switch against the dry sound.
 - **Private and offline.** No account, no network, no analytics. Audio, camera frames and AI prompts never leave the device.
 
 ## Try it in 3 minutes
@@ -49,7 +49,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 | 2 | Tap **Take the Tour** (or skip it) | A short walkthrough of the signal chain |
 | 3 | Tap **No guitar? Try the Demo Riff** (`⌘D`) | A riff plays through your pedals; the visualizer, spectrum and chord detector come alive |
 | 4 | Tap a pedal, or double-tap to bypass it | The sound and the spectrum change instantly; the notch announces the change |
-| 5 | Open the ✨ Tone Assistant and type *"ambient shimmer"* | The AI rebuilds the chain for you |
+| 5 | Open the **Tone Assistant** (`⌘J`) and tap *Ambient pad* | Watch it pick pedals and settings step by step, then rebuild the chain |
 | 6 | Turn on **Gesture Control** and nod | Presets switch hands-free, with feedback in the notch |
 
 > [!TIP]
@@ -75,7 +75,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 
 ### Real-time effects
 
-11 effect types, built on `AVAudioEngine` with low-latency bypass switching and drag-to-reorder chains.
+11 effect types, built on `AVAudioEngine`. Every pedal stays wired in chain order, so switching one on or off is an instant bypass. AVFoundation has no modulation effects, so Chorus, Flanger, Phaser and Tremolo run in a custom in-process **Audio Unit** with real LFO-driven DSP.
 
 | Category | Effects |
 | --- | --- |
@@ -98,9 +98,10 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 
 ### On-device AI
 
-- **Tone Assistant** – chat in plain English; Foundation Models returns structured parameters with `@Generable` and applies them to the pedalboard.
+- **Tone Assistant** – chat in plain English; Foundation Models returns structured settings with `@Generable` and applies them to the pedalboard. Output is streamed, so the chat shows what the model is doing ("Picking pedals: Distortion · Reverb", "Setting reverb decay → 5").
+- **Honest fallback** – RiffNode checks `SystemLanguageModel.availability`. Without Apple Intelligence an offline tone matcher answers instead, and every reply is labelled with which one responded.
 - **Chord → tone suggestions** – when a chord is held steadily, RiffNode suggests a matching tone you can apply in one tap.
-- **Analysis** – FFT spectrum (Accelerate / vDSP) and autocorrelation pitch detection power the tuner and chord detector.
+- **Analysis** – FFT spectrum (Accelerate / vDSP) and autocorrelation pitch detection power the tuner and chord detector. The live spectrum is drawn behind the Parametric EQ curve, so you can see which frequencies you are shaping.
 
 ### Keyboard shortcuts (Mac and iPad)
 
@@ -110,6 +111,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 | `⌘D` | Play / stop the demo riff |
 | `⌘←` `⌘→` | Previous / next preset |
 | `⌘K` | Open / close the Riff Notch |
+| `⌘J` | Open / close the Tone Assistant |
 | `⌘1` – `⌘4` | Pedalboard · Parametric EQ · AI Tools · Learn |
 
 ## Gallery
@@ -150,6 +152,8 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 - **Swift 6 audio taps** – tap blocks are global, non-isolated functions writing into a lock-protected buffer, so no `@MainActor` closure ever runs on the audio thread.
 - **Responsive start-up** – `AVAudioSession` activation runs off the main thread.
 - **Demo riff** – Karplus–Strong plucked-string synthesis with a seeded generator renders the same original power-chord riff on every run, with no bundled audio files.
+- **Real-time modulation DSP** – a custom `AUAudioUnit` processes in place on the audio thread with no allocation or locks; parameters cross threads through `Synchronization.Atomic`.
+- **Fast on-device AI** – a compact `@Generable` schema (up to five pedals, three settings each) and a fresh, prewarmed session per request keep responses to a few seconds and never overflow the 4K context window.
 
 ## Architecture
 
@@ -193,7 +197,7 @@ RiffNode.swiftpm/
 │   ├── Models/             Effect, preset, EQ and analysis models
 │   └── Protocols/          AudioManaging, EffectsChainManaging, PresetProviding …
 ├── Data/
-│   ├── Audio/              AudioEngineManager, DemoRiffSynthesizer
+│   ├── Audio/              AudioEngineManager, DemoRiffSynthesizer, DSP/ModulationAudioUnit
 │   ├── Analysis/           FFTAnalyzer, ChordDetector
 │   ├── Vision/             VisionGestureController
 │   ├── AI/                 SemanticCommandProcessor
