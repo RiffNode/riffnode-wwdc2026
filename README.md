@@ -23,7 +23,7 @@
   <img src="https://img.shields.io/badge/SwiftUI-Liquid%20Glass-0A84FF" alt="SwiftUI Liquid Glass">
   <img src="https://img.shields.io/badge/iPadOS%20%7C%20macOS-26-111827" alt="iPadOS and macOS 26">
   <img src="https://img.shields.io/badge/Works-Offline-30D158" alt="Works offline">
-  <img src="https://img.shields.io/badge/License-MIT-lightgrey" alt="MIT License">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-lightgrey" alt="MIT License"></a>
 </p>
 
 <p align="center">
@@ -243,7 +243,7 @@ It brings low-level signal processing, computer vision and on-device AI together
 
 ## License
 
-RiffNode is released under the MIT License.
+RiffNode is released under the [MIT License](LICENSE).
 
 <p align="center">
   Made with ❤️ and a lot of feedback loops by Jesse
