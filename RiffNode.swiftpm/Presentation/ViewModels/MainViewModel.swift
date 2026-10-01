@@ -13,14 +13,14 @@ final class MainViewModel {
     enum MainTab: String, CaseIterable {
         case pedalboard = "Pedalboard"
         case parametricEQ = "Parametric EQ"
-        case aiTools = "AI Tools"
+        case aiTools = "Analyze"
         case learnEffects = "Learn"
 
         var icon: String {
             switch self {
             case .pedalboard: return "slider.horizontal.below.square.filled.and.square"
             case .parametricEQ: return "slider.horizontal.3"
-            case .aiTools: return "brain.head.profile"
+            case .aiTools: return "waveform.and.magnifyingglass"
             case .learnEffects: return "text.book.closed"
             }
         }

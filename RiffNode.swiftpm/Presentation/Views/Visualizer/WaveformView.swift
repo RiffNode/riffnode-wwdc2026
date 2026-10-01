@@ -215,117 +215,6 @@ struct LevelMeterView: View {
     }
 }
 
-// MARK: - Audio Visualization Panel
-
-struct AudioVisualizationPanel: View {
-    @Bindable var engine: AudioEngineManager
-    @State private var visualizationMode: VisualizationMode = .waveform
-
-    enum VisualizationMode: String, CaseIterable {
-        case waveform = "Waveform"
-        case bars = "Bars"
-        case circular = "Circular"
-
-        var icon: String {
-            switch self {
-            case .waveform: return "waveform"
-            case .bars: return "chart.bar.fill"
-            case .circular: return "circle.hexagongrid.fill"
-            }
-        }
-    }
-
-    var body: some View {
-        GlassCard(cornerRadius: 16) {
-            VStack(spacing: 12) {
-                // Header
-                HStack {
-                    HStack(spacing: 8) {
-                        Image(systemName: "waveform.circle.fill")
-                            .foregroundStyle(.secondary)
-                        Text("Visualizer")
-                            .font(.headline)
-                    }
-
-                    Spacer()
-
-                    // Glass segment slider for mode selection
-                    GlassSegmentSlider(
-                        selection: $visualizationMode,
-                        options: VisualizationMode.allCases
-                    ) { mode in
-                        Image(systemName: mode.icon)
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .frame(width: 120)
-                }
-
-                // Visualization content
-                HStack(spacing: 12) {
-                    // Input level meter
-                    LevelMeterView(level: engine.inputLevel, label: "IN")
-
-                    // Main visualization
-                    ZStack {
-                        // Subtle dark glass background for visualization area
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(.black.opacity(0.15))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(.white.opacity(0.1), lineWidth: 1)
-                            }
-
-                        // Visualization
-                        Group {
-                            switch visualizationMode {
-                            case .waveform:
-                                WaveformView(samples: engine.waveformSamples)
-                                    .padding(8)
-                            case .bars:
-                                BarVisualizationView(samples: engine.waveformSamples)
-                            case .circular:
-                                CircularVisualizationView(samples: engine.waveformSamples)
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(.white.opacity(0.1), lineWidth: 1)
-                    }
-                    // Empty state: explain the silent flat line instead of leaving a grey box
-                    .overlay {
-                        if engine.inputLevel < 0.01 && !engine.isDemoRiffPlaying {
-                            VStack(spacing: 4) {
-                                Image(systemName: engine.isRunning ? "waveform.badge.mic" : "play.circle")
-                                    .font(.system(size: 20))
-                                Text(engine.isRunning ? "Play a note to see your sound" : "Start the engine to listen")
-                                    .font(.caption.weight(.medium))
-                                    .multilineTextAlignment(.center)
-                            }
-                            .foregroundStyle(.secondary)
-                            .padding(8)
-                            .transition(.opacity)
-                        }
-                    }
-                    .animation(.easeInOut(duration: 0.3), value: engine.inputLevel < 0.01)
-
-                    // Output level meter
-                    LevelMeterView(level: engine.outputLevel, label: "OUT")
-                }
-                .frame(height: 140)
-            }
-        }
-    }
-    
-    // Haptic feedback for mode switching
-    private func triggerHaptic() {
-        #if os(iOS)
-        let impact = UIImpactFeedbackGenerator(style: .light)
-        impact.impactOccurred()
-        #endif
-    }
-}
 
 // MARK: - Bar Visualization (Canvas-based for performance)
 
@@ -467,9 +356,6 @@ struct CircularVisualizationView: View {
         AdaptiveBackground()
 
         VStack(spacing: 20) {
-            AudioVisualizationPanel(engine: AudioEngineManager())
-                .frame(height: 220)
-
             HStack(spacing: 20) {
                 WaveformView(samples: (0..<128).map { _ in Float.random(in: 0...0.8) })
                     .frame(height: 80)

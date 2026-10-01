@@ -38,15 +38,10 @@ struct MainInterfaceView: View {
                 ScrollView {
                     GlassEffectContainer(spacing: 16) {
                         VStack(spacing: Spacing.md) {
-                            DemoRiffPill(engine: engine)
+                            // Sound in: source, visualizer, note & chord
+                            InputSourceCard(engine: engine, chordDetector: viewModel.chordDetector)
 
-                            AudioVisualizationPanel(engine: engine)
-
-                            // Spectrum + chord badge fuse with the cards above / below
-                            MiniSpectrumIndicator(analyzer: viewModel.fftAnalyzer)
-
-                            CompactChordBadge(detector: viewModel.chordDetector)
-
+                            // Play along with a song
                             BackingTrackView(engine: engine)
 
                             GestureControlPill(
@@ -79,10 +74,11 @@ struct MainInterfaceView: View {
                                     .padding()
                             }
                         case .aiTools:
-                            AIToolsView(
+                            AnalyzeView(
                                 fftAnalyzer: viewModel.fftAnalyzer,
                                 chordDetector: viewModel.chordDetector,
-                                engine: engine
+                                engine: engine,
+                                onOpenEQ: { viewModel.selectedTab = .parametricEQ }
                             )
                         case .learnEffects:
                             EffectGuideView(engine: engine)

@@ -35,7 +35,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 ## Why RiffNode
 
 - **No guitar? Still playable.** A built-in demo riff is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
-- **See the sound.** A live waveform, a 32-band spectrum, IN/OUT meters and a tuner react to every note.
+- **See the sound.** A live waveform, IN/OUT meters, a tuner, chord detection and a frequency map react to every note – and explain in plain words what they mean for your tone.
 - **Hands-free control.** Vision face tracking turns head nods, tilts and an open mouth into preset changes, bypass and a wah-style expression pedal.
 - **Describe the tone, get the tone.** Foundation Models translates "warm jazz clean" or "heavy metal riff" into real effect parameters, entirely on device – and shows each step live as it picks pedals and dials in settings.
 - **Learn by listening.** Every effect in the guide has a **Hear it** button: the demo riff plays through that pedal alone, with an A/B switch against the dry sound.
@@ -101,7 +101,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 - **Tone Assistant** – chat in plain English; Foundation Models returns structured settings with `@Generable` and applies them to the pedalboard. Output is streamed, so the chat shows what the model is doing ("Picking pedals: Distortion · Reverb", "Setting reverb decay → 5").
 - **Honest fallback** – RiffNode checks `SystemLanguageModel.availability`. Without Apple Intelligence an offline tone matcher answers instead, and every reply is labelled with which one responded.
 - **Chord → tone suggestions** – when a chord is held steadily, RiffNode suggests a matching tone you can apply in one tap.
-- **Analysis** – FFT spectrum (Accelerate / vDSP) and autocorrelation pitch detection power the tuner and chord detector. The live spectrum is drawn behind the Parametric EQ curve, so you can see which frequencies you are shaping.
+- **Analyze** – a cents-accurate tuner, chord detection, and a frequency map split into the ranges guitarists talk about (bass, body, mids, bite, air), with a plain-language takeaway that jumps straight into the EQ. FFT (Accelerate / vDSP) and autocorrelation pitch detection power it all; the same live spectrum is drawn behind the Parametric EQ curve.
 
 ### Keyboard shortcuts (Mac and iPad)
 
@@ -112,7 +112,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 | `⌘←` `⌘→` | Previous / next preset |
 | `⌘K` | Open / close the Riff Notch |
 | `⌘J` | Open / close the Tone Assistant |
-| `⌘1` – `⌘4` | Pedalboard · Parametric EQ · AI Tools · Learn |
+| `⌘1` – `⌘4` | Pedalboard · Parametric EQ · Analyze · Learn |
 
 ## Gallery
 
@@ -123,7 +123,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
   </tr>
   <tr>
     <td><img src="screenshots/screenshot_4.jpg" alt="Parametric EQ with ten draggable bands"><br><sub><b>Parametric EQ</b> – ten draggable bands over a live analyzer</sub></td>
-    <td><img src="screenshots/screenshot_2.jpg" alt="AI Tools tab with spectrum analyzer and chord detection"><br><sub><b>Audio analysis</b> – FFT spectrum and chord detection</sub></td>
+    <td><img src="screenshots/screenshot_2.jpg" alt="AI Tools tab with spectrum analyzer and chord detection"><br><sub><b>Audio analysis</b> – spectrum and chord detection</sub></td>
   </tr>
   <tr>
     <td><img src="screenshots/screenshot_8.jpg" alt="Performance mode with large pedals and quick preset bar"><br><sub><b>Stage Mode</b> – big footswitches and a quick preset bar</sub></td>
