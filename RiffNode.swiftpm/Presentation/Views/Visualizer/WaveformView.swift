@@ -293,6 +293,22 @@ struct AudioVisualizationPanel: View {
                         RoundedRectangle(cornerRadius: 12)
                             .strokeBorder(.white.opacity(0.1), lineWidth: 1)
                     }
+                    // Empty state: explain the silent flat line instead of leaving a grey box
+                    .overlay {
+                        if engine.inputLevel < 0.01 && !engine.isDemoRiffPlaying {
+                            VStack(spacing: 4) {
+                                Image(systemName: engine.isRunning ? "waveform.badge.mic" : "play.circle")
+                                    .font(.system(size: 20))
+                                Text(engine.isRunning ? "Play a note to see your sound" : "Start the engine to listen")
+                                    .font(.caption.weight(.medium))
+                                    .multilineTextAlignment(.center)
+                            }
+                            .foregroundStyle(.secondary)
+                            .padding(8)
+                            .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.3), value: engine.inputLevel < 0.01)
 
                     // Output level meter
                     LevelMeterView(level: engine.outputLevel, label: "OUT")

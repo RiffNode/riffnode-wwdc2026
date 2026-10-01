@@ -45,6 +45,11 @@ final class AudioEngineManager: AudioManaging {
 
     var effectsChain: [EffectNode] = []
 
+    /// The most recently applied preset, and a counter that bumps on every apply
+    /// (so re-applying the same preset is still observable).
+    private(set) var currentPreset: EffectPreset?
+    private(set) var presetApplyCount = 0
+
     // MARK: - Backing Track (BackingTrackManaging)
 
     private(set) var isBackingTrackPlaying = false
@@ -76,6 +81,11 @@ final class AudioEngineManager: AudioManaging {
 
     /// When true the backing track is routed through the full effects chain
     private(set) var backingTrackThroughEffects: Bool = false
+
+    // Demo riff – a synthesized guitar that stands in for a real one
+    private(set) var isDemoRiffPlaying = false
+    private var demoRiffPlayer: AVAudioPlayerNode?
+    private var demoRiffBuffer: AVAudioPCMBuffer?
 
     // Visualization
     private var tapInstalled = false
@@ -198,7 +208,7 @@ final class AudioEngineManager: AudioManaging {
 
         // Configure audio session (required for iOS/Mac Catalyst)
         #if os(iOS) || targetEnvironment(macCatalyst)
-        try configureAudioSession()
+        try await Self.configureAudioSession()
         #endif
 
         let engine = AVAudioEngine()
@@ -292,6 +302,7 @@ final class AudioEngineManager: AudioManaging {
     }
 
     func stop() {
+        stopDemoRiff()
         stopVisualization()
         
         audioEngine?.stop()
@@ -463,6 +474,8 @@ final class AudioEngineManager: AudioManaging {
             applyEffectParameters(effect)
         }
 
+        currentPreset = preset
+        presetApplyCount += 1
         print("applyPreset: Applied preset '\(preset.name)'")
     }
 
@@ -647,13 +660,86 @@ final class AudioEngineManager: AudioManaging {
         }
     }
 
+    // MARK: - Demo Riff
+
+    /// True once the effects chain exists, i.e. there is somewhere to send the riff.
+    var canPlayDemoRiff: Bool { fxInputMixer != nil }
+
+    func toggleDemoRiff() {
+        isDemoRiffPlaying ? stopDemoRiff() : startDemoRiff()
+    }
+
+    /// Loops a synthesized guitar riff into the effects chain where a real guitar would enter.
+    /// The visualizer, spectrum and chord detector follow the riff while it plays.
+    func startDemoRiff() {
+        guard !isDemoRiffPlaying,
+              let engine = audioEngine,
+              let fxMixer = fxInputMixer,
+              let format = processingFormat else { return }
+
+        if !isRunning { try? start() }
+        guard isRunning else { return }
+
+        let player: AVAudioPlayerNode
+        if let existing = demoRiffPlayer {
+            player = existing
+        } else {
+            player = AVAudioPlayerNode()
+            engine.attach(player)
+            engine.connect(player, to: fxMixer, format: format)
+            demoRiffPlayer = player
+        }
+
+        guard let buffer = demoRiffBuffer ?? makeDemoRiffBuffer(format: format) else { return }
+        demoRiffBuffer = buffer
+
+        // Point the analysis tap at the riff instead of the microphone
+        inputNode?.removeTap(onBus: 0)
+        player.removeTap(onBus: 0)
+        player.installTap(onBus: 0, bufferSize: 1024, format: format, block: audioTapCallback)
+
+        player.scheduleBuffer(buffer, at: nil, options: [.loops])
+        player.play()
+        isDemoRiffPlaying = true
+    }
+
+    func stopDemoRiff() {
+        guard isDemoRiffPlaying, let player = demoRiffPlayer else { return }
+        player.stop()
+        player.removeTap(onBus: 0)
+        isDemoRiffPlaying = false
+
+        // Hand the analysis tap back to the microphone
+        if isRunning {
+            startRealAudioVisualization()
+        }
+    }
+
+    private func makeDemoRiffBuffer(format: AVAudioFormat) -> AVAudioPCMBuffer? {
+        let samples = DemoRiffSynthesizer.render(sampleRate: format.sampleRate)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
+              let channels = buffer.floatChannelData else { return nil }
+
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        for channel in 0..<Int(format.channelCount) {
+            samples.withUnsafeBufferPointer { source in
+                channels[channel].update(from: source.baseAddress!, count: samples.count)
+            }
+        }
+        return buffer
+    }
+
     // MARK: - Private Helpers
 
     #if os(iOS) || targetEnvironment(macCatalyst)
-    private func configureAudioSession() throws {
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .mixWithOthers])
-        try session.setActive(true)
+    /// Activating the session blocks while the audio hardware spins up,
+    /// so it runs off the main thread to keep the UI responsive.
+    private nonisolated static func configureAudioSession() async throws {
+        try await Task.detached(priority: .userInitiated) {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .mixWithOthers])
+            try session.setActive(true)
+        }.value
         print("setupEngine: Audio session configured")
     }
     #endif
@@ -741,11 +827,17 @@ final class AudioEngineManager: AudioManaging {
             channels: 2
         ) ?? inputFormat
 
-        // Reconnect: Input -> Converter
+        // Reconnect: Input -> Converter -> fxInputMixer, so the backing track
+        // and demo riff (which feed fxInputMixer) stay routed through the effects
         engine.connect(input, to: converter, format: inputFormat)
 
         // Build chain based on enabled effects
         var currentNode: AVAudioNode = converter
+        if let fxMixer = fxInputMixer {
+            engine.disconnectNodeOutput(fxMixer)
+            engine.connect(converter, to: fxMixer, format: format)
+            currentNode = fxMixer
+        }
         var enabledEffectCount = 0
 
         for effectNode in effectsChain where effectNode.isEnabled {
@@ -765,6 +857,12 @@ final class AudioEngineManager: AudioManaging {
             engine.prepare()
             do {
                 try engine.start()
+                // Stopping the engine halts player nodes; resume the demo loop
+                if isDemoRiffPlaying, let player = demoRiffPlayer, let buffer = demoRiffBuffer {
+                    player.stop()
+                    player.scheduleBuffer(buffer, at: nil, options: [.loops])
+                    player.play()
+                }
                 print("rebuildAudioChain: Engine restarted successfully")
             } catch {
                 print("rebuildAudioChain: Failed to restart engine: \(error)")
