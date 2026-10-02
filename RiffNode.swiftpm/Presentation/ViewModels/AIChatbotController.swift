@@ -83,7 +83,14 @@ final class AIChatbotController {
             .joined(separator: ", ")
         let success = await processor.processCommand(text, pedalboard: pedalboard)
 
-        if success {
+        if success && processor.lastCommandMode == "chat" {
+            // A conversational reply: nothing to apply to the pedalboard
+            messages.append(ChatMessage(
+                role: .assistant,
+                content: processor.lastExplanation,
+                responder: processor.lastResponder
+            ))
+        } else if success {
             // For remove/additive/delete commands show what was affected
             let affectedEffects: [String]
             switch processor.lastCommandMode {

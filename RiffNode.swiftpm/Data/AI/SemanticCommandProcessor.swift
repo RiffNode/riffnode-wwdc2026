@@ -20,6 +20,8 @@ enum ToneCommandMode {
     case additive
     /// Turn pedals off ("remove delay")
     case remove
+    /// Not a tone request – a greeting, thanks, or a question. Reply only; change nothing.
+    case chat
 }
 
 @available(iOS 26, macOS 26, *)
@@ -235,6 +237,8 @@ final class SemanticCommandProcessor {
             preset: a whole style or genre ("heavy metal", "jazz clean", "for this Em riff"). Replaces the tone.
             additive: change only the pedals mentioned ("add reverb", "more bass", "faster tremolo"). Use the current pedalboard you are given.
             remove: turn pedals off ("remove delay", "no distortion").
+            chat: anything that is not asking for a sound – greetings ("hi"), thanks, or questions ("what does a phaser do?"). Leave pedals empty and answer in the explanation.
+            Only change the tone when the player asks for one. Never invent a request.
 
             Pedal settings (ranges):
             compressor threshold -40…0, ratio 1…20, attack 0.1…100, release 10…500
@@ -258,9 +262,12 @@ final class SemanticCommandProcessor {
             surf: reverb mix 90 decay 3.5, tremolo rate 4.5 depth 75
             funk: compressor threshold -22 ratio 6, equalizer treble 3
             psychedelic: fuzz drive 75, phaser rate 0.6 depth 70 feedback 60, reverb mix 55
-            Minor chords suit warm overdrive; major chords suit clean sparkle; power chords suit distortion.
+            If the player names a chord: minor suits warm overdrive, major suits clean sparkle, power chords suit distortion.
 
             Use at most 5 pedals and only the settings that matter.
+
+            Explanation: one or two calm, specific sentences in your own words about this request:
+            which pedals you chose and why they fit it. No hype, no exclamation marks.
             """
             self.instructions = instructions
             refreshAvailability()
@@ -319,7 +326,21 @@ final class SemanticCommandProcessor {
         isProcessing = true
         lastCommand = command
         errorMessage = nil
-        thinkingSteps = [ThinkingStep(id: "context", text: "Reading your pedalboard", isDone: true)]
+        thinkingSteps = [ThinkingStep(id: "context", text: "Reading your request", isDone: true)]
+
+        // Only real tone requests may change the pedalboard. Greetings and questions are
+        // recognised here, before the model – the small on-device model tends to answer
+        // everything with a tone otherwise.
+        switch Self.classify(command) {
+        case .smallTalk:
+            finishChat(Self.smallTalkReply(for: command), by: .offlineMatcher)
+            return true
+        case .question:
+            await answerQuestion(command)
+            return true
+        case .tone:
+            break
+        }
 
         defer { isProcessing = false }
 
@@ -354,9 +375,10 @@ final class SemanticCommandProcessor {
                         parameters.set(setting.name, to: setting.value, for: String(describing: pedal.effect))
                     }
                 }
-                parameters.explanation = result.explanation
+                let explanation = result.explanation.prefix(1).uppercased() + result.explanation.dropFirst()
+                parameters.explanation = explanation
                 lastParameters = parameters
-                lastExplanation = result.explanation
+                lastExplanation = explanation
                 lastResponder = .appleIntelligence
                 return true
             } catch {
@@ -372,6 +394,84 @@ final class SemanticCommandProcessor {
         // Fallback: instant keyword matching
         lastResponder = .offlineMatcher
         return processCommandFallback(command)
+    }
+
+    // MARK: - Request Classification
+
+    enum RequestKind { case smallTalk, question, tone }
+
+    private static let smallTalkWords: Set<String> = [
+        "hi", "hello", "hey", "yo", "hiya", "thanks", "thank", "you", "thx", "ty", "ok", "okay",
+        "cool", "nice", "great", "awesome", "good", "morning", "evening", "bye", "sup", "lol", "wow"
+    ]
+    private static let questionWords: Set<String> = [
+        "what", "whats", "how", "why", "which", "who", "when", "where", "does", "do", "is", "are", "can", "should"
+    ]
+    private static let toneVerbs = [
+        "add", "remove", "more", "less", "turn", "make", "give", "set", "boost", "cut", "increase",
+        "decrease", "want", "need", "bypass", "enable", "disable", "switch", "sound like", "dial", "tone for"
+    ]
+
+    static func classify(_ text: String) -> RequestKind {
+        let lower = text.lowercased()
+        let words = lower
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        guard !words.isEmpty else { return .smallTalk }
+
+        if words.count <= 4 && words.allSatisfy(smallTalkWords.contains) { return .smallTalk }
+
+        let asksSomething = lower.trimmingCharacters(in: .whitespaces).hasSuffix("?")
+            || questionWords.contains(words[0])
+        let requestsChange = toneVerbs.contains { lower.contains($0) }
+        if asksSomething && !requestsChange { return .question }
+        return .tone
+    }
+
+    private static func smallTalkReply(for text: String) -> String {
+        let lower = text.lowercased()
+        if lower.contains("thank") || lower.contains("thx") || lower == "ty" {
+            return "You're welcome. Ask for another sound whenever you like."
+        }
+        if lower.contains("bye") { return "See you – keep playing." }
+        return "Hi. Describe a sound – \"warm jazz clean\", \"add some reverb\", \"80s chorus\" – and I'll set up your pedals."
+    }
+
+    private func finishChat(_ reply: String, by responder: Responder) {
+        lastCommandMode = "chat"
+        lastEnabledEffects = []
+        lastDisabledEffects = []
+        lastParameters = nil
+        lastExplanation = reply
+        lastResponder = responder
+        markAllStepsDone()
+    }
+
+    /// Answers a question in words only. Uses Apple Intelligence when available; offline it
+    /// answers from RiffNode's own effect guide when the question names a pedal.
+    private func answerQuestion(_ question: String) async {
+        #if canImport(FoundationModels)
+        refreshAvailability()
+        if #available(iOS 26, macOS 26, *), isAvailable {
+            setStep("answer", "Answering your question", done: false)
+            let tutor = LanguageModelSession(instructions: """
+                You are RiffNode's guitar tutor. Answer the player's question about guitar tone, \
+                effects or music in at most two short, plain sentences. If it fits, suggest one \
+                sound they could ask RiffNode for. No exclamation marks.
+                """)
+            if let answer = try? await tutor.respond(to: question).content {
+                setStep("answer", "Answering your question", done: true)
+                finishChat(answer.trimmingCharacters(in: .whitespacesAndNewlines), by: .appleIntelligence)
+                return
+            }
+        }
+        #endif
+        let lower = question.lowercased()
+        if let type = EffectType.allCases.first(where: { lower.contains($0.rawValue.lowercased()) }) {
+            finishChat(type.effectDescription, by: .offlineMatcher)
+        } else {
+            finishChat("I can answer questions about the pedals offline – try \"what does a phaser do?\" – or ask for a sound to dial in.", by: .offlineMatcher)
+        }
     }
 
     // MARK: - Thinking Steps
@@ -403,6 +503,7 @@ final class SemanticCommandProcessor {
             case .preset: label = "Building a whole new tone"
             case .additive: label = "Adjusting only what you asked for"
             case .remove: label = "Turning pedals off"
+            case .chat: label = "Answering you"
             }
             setStep("mode", label, done: true)
         }
@@ -919,7 +1020,7 @@ final class SemanticCommandProcessor {
 
     /// Apply the last recommendation to the audio engine
     func applyToEngine(_ engine: AudioEngineManager) {
-        guard let params = lastParameters else { return }
+        guard lastCommandMode != "chat", let params = lastParameters else { return }
 
         // Ensure every effect the AI wants to enable actually exists in the chain.
         // This lets the default chain stay small; new pedals are inserted on demand.
