@@ -5,13 +5,7 @@ import SwiftUI
 
 struct MainInterfaceView: View {
     @State private var viewModel: MainViewModel
-    @State private var containerWidth: CGFloat = 1200
-
-    /// Narrower side panel on smaller windows (iPad portrait, split view)
-    /// so the pedalboard keeps room for more pedals.
-    private var sidePanelWidth: CGFloat {
-        containerWidth < 1100 ? 320 : 380
-    }
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     init(engine: AudioEngineManager, presetService: PresetProviding) {
         _viewModel = State(initialValue: MainViewModel(engine: engine, presetService: presetService))
@@ -21,78 +15,50 @@ struct MainInterfaceView: View {
         @Bindable var viewModel = viewModel
         let engine = viewModel.engine
 
-        VStack(spacing: 0) {
-            // Floating glass top bar – sits just below the notch
-            GlassTopBarView(
-                engine: engine,
-                chordDetector: viewModel.chordDetector,
-                showingSettings: $viewModel.showingSettings,
-                showingPresets: $viewModel.showingPresets
-            )
-            .padding(.horizontal, Spacing.md)
-            .padding(.top, RiffNotchMetrics.closedHeight + Spacing.xs)
-
-            HStack(spacing: Spacing.md) {
-                // Left panel – all glass cards sit inside one container
-                // so neighbouring cards fuse into a single liquid shape
-                ScrollView {
-                    GlassEffectContainer(spacing: 16) {
-                        VStack(spacing: Spacing.md) {
-                            // Sound in: source, visualizer, note & chord
-                            InputSourceCard(engine: engine, chordDetector: viewModel.chordDetector)
-
-                            // Play along with a song
-                            BackingTrackView(engine: engine)
-
-                            GestureControlPill(
-                                controller: viewModel.gestureController,
-                                isEnabled: $viewModel.gestureControlEnabled
-                            )
+        // Pro-app layout: sidebar (sections + live input + jam track), content in the
+        // middle, and the Tone Assistant as an inspector on the right.
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            RiffSidebar(viewModel: viewModel)
+                .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 360)
+        } detail: {
+            NavigationStack {
+                Group {
+                    switch viewModel.selectedTab {
+                    case .pedalboard:
+                        EffectsChainView(engine: engine)
+                    case .parametricEQ:
+                        ScrollView {
+                            ParametricEQView(engine: engine, analyzer: viewModel.fftAnalyzer)
+                                .padding()
                         }
+                    case .aiTools:
+                        AnalyzeView(
+                            fftAnalyzer: viewModel.fftAnalyzer,
+                            chordDetector: viewModel.chordDetector,
+                            engine: engine,
+                            onOpenEQ: { viewModel.selectedTab = .parametricEQ }
+                        )
+                    case .learnEffects:
+                        EffectGuideView(engine: engine)
                     }
-                    .padding(Spacing.md)
                 }
-                .scrollIndicators(.hidden)
-                .frame(width: sidePanelWidth)
-
-                // Right panel with tab switching
-                VStack(spacing: 0) {
-                    GlassTabBar(selection: $viewModel.selectedTab, tint: Color.riffPrimary) { tab in
-                        tab.icon
-                    }
-                    .padding(.horizontal, Spacing.lg)
-                    .padding(.top, Spacing.md)
-                    .padding(.bottom, Spacing.sm)
-
-                    Group {
-                        switch viewModel.selectedTab {
-                        case .pedalboard:
-                            EffectsChainView(engine: engine)
-                        case .parametricEQ:
-                            ScrollView {
-                                ParametricEQView(engine: engine, analyzer: viewModel.fftAnalyzer)
-                                    .padding()
-                            }
-                        case .aiTools:
-                            AnalyzeView(
-                                fftAnalyzer: viewModel.fftAnalyzer,
-                                chordDetector: viewModel.chordDetector,
-                                engine: engine,
-                                onOpenEQ: { viewModel.selectedTab = .parametricEQ }
-                            )
-                        case .learnEffects:
-                            EffectGuideView(engine: engine)
-                        }
-                    }
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .animation(.smooth(duration: 0.25), value: viewModel.selectedTab)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.trailing, Spacing.md)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(Color.riffBackground)
+                .navigationTitle(viewModel.selectedTab.rawValue)
+                .toolbarTitleDisplayMode(.inlineLarge)
+                .toolbar { mainToolbar(viewModel: viewModel) }
             }
-            .padding(.top, Spacing.sm)
+            .inspector(isPresented: $viewModel.showingChatbot) {
+                AIChatbotOverlayView(
+                    controller: viewModel.chatbotController,
+                    processor: viewModel.semanticProcessor,
+                    engine: engine,
+                    isExpanded: $viewModel.showingChatbot,
+                    presentation: .inspector
+                )
+                .inspectorColumnWidth(min: 300, ideal: 340, max: 420)
+            }
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
         .sheet(isPresented: $viewModel.showingSettings) {
             SettingsView(engine: engine)
         }
@@ -102,26 +68,17 @@ struct MainInterfaceView: View {
                 .frame(minWidth: 400, minHeight: 500)
                 #endif
         }
-        // AI Chatbot Overlay + Chord Suggestion Chip
+        // Chord → tone suggestion, bottom-trailing above the content
         .overlay(alignment: .bottomTrailing) {
-            VStack(alignment: .trailing, spacing: Spacing.sm) {
-                if let suggestion = viewModel.chordAISuggestion {
-                    ChordSuggestionChip(
-                        suggestion: suggestion,
-                        onApply: viewModel.applyChordSuggestion,
-                        onDismiss: viewModel.dismissChordSuggestion
-                    )
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
-
-                AIChatbotOverlayView(
-                    controller: viewModel.chatbotController,
-                    processor: viewModel.semanticProcessor,
-                    engine: engine,
-                    isExpanded: $viewModel.showingChatbot
+            if let suggestion = viewModel.chordAISuggestion {
+                ChordSuggestionChip(
+                    suggestion: suggestion,
+                    onApply: viewModel.applyChordSuggestion,
+                    onDismiss: viewModel.dismissChordSuggestion
                 )
+                .padding(Spacing.lg)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
-            .padding(Spacing.lg)
         }
         // Dynamic Island–style notch: live status, event banners, quick controls
         .overlay(alignment: .top) {
@@ -162,6 +119,82 @@ struct MainInterfaceView: View {
         .onAppear {
             viewModel.onAppear()
         }
+    }
+}
+
+// MARK: - Toolbar
+
+@MainActor @ToolbarContentBuilder
+private func mainToolbar(viewModel: MainViewModel) -> some ToolbarContent {
+    let engine = viewModel.engine
+    ToolbarItemGroup(placement: .primaryAction) {
+        Button {
+            viewModel.toggleEngine()
+        } label: {
+            Label(engine.isRunning ? "Stop Engine" : "Start Engine",
+                  systemImage: engine.isRunning ? "stop.fill" : "play.fill")
+        }
+        .help(engine.isRunning ? "Stop the audio engine (⌘↩)" : "Start the audio engine (⌘↩)")
+
+        Button {
+            viewModel.showingPresets = true
+        } label: {
+            Label("Presets", systemImage: "square.stack.3d.up")
+        }
+
+        Button {
+            viewModel.showingSettings = true
+        } label: {
+            Label("Settings", systemImage: "gearshape")
+        }
+
+        Button {
+            withAnimation { viewModel.showingChatbot.toggle() }
+        } label: {
+            Label("Tone Assistant", systemImage: "apple.intelligence")
+        }
+        .help("Tone Assistant (⌘J)")
+    }
+}
+
+// MARK: - Sidebar
+
+private struct RiffSidebar: View {
+    @Bindable var viewModel: MainViewModel
+
+    var body: some View {
+        let engine = viewModel.engine
+        List(selection: Binding(
+            get: { Optional(viewModel.selectedTab) },
+            set: { if let tab = $0 { viewModel.selectedTab = tab } }
+        )) {
+            Section {
+                ForEach(MainViewModel.MainTab.allCases, id: \.self) { tab in
+                    Label(tab.rawValue, systemImage: tab.icon)
+                        .tag(tab)
+                }
+            }
+
+            Section("Input") {
+                InputSourceCard(engine: engine, chordDetector: viewModel.chordDetector)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+            }
+
+            Section("Jam Track") {
+                BackingTrackView(engine: engine)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+            }
+
+            Section("Hands-free") {
+                GestureControlPill(
+                    controller: viewModel.gestureController,
+                    isEnabled: $viewModel.gestureControlEnabled
+                )
+                .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+            }
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("RiffNode")
     }
 }
 

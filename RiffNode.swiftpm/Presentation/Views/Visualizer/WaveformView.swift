@@ -10,7 +10,7 @@ import UIKit
 
 struct WaveformView: View {
     let samples: [Float]
-    var color: Color = .cyan
+    var color: Color = Color.riffPrimary
     var showMirror: Bool = true
     
     // Calculate max amplitude for dynamic coloring

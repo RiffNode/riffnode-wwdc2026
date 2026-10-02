@@ -22,8 +22,6 @@ struct BackingTrackView: View {
                 emptyRow
             }
         }
-        .padding(Spacing.md)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: CornerRadius.xl))
         .fileImporter(
             isPresented: $isImporting,
             allowedContentTypes: [.audio, .mp3, .wav, .aiff],
@@ -38,25 +36,13 @@ struct BackingTrackView: View {
 
     private var emptyRow: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Image(systemName: "music.note.list")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.riffPrimary)
-                    .frame(width: 36, height: 36)
-                    .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.12)), in: RoundedRectangle(cornerRadius: 10))
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Jam Track")
-                        .font(.headline)
-                    Text("Play along with a groove or your own song")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            Text("Play along with a groove or your own song")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
-                Button("Built-in groove", systemImage: "play.fill", action: playBuiltInGroove)
+                Button("Groove", systemImage: "play.fill", action: playBuiltInGroove)
                     .buttonStyle(.glassProminent)
                     .tint(.riffPrimary)
                     .disabled(!engine.canPlayDemoRiff)
@@ -161,7 +147,7 @@ struct BackingTrackView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .tint(.orange)
+            .tint(Color.riffPrimary)
         }
     }
 

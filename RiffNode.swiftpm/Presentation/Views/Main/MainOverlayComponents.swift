@@ -13,7 +13,7 @@ struct ChordSuggestionChip: View {
         HStack(spacing: 10) {
             Image(systemName: "music.note")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.purple)
+                .foregroundStyle(Color.riffPrimary)
 
             Text(suggestion)
                 .font(.system(size: 13, weight: .medium))
@@ -26,7 +26,7 @@ struct ChordSuggestionChip: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Color.purple.opacity(0.85), in: Capsule())
+                    .background(Color.riffPrimary.opacity(0.85), in: Capsule())
             }
             .buttonStyle(.plain)
 
@@ -39,7 +39,7 @@ struct ChordSuggestionChip: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .glassEffect(.regular.tint(.purple.opacity(0.12)), in: Capsule())
+        .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.12)), in: Capsule())
     }
 }
 
@@ -51,48 +51,30 @@ struct GestureControlPill: View {
     @Binding var isEnabled: Bool
 
     var body: some View {
-        Button {
-            isEnabled.toggle()
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "eye.fill")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(isEnabled ? .purple : .secondary)
-                    .symbolEffect(.pulse, options: .repeating, value: isEnabled && controller.faceDetected)
-
-                VStack(alignment: .leading, spacing: 2) {
+        Toggle(isOn: $isEnabled) {
+            Label {
+                VStack(alignment: .leading, spacing: 1) {
                     Text("Gesture Control")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-
                     Text(statusText)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption)
                         .foregroundStyle(statusColor)
                 }
-
-                Spacer()
-
-                Circle()
-                    .fill(statusColor.opacity(0.8))
-                    .frame(width: 7, height: 7)
+            } icon: {
+                Image(systemName: "face.dashed")
+                    .symbolEffect(.pulse, options: .repeating, isActive: isEnabled && controller.faceDetected)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .glassEffect(
-                .regular.tint(isEnabled ? .purple.opacity(0.1) : .clear),
-                in: Capsule()
-            )
         }
-        .buttonStyle(.plain)
+        .tint(Color.riffPrimary)
+        .accessibilityHint("Nod to switch presets using the front camera")
     }
 
     private var statusText: String {
-        guard isEnabled else { return "Tap to enable" }
-        return controller.faceDetected ? "Face Detected" : "Looking for face..."
+        guard isEnabled else { return "Nod to change presets" }
+        return controller.faceDetected ? "Face detected" : "Looking for your face…"
     }
 
     private var statusColor: Color {
         guard isEnabled else { return .secondary }
-        return controller.faceDetected ? .green : .orange
+        return controller.faceDetected ? .green : .secondary
     }
 }

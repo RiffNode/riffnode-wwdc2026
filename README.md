@@ -27,8 +27,10 @@
 </p>
 
 <p align="center">
-  <img src="screenshots/screenshot_5.jpg" width="900" alt="RiffNode on Mac: the pedalboard with compressor, overdrive, distortion, chorus, delay and reverb pedals">
+  <img src="screenshots/pedalboard-dark.jpg" width="720" alt="RiffNode on iPad in dark mode: a sidebar with sections, live input and jam track, and the pedalboard with the selected pedal's knobs">
 </p>
+
+RiffNode is laid out like a pro app: a **sidebar** for the sections plus your live input and jam track, the **pedalboard** in the middle, and the **Tone Assistant** in an inspector on the right. Everything is monochrome Liquid Glass with one accent colour – colour only appears where it means something (a lit LED, an in-tune note).
 
 Guitar effects are usually explained with jargon and sold as expensive boxes. RiffNode turns them into something you can **see, touch and hear** in a few minutes: drag pedals into a signal chain, watch the waveform and spectrum change as you play, ask the on-device AI for a tone in plain English, and switch presets with a nod of your head while both hands stay on the guitar.
 
@@ -48,10 +50,10 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 | --- | --- | --- |
 | 1 | Tap **Get Started** and allow the microphone | The audio engine starts and the Riff Notch turns green |
 | 2 | Tap **Take the Tour** (or skip it) | A short walkthrough of the signal chain |
-| 3 | Tap **No guitar? Try the Demo Riff** (`⌘D`) | A riff plays through your pedals; the visualizer, spectrum and chord detector come alive |
+| 3 | Switch **Input** in the sidebar to **Demo riff** (`⌘D`) | A riff plays through your pedals; the visualizer, tuner and chord detector come alive |
 | 4 | Tap a pedal, or double-tap to bypass it | The sound and the spectrum change instantly; the notch announces the change |
-| 5 | Open the **Tone Assistant** (`⌘J`) and tap *Ambient pad* | Watch it pick pedals and settings step by step, then rebuild the chain |
-| 6 | Tap **Built-in groove** in Jam Track | Drums and bass in the same key and tempo as the riff |
+| 5 | Open the **Tone Assistant** inspector (`⌘J`) and tap *Ambient pad* | Watch it pick pedals and settings step by step, then rebuild the chain |
+| 6 | Tap **Groove** under Jam Track | Drums and bass in the same key and tempo as the riff |
 | 7 | Turn on **Gesture Control** and nod | Presets switch hands-free, with feedback in the notch |
 
 > [!TIP]
@@ -59,9 +61,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 
 ## The Riff Notch
 
-<img src="screenshots/ipad_notch_open.jpg" width="420" align="right" alt="The Riff Notch opened on iPad, showing the tuner, input and output meters, transport controls and pedal chips">
-
-A Dynamic Island–style notch hangs from the top of the window on both iPad and Mac. It gives you feedback while your eyes are on the fretboard – especially important for head gestures, which otherwise have no visual response.
+A Dynamic Island–style notch sits in the status bar at the top of the window on both iPad and Mac, out of the way of the navigation bar. It gives you feedback while your eyes are on the fretboard – especially important for head gestures, which otherwise have no visual response.
 
 | State | Shows |
 | --- | --- |
@@ -70,8 +70,6 @@ A Dynamic Island–style notch hangs from the top of the window on both iPad and
 | **Opened** | Tuner, IN/OUT meters, start/stop, previous/next preset and tap-to-toggle pedal chips |
 
 Tap it or press `⌘K` to open it. Its shape, states and spring animation are inspired by [NotchDrop](https://github.com/Lakr233/NotchDrop), rebuilt as a single animatable SwiftUI `Shape` so it works inside an App Playground on iPad and Mac Catalyst.
-
-<br clear="right">
 
 ## Features
 
@@ -120,20 +118,16 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 
 <table>
   <tr>
-    <td width="50%"><img src="screenshots/ipad_dark_demo_riff.jpg" alt="RiffNode on iPad in dark mode playing the demo riff"><br><sub><b>Dark mode on iPad</b> – the demo riff driving the visualizer and chord detector</sub></td>
-    <td width="50%"><img src="screenshots/screenshot_1.jpg" alt="Tone Assistant chat applying reverb and delay"><br><sub><b>Tone Assistant</b> – describe a sound, get a pedalboard</sub></td>
+    <td width="50%"><img src="screenshots/pedalboard.jpg" alt="Pedalboard with the sidebar, the signal chain and the selected pedal's knobs"><br><sub><b>Pedalboard</b> – tap a pedal for its knobs, double-tap to switch it</sub></td>
+    <td width="50%"><img src="screenshots/analyze-assistant.jpg" alt="Analyze tab with the Tone Assistant open in the inspector"><br><sub><b>Tone Assistant</b> – in the inspector, next to whatever you are doing</sub></td>
   </tr>
   <tr>
-    <td><img src="screenshots/screenshot_4.jpg" alt="Parametric EQ with ten draggable bands"><br><sub><b>Parametric EQ</b> – ten draggable bands over a live analyzer</sub></td>
-    <td><img src="screenshots/screenshot_2.jpg" alt="AI Tools tab with spectrum analyzer and chord detection"><br><sub><b>Audio analysis</b> – spectrum and chord detection</sub></td>
+    <td><img src="screenshots/analyze.jpg" alt="Analyze tab with tuner, chord, frequency map and advice"><br><sub><b>Analyze</b> – tuner, chord, where your sound sits, and what to do about it</sub></td>
+    <td><img src="screenshots/eq.jpg" alt="Parametric EQ with a live spectrum behind the curve"><br><sub><b>Parametric EQ</b> – ten draggable bands over a live spectrum</sub></td>
   </tr>
   <tr>
-    <td><img src="screenshots/screenshot_8.jpg" alt="Performance mode with large pedals and quick preset bar"><br><sub><b>Stage Mode</b> – big footswitches and a quick preset bar</sub></td>
-    <td><img src="screenshots/screenshot_6.jpg" alt="Guided tour explaining the signal chain"><br><sub><b>Guided tour</b> – how sound flows through a chain</sub></td>
-  </tr>
-  <tr>
-    <td><img src="screenshots/screenshot_7.jpg" alt="Sound science lesson showing a clipped distortion waveform"><br><sub><b>Sound science</b> – see why distortion sounds the way it does</sub></td>
-    <td><img src="screenshots/screenshot_3.jpg" alt="Effect guide entry for distortion with famous users"><br><sub><b>Effect guide</b> – what it does, where it goes, who used it</sub></td>
+    <td><img src="screenshots/learn.jpg" alt="Learn tab with the Chorus card playing a Hear it A/B comparison"><br><sub><b>Learn</b> – Hear it: the demo riff through one pedal, A/B against dry</sub></td>
+    <td><img src="screenshots/stage-mode.jpg" alt="Stage Mode with large pedals and a quick preset bar"><br><sub><b>Stage Mode</b> – big footswitches and a quick preset bar</sub></td>
   </tr>
 </table>
 
@@ -204,7 +198,7 @@ RiffNode.swiftpm/
 │   ├── Vision/             VisionGestureController
 │   ├── AI/                 SemanticCommandProcessor
 │   └── Presets/ · Learning/
-├── Presentation/
+├── Presentation/           NavigationSplitView: sidebar · content · inspector
 │   ├── ViewModels/         MainViewModel, RiffNotchController, SetupViewModel …
 │   ├── Views/              One folder per feature: Main, Notch, Pedalboard, EQ, AI, Learn …
 │   └── DesignSystem/       Spacing and color tokens, glass components, NotchShape

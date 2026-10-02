@@ -17,7 +17,7 @@ struct VisionGestureControlView: View {
             HStack {
                 HStack(spacing: 8) {
                     Image(systemName: "eye.fill")
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(Color.riffPrimary)
                     Text("GESTURE CONTROL")
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                 }
@@ -78,13 +78,13 @@ struct VisionGestureControlView: View {
                 if let lastGesture = controller.lastDetectedGesture {
                     HStack(spacing: 8) {
                         Image(systemName: lastGesture.icon)
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(Color.riffPrimary)
                         Text(lastGesture.defaultAction)
                             .font(.system(size: 12, weight: .medium))
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.purple.opacity(0.2))
+                    .background(Color.riffPrimary.opacity(0.2))
                     .clipShape(Capsule())
                 }
 
@@ -109,7 +109,7 @@ struct VisionGestureControlView: View {
             }
         }
         .padding()
-        .glassEffect(.regular.tint(.purple.opacity(0.1)), in: RoundedRectangle(cornerRadius: 12))
+        .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.1)), in: RoundedRectangle(cornerRadius: 12))
         .onAppear {
             controller.onGestureDetected = { gesture in
                 onGestureAction(gesture)
@@ -129,7 +129,7 @@ struct GestureIndicator: View {
         VStack(spacing: 4) {
             ZStack {
                 Circle()
-                    .fill(isActive ? Color.purple : Color.white.opacity(0.1))
+                    .fill(isActive ? Color.riffPrimary : Color.white.opacity(0.1))
                     .frame(width: 40, height: 40)
 
                 Image(systemName: gesture.icon)
@@ -160,7 +160,7 @@ struct MouthIndicator: View {
 
                 // Mouth visual
                 Capsule()
-                    .fill(Color.purple.opacity(Double(openness)))
+                    .fill(Color.riffPrimary.opacity(Double(openness)))
                     .frame(width: 20, height: 8 + CGFloat(openness) * 12)
             }
 

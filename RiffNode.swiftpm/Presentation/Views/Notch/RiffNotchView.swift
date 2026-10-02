@@ -29,12 +29,12 @@ struct RiffNotchHost: View {
 // MARK: - Riff Notch Metrics
 
 enum RiffNotchMetrics {
-    /// Height of the closed notch below the safe area; the top bar leaves room for it.
-    static let closedHeight: CGFloat = 32
+    /// Minimum height of the closed notch (used where there is no status bar, e.g. Mac).
+    static let closedHeight: CGFloat = 26
 
     static func size(for status: RiffNotchController.Status) -> CGSize {
         switch status {
-        case .closed:  CGSize(width: 220, height: closedHeight)
+        case .closed:  CGSize(width: 200, height: closedHeight)
         case .popping: CGSize(width: 360, height: 56)
         case .opened:  CGSize(width: 560, height: 196)
         }
@@ -70,11 +70,16 @@ struct RiffNotchView: View {
     var body: some View {
         let size = RiffNotchMetrics.size(for: notch.status)
         let radii = RiffNotchMetrics.radii(for: notch.status)
+        // Closed, the notch lives inside the status bar strip like a real Dynamic Island,
+        // so it never covers the navigation bar; it only grows down when it has news.
+        let isClosed = notch.status == .closed
+        let totalHeight = isClosed ? max(topInset, RiffNotchMetrics.closedHeight) : size.height + topInset
+        let contentInset = isClosed ? 0 : topInset
 
         ZStack(alignment: .top) {
             content
-                .padding(.top, topInset)
-                .frame(width: size.width, height: size.height + topInset, alignment: .top)
+                .padding(.top, contentInset)
+                .frame(width: size.width, height: totalHeight, alignment: .top)
                 .id(notch.status)
                 .transition(
                     .asymmetric(
@@ -84,7 +89,7 @@ struct RiffNotchView: View {
                     )
                 )
         }
-        .frame(width: size.width + radii.top * 2, height: size.height + topInset, alignment: .top)
+        .frame(width: size.width + radii.top * 2, height: totalHeight, alignment: .top)
         .background {
             NotchShape(topRadius: radii.top, bottomRadius: radii.bottom)
                 .fill(.black)

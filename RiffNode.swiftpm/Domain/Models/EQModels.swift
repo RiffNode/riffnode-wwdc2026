@@ -48,15 +48,8 @@ struct EQBand: Identifiable, Equatable {
             }
         }
 
-        var color: Color {
-            switch self {
-            case .highPass: return .red
-            case .lowShelf: return .orange
-            case .peak: return .green
-            case .highShelf: return .cyan
-            case .lowPass: return .purple
-            }
-        }
+        /// One accent for every filter type; the type is named in the band controls.
+        var color: Color { .riffPrimary }
     }
 
     // 10-band frequencies: 32, 64, 125, 250, 500, 1k, 2k, 4k, 8k, 16k

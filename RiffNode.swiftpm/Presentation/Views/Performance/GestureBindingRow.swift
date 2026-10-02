@@ -12,7 +12,7 @@ struct GestureBindingRow: View {
             // Gesture icon
             Image(systemName: gesture.icon)
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.purple)
+                .foregroundStyle(Color.riffPrimary)
                 .frame(width: 24)
 
             // Gesture name

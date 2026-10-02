@@ -140,11 +140,11 @@ enum EffectType: String, CaseIterable, Identifiable, Codable, Sendable {
         case .equalizer: return .riffFilter
         case .overdrive: return .riffGain
         case .distortion: return .riffGain
-        case .fuzz: return Color(red: 0.7, green: 0.45, blue: 0.55) // Warm rose
+        case .fuzz: return .riffGain
         case .chorus: return .riffModulation
         case .phaser: return .riffModulation
         case .flanger: return .riffModulation
-        case .tremolo: return Color(red: 0.65, green: 0.5, blue: 0.6) // Soft mauve
+        case .tremolo: return .riffModulation
         case .delay: return .riffAmbience
         case .reverb: return .riffAmbience
         }
@@ -414,7 +414,7 @@ struct EffectPreset: Identifiable, Hashable {
             switch self {
             case .clean: return .riffDynamics
             case .crunch: return .riffGain
-            case .heavy: return Color(red: 0.7, green: 0.4, blue: 0.4)
+            case .heavy: return .riffGain
             case .ambient: return .riffAmbience
             }
         }

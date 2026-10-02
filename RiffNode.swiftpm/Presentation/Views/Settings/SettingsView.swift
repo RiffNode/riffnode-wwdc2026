@@ -70,7 +70,7 @@ struct SettingsView: View {
 
                             SettingsRow(
                                 icon: "slider.horizontal.3",
-                                iconColor: .purple,
+                                iconColor: Color.riffPrimary,
                                 title: "Input Level",
                                 subtitle: "Current signal strength"
                             ) {

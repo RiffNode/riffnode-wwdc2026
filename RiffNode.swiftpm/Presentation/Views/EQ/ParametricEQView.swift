@@ -112,7 +112,7 @@ private struct EQSpectrumOverlay: View {
             path.closeSubpath()
 
             context.fill(path, with: .linearGradient(
-                Gradient(colors: [Color.cyan.opacity(0.28), Color.cyan.opacity(0.02)]),
+                Gradient(colors: [Color.riffPrimary.opacity(0.28), Color.riffPrimary.opacity(0.02)]),
                 startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)
             ))
         }
@@ -131,13 +131,9 @@ struct GlassEQHeader: View {
 
     var body: some View {
         HStack {
-            // EQ Icon and title
-            HStack(spacing: 10) {
-                Image(systemName: "slider.horizontal.3")
-                    .foregroundStyle(.primary)
-                Text("Parametric EQ")
-                    .font(.headline)
-            }
+            Text("Drag a point to boost or cut that frequency")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
             Spacer()
 
@@ -425,7 +421,7 @@ struct GlassEQCurveView: View {
             }
             .stroke(
                 LinearGradient(
-                    colors: [.white.opacity(0.8), .cyan],
+                    colors: [.white.opacity(0.8), Color.riffPrimary],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),

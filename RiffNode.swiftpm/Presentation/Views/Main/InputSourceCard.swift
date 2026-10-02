@@ -45,16 +45,12 @@ struct InputSourceCard: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header: title + source switch
             HStack {
-                Label("Input", systemImage: "cable.connector")
-                    .font(.headline)
-                Spacer()
                 Picker("Source", selection: source) {
                     Label("Guitar", systemImage: "guitars").tag(Source.guitar)
                     Label("Demo riff", systemImage: "play.circle").tag(Source.demo)
                 }
                 .pickerStyle(.segmented)
                 .labelStyle(.titleOnly)
-                .fixedSize()
                 .disabled(!engine.canPlayDemoRiff)
                 .help("⌘D toggles the demo riff")
             }
@@ -75,7 +71,6 @@ struct InputSourceCard: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(hasChord ? .primary : .secondary)
                         .lineLimit(1)
-                        .contentTransition(.opacity)
                     Label(sourceDetail, systemImage: engine.isDemoRiffPlaying ? "music.note" : engine.currentInputDeviceType.icon)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -83,10 +78,7 @@ struct InputSourceCard: View {
                 }
                 Spacer(minLength: 0)
             }
-            .animation(.smooth(duration: 0.2), value: chordText)
         }
-        .padding(Spacing.md)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: CornerRadius.xl))
     }
 
     // MARK: - Visualizer
@@ -152,7 +144,7 @@ struct InputSourceCard: View {
             .foregroundStyle(hasNote ? (chordDetector.isInTune ? Color.green : Color.primary) : Color.secondary)
             .contentTransition(.numericText())
             .frame(width: 44, height: 44)
-            .glassEffect(.regular.tint((hasNote && chordDetector.isInTune ? Color.green : Color.purple).opacity(0.12)), in: Circle())
+            .glassEffect(.regular.tint((hasNote && chordDetector.isInTune ? Color.green : Color.riffPrimary).opacity(0.12)), in: Circle())
             .animation(.snappy, value: chordDetector.detectedNote)
             .accessibilityLabel(hasNote ? "Note \(chordDetector.detectedNote)" : "No note")
     }

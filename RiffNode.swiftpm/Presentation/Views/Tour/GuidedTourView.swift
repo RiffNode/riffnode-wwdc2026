@@ -581,7 +581,7 @@ struct PrimaryButtonStyle: ButtonStyle {
             .padding(.vertical, 14)
             .background(
                 LinearGradient(
-                    colors: [.cyan, .cyan.opacity(0.8)],
+                    colors: [Color.riffPrimary, Color.riffPrimary.opacity(0.8)],
                     startPoint: .top,
                     endPoint: .bottom
                 )

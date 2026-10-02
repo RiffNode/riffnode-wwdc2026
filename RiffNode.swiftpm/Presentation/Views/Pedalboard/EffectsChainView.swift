@@ -25,12 +25,9 @@ struct EffectsChainView: View {
         VStack(spacing: 16) {
             // Header – plain row, no glass on the title; buttons are capsule glass
             HStack {
-                HStack(spacing: 10) {
-                    Image(systemName: "cable.connector.horizontal")
-                        .foregroundStyle(.orange)
-                    Text("Pedalboard")
-                        .font(.title3.bold())
-                }
+                Text("Your signal flows left to right through each pedal")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
 
                 Spacer()
 
@@ -329,7 +326,7 @@ struct GlassPedalControlsView: View {
     @State private var showingInfo = false
 
     var body: some View {
-        GlassCard(tint: effect.type.color.opacity(0.18), cornerRadius: 16) {
+        GlassCard(cornerRadius: 16) {
             VStack(spacing: 16) {
                 // Header
                 HStack {
@@ -420,28 +417,28 @@ struct GlassEffectEducationView: View {
                 title: "Signal Chain Position",
                 icon: "arrow.right.circle",
                 content: effectType.signalChainPosition,
-                color: .cyan
+                color: Color.riffPrimary
             )
 
             // Genres
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "music.note.list")
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(Color.riffPrimary)
                     .frame(width: 20)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Common Genres")
                         .font(.caption.bold())
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(Color.riffPrimary)
 
                     FlowLayout(spacing: 6) {
                         ForEach(effectType.commonGenres, id: \.self) { genre in
                             Text(genre)
                                 .font(.caption2)
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(Color.riffPrimary)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .glassEffect(.regular.tint(.purple.opacity(0.2)), in: Capsule())
+                                .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.2)), in: Capsule())
                         }
                     }
                 }
@@ -452,7 +449,7 @@ struct GlassEffectEducationView: View {
                 title: "Famous Examples",
                 icon: "star.fill",
                 content: effectType.famousExamples,
-                color: .yellow
+                color: .riffPrimary
             )
         }
         .padding()
@@ -554,9 +551,9 @@ struct GlassEffectKnobsView: View {
 
             // Filter & Pitch
             case .equalizer:
-                GlassKnob(value: binding("bass"), range: -12...12, tint: .red, label: "BASS", format: "%.1fdB")
-                GlassKnob(value: binding("mid"), range: -12...12, tint: .yellow, label: "MID", format: "%.1fdB")
-                GlassKnob(value: binding("treble"), range: -12...12, tint: .cyan, label: "TREBLE", format: "%.1fdB")
+                GlassKnob(value: binding("bass"), range: -12...12, tint: .riffPrimary, label: "BASS", format: "%.1fdB")
+                GlassKnob(value: binding("mid"), range: -12...12, tint: .riffPrimary, label: "MID", format: "%.1fdB")
+                GlassKnob(value: binding("treble"), range: -12...12, tint: Color.riffPrimary, label: "TREBLE", format: "%.1fdB")
 
             // Gain / Dirt
             case .overdrive:

@@ -46,13 +46,6 @@ struct EffectGuideView: View {
         VStack(spacing: 0) {
             // Header with section picker
             VStack(spacing: 16) {
-                HStack {
-                    Text("Learn")
-                        .font(.title2.bold())
-                    Spacer()
-                }
-                .padding(.horizontal)
-
                 // Section picker - native segmented style
                 Picker("Section", selection: $selectedSection) {
                     ForEach(LearnSection.allCases, id: \.self) { section in
@@ -240,7 +233,7 @@ struct SoundVisualization: View {
             path.addLine(to: CGPoint(x: x, y: y))
         }
 
-        context.stroke(path, with: .color(.cyan), lineWidth: 2)
+        context.stroke(path, with: .color(Color.riffPrimary), lineWidth: 2)
     }
 
     private func drawFrequency(context: GraphicsContext, size: CGSize, midY: CGFloat, time: Double) {
@@ -283,7 +276,7 @@ struct SoundVisualization: View {
             y = min(max(y, midY - clipThreshold), midY + clipThreshold)
             clippedPath.addLine(to: CGPoint(x: x, y: y))
         }
-        context.stroke(clippedPath, with: .color(.orange), lineWidth: 2)
+        context.stroke(clippedPath, with: .color(Color.riffPrimary), lineWidth: 2)
     }
 
     private func drawTimeEffect(context: GraphicsContext, size: CGSize, midY: CGFloat, time: Double) {
@@ -294,7 +287,7 @@ struct SoundVisualization: View {
             let y = midY + sin(x / size.width * .pi * 4 + time * 2) * size.height * 0.3
             originalPath.addLine(to: CGPoint(x: x, y: y))
         }
-        context.stroke(originalPath, with: .color(.cyan), lineWidth: 2)
+        context.stroke(originalPath, with: .color(Color.riffPrimary), lineWidth: 2)
 
         // Delayed echo
         var delayedPath = Path()
@@ -304,7 +297,7 @@ struct SoundVisualization: View {
             let y = midY + sin((x - offset) / size.width * .pi * 4 + time * 2) * size.height * 0.2
             delayedPath.addLine(to: CGPoint(x: x, y: y))
         }
-        context.stroke(delayedPath, with: .color(.cyan.opacity(0.4)), lineWidth: 2)
+        context.stroke(delayedPath, with: .color(Color.riffPrimary.opacity(0.4)), lineWidth: 2)
     }
 }
 

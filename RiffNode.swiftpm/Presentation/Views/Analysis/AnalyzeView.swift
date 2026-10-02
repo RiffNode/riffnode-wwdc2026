@@ -22,13 +22,9 @@ struct AnalyzeView: View {
         ScrollView {
             GlassEffectContainer(spacing: 16) {
                 VStack(alignment: .leading, spacing: Spacing.md) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Analyze")
-                            .font(.title2.bold())
-                        Text("See what you're playing, note by note and frequency by frequency.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("See what you're playing, note by note and frequency by frequency.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: Spacing.md) {
@@ -87,7 +83,6 @@ struct AnalyzeView: View {
 private struct AnalyzeCard<Content: View>: View {
     let title: String
     let icon: String
-    var tint: Color = .riffPrimary
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -99,7 +94,7 @@ private struct AnalyzeCard<Content: View>: View {
         }
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassEffect(.regular.tint(tint.opacity(0.06)), in: RoundedRectangle(cornerRadius: CornerRadius.xl))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: CornerRadius.xl))
     }
 }
 
@@ -118,7 +113,7 @@ private struct TunerCard: View {
     }
 
     var body: some View {
-        AnalyzeCard(title: "Tuner", icon: "tuningfork", tint: status.color) {
+        AnalyzeCard(title: "Tuner", icon: "tuningfork") {
             VStack(spacing: 10) {
                 TunerGauge(cents: hasNote ? cents : 0, isActive: hasNote, color: status.color)
                     .frame(height: 96)
@@ -206,7 +201,7 @@ private struct ChordCard: View {
     private var hasChord: Bool { isHearingSound && detector.detectedChord != "—" && !detector.detectedChord.isEmpty }
 
     var body: some View {
-        AnalyzeCard(title: "Chord", icon: "pianokeys", tint: .purple) {
+        AnalyzeCard(title: "Chord", icon: "pianokeys") {
             HStack(alignment: .center, spacing: Spacing.md) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(hasChord ? detector.detectedChord : "Strum a chord")
@@ -227,7 +222,7 @@ private struct ChordCard: View {
                                     .font(.caption.weight(.semibold))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .glassEffect(.regular.tint(.purple.opacity(0.15)), in: Capsule())
+                                    .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.15)), in: Capsule())
                             }
                         }
                     }
@@ -242,7 +237,7 @@ private struct ChordCard: View {
                         .font(.caption.weight(.semibold).monospacedDigit())
                 }
                 .gaugeStyle(.accessoryCircularCapacity)
-                .tint(.purple)
+                .tint(Color.riffPrimary)
                 .accessibilityLabel("Confidence")
             }
             .frame(minHeight: 96)
@@ -287,15 +282,8 @@ enum FrequencyRegion: CaseIterable {
         }
     }
 
-    var color: Color {
-        switch self {
-        case .bass: .red
-        case .body: .orange
-        case .mids: .green
-        case .bite: .cyan
-        case .air: .purple
-        }
-    }
+    /// One accent for every region; the dominant one is shown by emphasis, not hue.
+    var color: Color { .riffPrimary }
 
     var insight: (title: String, detail: String) {
         switch self {
@@ -342,7 +330,7 @@ private struct FrequencyMapCard: View {
     let dominant: FrequencyRegion?
 
     var body: some View {
-        AnalyzeCard(title: "Where your sound sits", icon: "waveform.path.ecg", tint: .cyan) {
+        AnalyzeCard(title: "Where your sound sits", icon: "waveform.path.ecg") {
             VStack(spacing: 10) {
                 Canvas { context, size in
                     func x(_ frequency: Float) -> CGFloat {
@@ -372,7 +360,7 @@ private struct FrequencyMapCard: View {
                     path.addLine(to: CGPoint(x: x(points[points.count - 1].0), y: size.height))
                     path.closeSubpath()
                     context.fill(path, with: .linearGradient(
-                        Gradient(colors: [Color.cyan.opacity(0.55), Color.cyan.opacity(0.08)]),
+                        Gradient(colors: [Color.riffPrimary.opacity(0.55), Color.riffPrimary.opacity(0.08)]),
                         startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
                 }
                 .frame(height: 140)
@@ -449,7 +437,7 @@ private struct InsightCard: View {
             }
         }
         .padding(Spacing.md)
-        .glassEffect(.regular.tint((region?.color ?? .gray).opacity(0.08)), in: RoundedRectangle(cornerRadius: CornerRadius.xl))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: CornerRadius.xl))
         .animation(.smooth(duration: 0.3), value: region)
     }
 }

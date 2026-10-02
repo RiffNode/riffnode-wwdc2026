@@ -8,6 +8,10 @@ struct AIChatbotOverlayView: View {
     let processor: SemanticCommandProcessor
     let engine: AudioEngineManager
     @Binding var isExpanded: Bool
+    /// `.inspector` renders just the conversation, for the right-hand inspector column.
+    var presentation: Presentation = .floating
+
+    enum Presentation { case floating, inspector }
 
     @State private var isMinimized = false
     @FocusState private var inputFocused: Bool
@@ -29,6 +33,29 @@ struct AIChatbotOverlayView: View {
     private let panelMaxHeight: CGFloat = 520
 
     var body: some View {
+        if presentation == .inspector {
+            inspectorBody
+        } else {
+            floatingBody
+        }
+    }
+
+    private var inspectorBody: some View {
+        VStack(spacing: 0) {
+            chatHeader
+            Divider()
+            messagesScrollView
+            if controller.messages.count > 1 {
+                Divider()
+                quickSuggestionsBar
+            }
+            Divider()
+            inputBar
+        }
+        .background(Color.riffBackground)
+    }
+
+    private var floatingBody: some View {
         // One container so the button and panel morph into each other as Liquid Glass
         GlassEffectContainer(spacing: 16) {
         VStack(alignment: .trailing, spacing: 12) {
@@ -146,12 +173,13 @@ struct AIChatbotOverlayView: View {
                 Spacer()
                 ProgressView()
                     .controlSize(.small)
-                    .tint(.purple)
+                    .tint(Color.riffPrimary)
             }
 
             Spacer()
 
             HStack(spacing: 4) {
+                if presentation == .floating {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         isMinimized.toggle()
@@ -165,6 +193,7 @@ struct AIChatbotOverlayView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(isMinimized ? "Expand chat" : "Collapse chat")
+                }
 
             }
         }
@@ -232,10 +261,10 @@ struct AIChatbotOverlayView: View {
 
     private var starterCards: some View {
         let starters: [(icon: String, title: String, detail: String, tint: Color)] = [
-            ("bolt.fill", "Heavy metal", "Tight, high-gain riffs", .red),
-            ("music.note", "Jazz clean", "Warm and round", .blue),
-            ("moon.stars.fill", "Ambient pad", "Huge reverb and echoes", .purple),
-            ("flame.fill", "Blues crunch", "Edge-of-breakup drive", .orange)
+            ("bolt.fill", "Heavy metal", "Tight, high-gain riffs", Color.riffPrimary),
+            ("music.note", "Jazz clean", "Warm and round", Color.riffPrimary),
+            ("moon.stars.fill", "Ambient pad", "Huge reverb and echoes", Color.riffPrimary),
+            ("flame.fill", "Blues crunch", "Edge-of-breakup drive", Color.riffPrimary)
         ]
         return VStack(alignment: .leading, spacing: 8) {
             Text("Try one, or describe your own sound")
@@ -335,7 +364,7 @@ struct AIChatbotOverlayView: View {
                             controller.inputText.isEmpty || controller.isProcessing
                                 ? AnyShapeStyle(.quaternary)
                                 : AnyShapeStyle(LinearGradient(
-                                    colors: [Color.purple, Color.indigo],
+                                    colors: [Color.riffPrimary, Color.riffPrimary],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ))
@@ -491,7 +520,7 @@ struct ChatMessageBubble: View {
                                         LinearGradient(
                                             colors: isDestructive
                                                 ? [Color.orange, Color.red.opacity(0.8)]
-                                                : [Color.purple, Color.indigo],
+                                                : [Color.riffPrimary, Color.riffPrimary],
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
@@ -512,8 +541,8 @@ struct ChatMessageBubble: View {
 
     private var bubbleTint: Glass {
         message.role == .user
-            ? .regular.tint(Color.indigo.opacity(0.22))
-            : .regular.tint(Color.purple.opacity(0.12))
+            ? .regular.tint(Color.riffPrimary.opacity(0.22))
+            : .regular.tint(Color.riffPrimary.opacity(0.12))
     }
 }
 
@@ -571,14 +600,14 @@ struct TypingIndicator: View {
         HStack(spacing: 5) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
-                    .fill(Color.purple.opacity(0.7))
+                    .fill(Color.riffPrimary.opacity(0.7))
                     .frame(width: 7, height: 7)
                     .offset(y: CGFloat(sin(phase + Double(i) * 0.8)) * 4)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
-        .glassEffect(.regular.tint(.purple.opacity(0.12)), in: RoundedRectangle(cornerRadius: 16))
+        .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.12)), in: RoundedRectangle(cornerRadius: 16))
         .onAppear {
             withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
                 phase = .pi * 2
@@ -598,9 +627,9 @@ struct AssistantAvatar: View {
     var body: some View {
         Image(systemName: usesAppleIntelligence ? "apple.intelligence" : "wand.and.stars")
             .font(.system(size: size * 0.48, weight: .semibold))
-            .foregroundStyle(LinearGradient(colors: [.purple, .pink, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .foregroundStyle(LinearGradient(colors: [Color.riffPrimary, Color.riffPrimary.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .frame(width: size, height: size)
-            .glassEffect(.regular.tint(.purple.opacity(0.12)), in: Circle())
+            .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.12)), in: Circle())
             .accessibilityHidden(true)
     }
 }
@@ -623,7 +652,7 @@ struct ThinkingStepsView: View {
                         } else {
                             ProgressView()
                                 .controlSize(.mini)
-                                .tint(.purple)
+                                .tint(Color.riffPrimary)
                         }
                     }
                     .font(.system(size: 12))
@@ -640,7 +669,7 @@ struct ThinkingStepsView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .glassEffect(.regular.tint(.purple.opacity(0.1)), in: RoundedRectangle(cornerRadius: 16))
+        .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.1)), in: RoundedRectangle(cornerRadius: 16))
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: steps)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Tone Assistant is working: " + (steps.last?.text ?? ""))
@@ -687,7 +716,7 @@ struct AIChatbotFAB: View {
             .padding(.horizontal, isExpanded ? 0 : 18)
             .frame(width: isExpanded ? 48 : nil, height: 48)
             .contentShape(Capsule())
-            .glassEffect(.regular.tint(.purple.opacity(isExpanded ? 0 : 0.18)).interactive(), in: Capsule())
+            .glassEffect(.regular.tint(Color.riffPrimary.opacity(isExpanded ? 0 : 0.18)).interactive(), in: Capsule())
             .glassEffectID("fab", in: namespace)
             // Apple Intelligence–style glow ring while the model works
             .overlay {
@@ -695,7 +724,7 @@ struct AIChatbotFAB: View {
                     Capsule()
                         .strokeBorder(
                             AngularGradient(
-                                colors: [.purple, .pink, .orange, .cyan, .purple],
+                                colors: [Color.riffPrimary, Color.riffPrimary.opacity(0.15), Color.riffPrimary],
                                 center: .center,
                                 angle: .degrees(ringRotation)
                             ),
@@ -714,7 +743,7 @@ struct AIChatbotFAB: View {
             }
         }
         .buttonStyle(.plain)
-        .shadow(color: .purple.opacity(isExpanded ? 0 : 0.25), radius: isHovered ? 14 : 8, y: 4)
+        .shadow(color: Color.riffPrimary.opacity(isExpanded ? 0 : 0.25), radius: isHovered ? 14 : 8, y: 4)
         .scaleEffect(isHovered ? 1.04 : 1.0)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isHovered)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isExpanded)
@@ -726,7 +755,7 @@ struct AIChatbotFAB: View {
     }
 
     private var assistantGradient: LinearGradient {
-        LinearGradient(colors: [.purple, .pink, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)
+        LinearGradient(colors: [Color.riffPrimary, Color.riffPrimary.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 }
 

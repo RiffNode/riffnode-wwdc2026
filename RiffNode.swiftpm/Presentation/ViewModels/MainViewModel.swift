@@ -107,7 +107,7 @@ final class MainViewModel {
             gestureControlEnabled = gestureController.isRunning
             if gestureController.isRunning {
                 notch.announce(icon: "eye.fill", title: "Gesture Control On",
-                               detail: "Nod to switch presets", tint: .purple, priority: .engine)
+                               detail: "Nod to switch presets", tint: Color.riffPrimary, priority: .engine)
             }
         } else {
             gestureController.stop()
@@ -165,7 +165,7 @@ final class MainViewModel {
         default: detail = gesture.defaultAction
         }
         notch.announce(icon: gesture.icon, title: gesture.rawValue, detail: detail,
-                       tint: .purple, priority: .gesture)
+                       tint: Color.riffPrimary, priority: .gesture)
     }
 
     // MARK: - Notch Announcements
@@ -210,7 +210,7 @@ final class MainViewModel {
         notch.announce(icon: isPlaying ? "guitars.fill" : "stop.fill",
                        title: isPlaying ? "Demo Riff" : "Demo Riff Stopped",
                        detail: isPlaying ? "Playing through your pedals" : nil,
-                       tint: .orange, priority: .engine)
+                       tint: .riffPrimary, priority: .engine)
     }
 
     // MARK: - Chord AI Bridge

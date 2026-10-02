@@ -77,13 +77,13 @@ struct PerformanceModeView: View {
                 // Mode title
                 HStack(spacing: 8) {
                     Image(systemName: "rectangle.expand.vertical")
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.riffPrimary)
                     Text("PERFORMANCE MODE")
                         .font(.system(size: 14, weight: .bold, design: .monospaced))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .glassEffect(.regular.tint(.orange.opacity(0.15)), in: Capsule())
+                .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.15)), in: Capsule())
 
                 Spacer()
 
@@ -220,7 +220,7 @@ struct PerformanceModeView: View {
             PerformanceLevelMeter(
                 level: engine.outputLevel,
                 label: "OUT",
-                color: .cyan
+                color: Color.riffPrimary
             )
         }
         .padding(.horizontal, Spacing.xl)
@@ -454,9 +454,9 @@ struct PerformanceJackView: View {
 
                     // Signal indicator LED
                     Circle()
-                        .fill(isInput ? Color.green : Color.cyan)
+                        .fill(isInput ? Color.green : Color.riffPrimary)
                         .frame(width: 8, height: 8)
-                        .shadow(color: isInput ? .green.opacity(0.6) : .cyan.opacity(0.6), radius: 6)
+                        .shadow(color: isInput ? .green.opacity(0.6) : Color.riffPrimary.opacity(0.6), radius: 6)
                 }
             }
             .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
@@ -464,7 +464,7 @@ struct PerformanceJackView: View {
             // Label
             Text(label)
                 .font(.system(size: 14, weight: .heavy, design: .rounded))
-                .foregroundStyle(isInput ? .green : .cyan)
+                .foregroundStyle(isInput ? .green : Color.riffPrimary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
                 .background(
@@ -505,7 +505,7 @@ struct PerformanceConnectorView: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [.cyan, .cyan.opacity(0)],
+                        colors: [Color.riffPrimary, Color.riffPrimary.opacity(0)],
                         center: .center,
                         startRadius: 0,
                         endRadius: 8
@@ -633,7 +633,7 @@ struct GestureIndicatorOverlay: View {
                         // Header
                         HStack(spacing: 8) {
                             Image(systemName: "eye.fill")
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(Color.riffPrimary)
                             Text("CV CONTROL")
                                 .font(.system(size: 11, weight: .bold, design: .monospaced))
                         }
@@ -670,7 +670,7 @@ struct GestureIndicatorOverlay: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "mouth.fill")
                                     .font(.system(size: 12))
-                                    .foregroundStyle(.purple)
+                                    .foregroundStyle(Color.riffPrimary)
                                     .frame(width: 16)
 
                                 Text("Wah")
@@ -685,7 +685,7 @@ struct GestureIndicatorOverlay: View {
                                             .fill(Color.white.opacity(0.1))
 
                                         RoundedRectangle(cornerRadius: 2)
-                                            .fill(Color.purple)
+                                            .fill(Color.riffPrimary)
                                             .frame(width: geometry.size.width * CGFloat(performanceController.wahPosition))
                                     }
                                 }
