@@ -97,7 +97,10 @@ struct EffectGuideView: View {
 
                             // Effects list - cleaner design
                             LazyVStack(spacing: 12) {
-                                ForEach(Array(category.effects.enumerated()), id: \.offset) { index, effect in
+                                // Pedals you can play in RiffNode come first; the rest are for reading
+                                ForEach(Array(category.effects.sorted { (a: any EffectInfoProviding, b: any EffectInfoProviding) in
+                                    (a as? EffectInfoModel)?.effectType != nil && (b as? EffectInfoModel)?.effectType == nil
+                                }.enumerated()), id: \.offset) { index, effect in
                                     if let effectModel = effect as? EffectInfoModel {
                                         GlassEffectCardView(
                                             effect: effectModel,
@@ -845,6 +848,13 @@ struct EffectAuditionPanel: View {
             Text(engine.canPlayDemoRiff ? type.listenFor : "Start the engine to hear this effect.")
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(isAuditioning ? .primary : .secondary)
+
+            // See it while you hear it: the pedal's input against its output, live.
+            // Switching to Dry makes the two lines meet – the A/B, visible.
+            if isAuditioning, let node = engine.effectsChain.first(where: { $0.type == type }) {
+                SignalLabView(effect: node, engine: engine)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         .padding(12)
         .background(tint.opacity(isAuditioning ? 0.12 : 0.06), in: RoundedRectangle(cornerRadius: 12))

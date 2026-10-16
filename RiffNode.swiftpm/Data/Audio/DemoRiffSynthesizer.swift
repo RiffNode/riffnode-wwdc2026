@@ -1,85 +1,69 @@
 import Foundation
 
 // MARK: - Demo Riff Synthesizer
-// Renders a short, original funk "cutting" guitar part – the bright, 16th-note chord stabs of
-// J-pop and city pop – with Karplus–Strong plucked-string synthesis. It lets anyone hear the
-// pedalboard without a guitar or audio interface: the riff is generated on device (no bundled
-// audio, works offline) and is fed into the effects chain exactly where a real guitar would be.
+// Renders a short, original guitar part in the style of Japanese indie rock: a bright, clean
+// arpeggio where open B and E strings ring on through every chord, over the IV–V–iii–vi
+// "royal road" progression (王道進行) beloved in J-pop, with a quick melodic run to close.
+// Karplus–Strong plucked-string synthesis renders it on device (no bundled audio, works
+// offline), and it enters the effects chain exactly where a real guitar would.
 //
-// Four bars – Em9 · Cmaj7 · Gmaj7 · Dadd9 – over the same chords and tempo as the built-in
-// groove (Em · C · G · D, 112 BPM), so the two lock together.
+// Four bars – Cmaj7 · D6/9 · Bm11 · Em9 at 150 BPM – over the same chords and tempo as the
+// built-in groove, so the two lock together.
 
 enum DemoRiffSynthesizer {
 
-    static let tempo: Double = 112
+    static let tempo: Double = 150
 
-    /// What happens on one 16th note.
-    private enum Stroke {
-        case down, up       // a chord stab, strummed low→high or high→low
-        case ghost          // a muted "chk" – fretting hand resting on the strings
-        case note(Int)      // a single note (MIDI)
-        case rest
-
-        var isUp: Bool { if case .up = self { true } else { false } }
-    }
-
-    /// Chord voicings in the middle of the neck, low string to high (MIDI).
+    /// Chord voicings, low string to high (MIDI). The top two notes are the open B (59)
+    /// and high E (64) strings where they fit – the ringing shimmer of the style.
     private static let voicings: [[Int]] = [
-        [52, 55, 62, 66],   // Em9   x-7-5-7-7-x
-        [48, 55, 59, 64],   // Cmaj7 x-3-5-4-5-x
-        [55, 62, 66, 71],   // Gmaj7 x-x-5-7-7-7
-        [50, 57, 64, 66],   // Dadd9 x-5-7-9-7-x
+        [48, 55, 59, 64],   // Cmaj7  x-3-5-4-0-0
+        [50, 57, 59, 64],   // D6/9   x-5-7-4-0-0
+        [47, 54, 57, 64],   // Bm11   x-2-4-2-0-0 (A on the G string)
+        [40, 47, 55, 59, 66],   // Em9 – full open E shape with F♯ on top
     ]
 
-    /// One bar of cutting: stabs on the accents, ghost strums in between.
-    ///                         1    e      &      a     2      e     &      a
-    private static let groove: [Stroke] = [.down, .ghost, .up, .down, .ghost, .up, .ghost, .up,
-    ///                         3    e      &      a     4      e     &      a
-                                           .down, .ghost, .ghost, .up, .ghost, .up, .down, .rest]
+    /// Eighth-note picking order, as indices into the voicing: bass, then up and down the
+    /// upper strings so the top notes ring together.
+    private static let pattern = [0, 2, 3, 1, 3, 2, 3, 1]
 
-    /// The last bar ends on a little E minor pentatonic run instead.
-    private static let fill: [Stroke] = [.down, .ghost, .up, .down, .ghost, .up, .ghost, .rest,
-                                         .note(62), .note(64), .note(67), .note(64),
-                                         .note(69), .rest, .note(71), .rest]
+    /// The last half of the final bar becomes a quick run up the E minor scale (16ths).
+    private static let run = [66, 67, 71, 74, 76, 74, 71, 74]
 
     /// Renders one four-bar loop as mono samples, normalised to a guitar-like level.
     static func render(sampleRate: Double) -> [Float] {
-        let sixteenth = 60 / tempo / 4
-        let barFrames = Int(16 * sixteenth * sampleRate)
+        let eighth = 60 / tempo / 2
+        let barFrames = Int(8 * eighth * sampleRate)
         var output = [Float](repeating: 0, count: barFrames * voicings.count)
-        var random = SeededRandom(seed: 0x4355_5421)  // "CUT!" – same riff every time
+        var random = SeededRandom(seed: 0x594F_5255)  // same riff every time
 
         for (bar, voicing) in voicings.enumerated() {
-            let strokes = bar == voicings.count - 1 ? fill : groove
-            for (step, stroke) in strokes.enumerated() {
-                let start = bar * barFrames + Int(Double(step) * sixteenth * sampleRate)
-                let stab = Int(sixteenth * 1.6 * sampleRate)   // staccato, but rings past its 16th
-                switch stroke {
-                case .down, .up:
-                    let strings = stroke.isUp ? Array(voicing.reversed()) : voicing
-                    for (index, note) in strings.enumerated() {
-                        pluck(into: &output, note: note, start: start + index * Int(0.007 * sampleRate),
-                              frames: stab, brightness: stroke.isUp ? 0.55 : 0.7,
-                              gain: stroke.isUp ? 0.7 : 1, muted: false, sampleRate: sampleRate, random: &random)
-                    }
-                case .ghost:
-                    for (index, note) in voicing.enumerated() {
-                        pluck(into: &output, note: note, start: start + index * Int(0.004 * sampleRate),
-                              frames: Int(0.045 * sampleRate), brightness: 0.9,
-                              gain: 0.35, muted: true, sampleRate: sampleRate, random: &random)
-                    }
-                case .note(let note):
-                    pluck(into: &output, note: note, start: start, frames: Int(sixteenth * 1.8 * sampleRate),
-                          brightness: 0.6, gain: 1.1, muted: false, sampleRate: sampleRate, random: &random)
-                case .rest:
-                    break
+            let isLastBar = bar == voicings.count - 1
+            for (step, index) in pattern.enumerated() {
+                if isLastBar && step >= 4 { break }   // the run takes over
+                let note = voicing[min(index, voicing.count - 1)]
+                let start = bar * barFrames + Int(Double(step) * eighth * sampleRate)
+                let isBass = index == 0
+                // Notes are left to ring for a bar and a half: the arpeggio blooms into a chord
+                pluck(into: &output, note: note, start: start,
+                      frames: Int(eighth * (isBass ? 8 : 6) * sampleRate),
+                      brightness: isBass ? 0.5 : 0.75, gain: step == 0 ? 1.1 : (step.isMultiple(of: 2) ? 0.9 : 0.75),
+                      muted: false, sampleRate: sampleRate, random: &random)
+            }
+            if isLastBar {
+                let sixteenth = eighth / 2
+                for (step, note) in run.enumerated() {
+                    let start = bar * barFrames + Int((4 * eighth + Double(step) * sixteenth) * sampleRate)
+                    pluck(into: &output, note: note, start: start,
+                          frames: Int(sixteenth * (step == run.count - 1 ? 4 : 2) * sampleRate),
+                          brightness: 0.7, gain: 0.95, muted: false, sampleRate: sampleRate, random: &random)
                 }
             }
         }
 
-        // Body: take off rumble below ~90 Hz and fizz above ~7 kHz, like a guitar through a DI
+        // Body: take off rumble below ~90 Hz and fizz above ~8 kHz, like a clean guitar through a DI
         highPass(&output, cutoff: 90, sampleRate: sampleRate)
-        lowPass(&output, cutoff: 7_000, sampleRate: sampleRate)
+        lowPass(&output, cutoff: 8_000, sampleRate: sampleRate)
 
         let peak = output.reduce(0) { max($0, abs($1)) }
         if peak > 0 {
@@ -115,8 +99,8 @@ enum DemoRiffSynthesizer {
         let mean = delayLine.reduce(0, +) / Float(period)
         for i in 0..<period { delayLine[i] -= mean }
 
-        let decay: Float = muted ? 0.93 : 0.997
-        let releaseFrames = Int((muted ? 0.012 : 0.03) * sampleRate)
+        let decay: Float = muted ? 0.93 : 0.9985
+        let releaseFrames = Int((muted ? 0.012 : 0.06) * sampleRate)
         let end = min(output.count, start + frames)
         guard start >= 0, start < end else { return }
 

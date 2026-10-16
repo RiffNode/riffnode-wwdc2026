@@ -77,6 +77,7 @@ struct InputSourceCard: View {
     private var hasChord: Bool {
         !isSilent && chordDetector.confidence >= 0.3
             && chordDetector.detectedChord != "—" && !chordDetector.detectedChord.isEmpty
+            && !chordDetector.detectedChord.hasSuffix("note")   // a single note is the tuner's job
     }
 
     private var tuneColor: Color {
@@ -157,6 +158,13 @@ private struct LevelBar: View {
     let label: String
     let level: Float
 
+    /// Levels arrive as RMS × 5; meters read in decibels (−60…0 dBFS) like a real mixer,
+    /// so a normal signal sits in the green and only real peaks reach the red.
+    private var meter: Float {
+        let db = 20 * log10(max(level / 5, 1e-6))
+        return min(max((db + 60) / 60, 0), 1)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Text(label)
@@ -170,7 +178,7 @@ private struct LevelBar: View {
                         .fill(LinearGradient(colors: [.green, .yellow, .red],
                                              startPoint: .leading, endPoint: .trailing))
                         .mask(alignment: .leading) {
-                            Capsule().frame(width: geo.size.width * CGFloat(min(max(level, 0), 1)))
+                            Capsule().frame(width: geo.size.width * CGFloat(meter))
                         }
                 }
             }
@@ -179,6 +187,6 @@ private struct LevelBar: View {
         }
         .accessibilityElement()
         .accessibilityLabel("\(label) level")
-        .accessibilityValue("\(Int(min(max(level, 0), 1) * 100)) percent")
+        .accessibilityValue("\(Int(meter * 100)) percent")
     }
 }

@@ -434,6 +434,14 @@ final class AudioEngineManager: AudioManaging {
         return min(max(bandwidth, 0.05), 5)
     }
 
+    // MARK: - Tone Suggestions
+
+    /// Applies one EQ move from the Tone balance card and switches the EQ on so it's heard.
+    func applyToneSuggestion(_ suggestion: ToneSuggestion) {
+        guard parametricEQBands.indices.contains(suggestion.band) else { return }
+        parametricEQBands[suggestion.band].gain = suggestion.gain
+    }
+
     // MARK: - Wah
 
     /// Mouth wah: nil turns it off; 0…1 is the pedal position (heel → toe).
@@ -995,12 +1003,25 @@ final class AudioEngineManager: AudioManaging {
 
     // MARK: - Signal Probe
 
-    /// Starts watching the signal just before and just after one pedal (nil stops).
-    func probe(_ type: EffectType?) {
+    /// Starts watching the signal just before and just after one pedal.
+    /// `owner` identifies the view asking: views are rebuilt when you switch pedals or a preset
+    /// replaces the chain, and the old view's "stop" can arrive after the new view's "start".
+    func probe(_ type: EffectType, owner: UUID) {
+        probeOwner = owner
         guard type != probedEffectType else { return }
         probedEffectType = type
         installProbeTaps()
     }
+
+    /// Stops the probe – only if `owner` is still the view that started it.
+    func stopProbe(owner: UUID) {
+        guard probeOwner == owner else { return }
+        probeOwner = nil
+        probedEffectType = nil
+        installProbeTaps()
+    }
+
+    @ObservationIgnored private var probeOwner: UUID?
 
     /// Taps the node that feeds the probed pedal ("before") and the pedal itself ("after").
     /// Re-run after every rewire, since the node in front of a pedal can change.

@@ -70,16 +70,13 @@ struct MainInterfaceView: View {
                             EffectsChainView(engine: engine)
                         case .parametricEQ:
                             ScrollView {
-                                ParametricEQView(engine: engine, analyzer: viewModel.fftAnalyzer)
-                                    .padding()
+                                VStack(spacing: Spacing.md) {
+                                    // What you're hearing, and one tap to act on it
+                                    ToneBalanceCard(fftAnalyzer: viewModel.fftAnalyzer, engine: engine)
+                                    ParametricEQView(engine: engine, analyzer: viewModel.fftAnalyzer)
+                                }
+                                .padding()
                             }
-                        case .aiTools:
-                            AnalyzeView(
-                                fftAnalyzer: viewModel.fftAnalyzer,
-                                chordDetector: viewModel.chordDetector,
-                                engine: engine,
-                                onOpenEQ: { viewModel.selectedTab = .parametricEQ }
-                            )
                         case .learnEffects:
                             EffectGuideView(engine: engine)
                         }

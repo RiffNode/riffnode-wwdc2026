@@ -34,7 +34,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 
 ## Why RiffNode
 
-- **No guitar? Still playable.** A built-in demo riff – an original J-pop / city-pop funk cutting part – is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
+- **No guitar? Still playable.** A built-in demo riff – an original J-rock arpeggio over the IV–V–iii–vi "royal road" progression – is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
 - **Always something to jam with.** A built-in drums-and-bass groove (Em · C · G · D, 112 BPM) is also synthesized on device – or import your own song and send it through your pedals.
 - **See the physics.** The Signal Lab draws each pedal's input against its output, live – distortion flattening the peaks, a compressor squeezing the volume, a flanger's comb of notches – with measurements that put numbers on the change.
 - **Hands-free control.** Vision face tracking turns head nods and tilts into preset changes and bypass, and your mouth into a wah pedal – a resonant band-pass that sweeps from 350 Hz to 2.2 kHz as you open it.
@@ -105,7 +105,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 - **Play Along** – a built-in groove in any minor key and tempo with chord highlighting and the scale to solo with, your own songs, or Apple Music (controlled in-app on iPad) and Spotify playing alongside.
 - **Honest fallback** – RiffNode checks `SystemLanguageModel.availability`. Without Apple Intelligence an offline tone matcher answers instead, and every reply is labelled with which one responded.
 - **Chord → tone suggestions** – when a chord is held steadily, RiffNode suggests a matching tone you can apply in one tap.
-- **Tuner & Analyze** – a cents-accurate tuner always in the Input card; chord detection and a frequency map split into the ranges guitarists talk about (bass, body, mids, bite, air), with a plain-language takeaway that jumps straight into the EQ. FFT (Accelerate / vDSP) and autocorrelation pitch detection power it all; the same live spectrum is drawn behind the Parametric EQ curve.
+- **Tuner & Tone balance** – a cents-accurate tuner and chord detection in the Input card; on the EQ tab, a tone-balance card that shows which range your sound sits in (bass, body, mids, bite, air), explains it in plain words and applies the matching EQ move in one tap. FFT (Accelerate / vDSP) and autocorrelation pitch detection power it all; the same live spectrum is drawn behind the Parametric EQ curve.
 
 ### Keyboard shortcuts (Mac and iPad)
 

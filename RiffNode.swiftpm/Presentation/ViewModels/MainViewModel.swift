@@ -12,15 +12,13 @@ final class MainViewModel {
 
     enum MainTab: String, CaseIterable {
         case pedalboard = "Pedalboard"
-        case parametricEQ = "Parametric EQ"
-        case aiTools = "Analyze"
+        case parametricEQ = "EQ & Tone"
         case learnEffects = "Learn"
 
         var icon: String {
             switch self {
             case .pedalboard: return "slider.horizontal.below.square.filled.and.square"
             case .parametricEQ: return "slider.horizontal.3"
-            case .aiTools: return "waveform.and.magnifyingglass"
             case .learnEffects: return "text.book.closed"
             }
         }
@@ -216,9 +214,12 @@ final class MainViewModel {
     // MARK: - Chord AI Bridge
 
     func chordDidChange(_ newChord: String) {
-        guard newChord != "—", newChord != lastSuggestedChord else {
+        // Only suggest for chords the player is actually holding – not single notes,
+        // and not the demo riff, which changes chord every bar on its own
+        guard newChord != "—", newChord != lastSuggestedChord,
+              !newChord.hasSuffix("note"), !engine.isDemoRiffPlaying, engine.auditionEffect == nil else {
             chordSuggestionTask?.cancel()
-            if newChord == "—" { withAnimation { chordAISuggestion = nil } }
+            if newChord == "—" || engine.isDemoRiffPlaying { withAnimation { chordAISuggestion = nil } }
             return
         }
         chordSuggestionTask?.cancel()

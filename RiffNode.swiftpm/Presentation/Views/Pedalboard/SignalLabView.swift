@@ -10,6 +10,7 @@ struct SignalLabView: View {
     let engine: AudioEngineManager
 
     @State private var model = SignalLabModel()
+    @State private var probeID = UUID()
     @State private var lens: SignalLens
 
     init(effect: EffectNode, engine: AudioEngineManager) {
@@ -33,14 +34,14 @@ struct SignalLabView: View {
             }
         }
         .task(id: effect.type) {
-            engine.probe(effect.type)
+            engine.probe(effect.type, owner: probeID)
             model.clear()
             while !Task.isCancelled {
                 model.update(from: engine.signalProbe)
                 try? await Task.sleep(for: .milliseconds(66))
             }
         }
-        .onDisappear { engine.probe(nil) }
+        .onDisappear { engine.stopProbe(owner: probeID) }
     }
 
     // MARK: - Header

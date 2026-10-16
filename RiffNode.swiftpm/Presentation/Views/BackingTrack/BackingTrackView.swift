@@ -23,6 +23,7 @@ struct BackingTrackView: View {
     @State private var isLoading = false
     /// Name shown while an imported file is still loading.
     @State private var pendingTrackName: String?
+    @State private var isDropTargeted = false
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -183,18 +184,48 @@ struct BackingTrackView: View {
         if let name = (engine.isBuiltInJamTrack ? nil : engine.backingTrackName) ?? pendingTrackName {
             songPlayer(trackName: name)
         } else {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Import a song from Files – MP3, M4A, WAV or AIFF – and play over it. Your pedals can process it too.")
+            importDropZone
+        }
+    }
+
+    /// Tap to pick a file, or drop one in (drag from Finder on Mac, or from Files on iPad).
+    private var importDropZone: some View {
+        Button { isImporting = true } label: {
+            VStack(spacing: 8) {
+                Image(systemName: isDropTargeted ? "arrow.down.circle.fill" : "square.and.arrow.down")
+                    .font(.system(size: 26, weight: .medium))
+                    .foregroundStyle(Color.riffPrimary)
+                    .symbolEffect(.bounce, value: isDropTargeted)
+                    .contentTransition(.symbolEffect(.replace))
+                Text("Import a Song")
+                    .font(.subheadline.weight(.semibold))
+                Text("or drop an audio file here · MP3, M4A, WAV, AIFF")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Import a Song", systemImage: "square.and.arrow.down") { isImporting = true }
-                    .buttonStyle(.glassProminent)
-                    .tint(.riffPrimary)
-                    .controlSize(.small)
-                    .disabled(!engine.canPlayDemoRiff)
+                    .multilineTextAlignment(.center)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Spacing.md)
+            .contentShape(RoundedRectangle(cornerRadius: CornerRadius.lg))
         }
+        .buttonStyle(.plain)
+        .glassEffect(
+            .regular.tint(Color.riffPrimary.opacity(isDropTargeted ? 0.25 : 0.08)).interactive(),
+            in: RoundedRectangle(cornerRadius: CornerRadius.lg)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: CornerRadius.lg)
+                .strokeBorder(Color.riffPrimary.opacity(isDropTargeted ? 0.8 : 0.25),
+                              style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first else { return false }
+            importSong(from: url)
+            return true
+        } isTargeted: { isDropTargeted = $0 }
+        .animation(.smooth(duration: 0.2), value: isDropTargeted)
+        .disabled(!engine.canPlayDemoRiff)
+        .accessibilityHint("Opens Files to choose a song")
     }
 
     private func songPlayer(trackName: String) -> some View {
@@ -387,6 +418,10 @@ struct BackingTrackView: View {
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result, let url = urls.first else { return }
+        importSong(from: url)
+    }
+
+    private func importSong(from url: URL) {
         isLoading = true
         pendingTrackName = url.deletingPathExtension().lastPathComponent
         Task { @MainActor in

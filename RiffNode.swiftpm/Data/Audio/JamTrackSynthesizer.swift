@@ -1,15 +1,15 @@
 import Foundation
 
 // MARK: - Jam Track Synthesizer
-// A built-in backing groove – drums and bass over a i · VI · III · VII progression (Em · C ·
-// G · D by default) – rendered on device, so there is always something to play along with,
-// even offline with no music files. Any minor key, 70–160 BPM. At the defaults it shares the
-// demo riff's key and tempo, so the two lock together.
+// A built-in backing groove – drums and bass over the IV–V–iii–vi "royal road" progression of
+// J-pop (C · D · Bm · Em by default) – rendered on device, so there is always something to play
+// along with, even offline with no music files. Any minor key, 70–190 BPM. At the defaults it
+// shares the demo riff's chords and tempo, so the two lock together.
 
 enum JamTrackSynthesizer {
 
-    static let defaultTempo: Double = 112
-    static let tempoRange: ClosedRange<Double> = 70...160
+    static let defaultTempo: Double = DemoRiffSynthesizer.tempo
+    static let tempoRange: ClosedRange<Double> = 70...190
     static let title = "RiffNode Groove"
 
     /// Minor keys on offer, as semitones from E minor.
@@ -20,9 +20,9 @@ enum JamTrackSynthesizer {
 
     private static let noteNames = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"]
 
-    /// MIDI roots for the bass in E minor, one chord per bar (E2, C2, G2, D2).
-    private static let bassRoots = [40, 36, 43, 38]
-    private static let chordIsMinor = [true, false, false, false]
+    /// MIDI roots for the bass in E minor, one chord per bar (C2, D2, B1, E2).
+    private static let bassRoots = [36, 38, 35, 40]
+    private static let chordIsMinor = [false, false, true, true]
 
     /// The four chords, one per bar, in the given key.
     static func chords(transpose: Int) -> [String] {
