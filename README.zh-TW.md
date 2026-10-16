@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <img src="screenshots/mac_pedalboard.jpg" width="900" alt="Mac 上的 RiffNode：踏板鏈、Distortion 的旋鈕，以及 Signal Lab 顯示被削平的波形；左側是調音器與 Play Along 伴奏">
+  <img src="screenshots/mac_board.jpg" width="900" alt="Mac 上的 RiffNode：從吉他輸入到音箱的一排彩色效果器、Distortion 的旋鈕，以及 Signal Lab 顯示被削平的波形">
 </p>
 
 吉他效果器通常被一堆術語包圍，而且一顆就要好幾千元。RiffNode 把它變成幾分鐘內就能**看見、摸到、聽到**的東西：把踏板拖進訊號鏈、邊彈邊看波形和頻譜變化、用一句話請裝置上的 AI 調出音色，雙手不離吉他也能點頭切換 preset。
@@ -41,6 +41,7 @@
 
 - **沒有吉他也能玩。** 內建的 demo riff 是一段原創的 J-rock 分散和弦，走 IV–V–iii–vi「王道進行」，在裝置上即時合成，從真吉他進入的位置送進踏板鏈，任何人都能聽出每顆踏板的作用。
 - **隨時有伴奏。** 內建鼓加貝斯的 groove（C · D · Bm · Em、150 BPM，可換任何小調）同樣即時合成；也可以匯入自己的歌，或讓 Apple Music、Spotify 一起播放。
+- **一塊免費、行為像真的效果器盤。** 彩色的實體效果器從吉他輸入一路接到音箱和喇叭箱，順序和真實玩家一樣 —— 排序不尋常時，RiffNode 會解釋它對聲音的影響。連導線都有模擬：線越長，高頻越悶。
 - **看見物理作用。** Signal Lab 即時畫出每顆踏板「進去」與「出來」的訊號 —— Distortion 削平峰值、Compressor 壓縮音量、Flanger 的梳狀濾波 —— 並用量測數字說明變化。
 - **不用手也能控制。** Vision 臉部追蹤把點頭、歪頭變成切換 preset 與開關踏板，嘴巴則是一顆 wah：張得越開，共振帶通濾波器就從 350 Hz 掃到 2.2 kHz。
 - **描述音色，就得到音色。** Foundation Models 聽得懂「surf rock」或「Comfortably Numb solo」，RiffNode 幫你設定好踏板，全程在裝置上，並即時顯示它的思考步驟。
@@ -78,7 +79,16 @@
 
 ### 即時效果器
 
-11 種效果器，建構在 `AVAudioEngine` 上。每顆踏板都依訊號鏈順序接好，開關只是即時 bypass。Chorus、Flanger、Phaser、Tremolo，以及 Overdrive（soft clip）、Distortion（hard clip）、Fuzz 這三種削波器，都在自製的 in-process **Audio Unit** 中以真正的 DSP 運作 —— 每一顆旋鈕都會改變訊號。
+11 種效果器，建構在 `AVAudioEngine` 上。每顆踏板都依訊號鏈順序接好，開關只是即時 bypass。Chorus、Flanger、Phaser、Tremolo、類比風格的 Delay，以及 Overdrive（soft clip）、Distortion（hard clip）、Fuzz 這三種削波器，都在自製的 in-process **Audio Unit** 中以真正的 DSP 運作 —— 每一顆旋鈕都會改變訊號。
+
+效果器盤的配置和真的一樣：**吉他 → 輸入級 → 踏板 → 音箱 → 喇叭箱**。
+
+| 階段 | 模擬的內容 |
+| --- | --- |
+| 吉他與導線 | 拾音器（約 2.5 H）與導線（每英尺約 30 pF）形成共振低通，f = 1/(2π√LC)：3 英尺在 7.3 kHz 以上滾降，60 英尺降到 2.3 kHz。效果器盤前端的 buffer 可以保住高頻；另有音量踏板與 noise gate |
+| 踏板 | 可拖曳排序；遇到不尋常的順序（時間類效果放在破音前、fuzz 不在第一顆……）會提示並解釋對聲音的影響，一鍵排回標準順序 |
+| 音箱 | Clean、Crunch、Lead：不對稱的真空管前級、Bass／Mid／Treble 音色控制、後級飽和 |
+| 喇叭箱 | 1×12、2×12、4×12 喇叭模型 —— 5 kHz 以上的滾降讓刺耳的破音變成吉他音色 —— 也可以載入自己的 **IR 檔**（.wav），即時卷積 |
 
 | 類別 | 效果器 |
 | --- | --- |
@@ -127,6 +137,10 @@
     <td width="50%"><img src="screenshots/mac_eq.jpg" alt="Mac 上的 EQ & Tone 分頁：Tone balance 卡片建議 Boost 1 kHz，下方是 parametric EQ 與即時頻譜"><br><sub><b>EQ &amp; Tone</b> —— 聲音落在哪裡，以及一鍵修正的 EQ 調整</sub></td>
   </tr>
   <tr>
+    <td><img src="screenshots/mac_amp.jpg" alt="Mac 上的音箱與喇叭箱面板：音箱型號、喇叭箱與 IR 選擇、五顆旋鈕，以及在 5 kHz 以上滾降的頻率響應"><br><sub><b>音箱與喇叭箱</b> —— 把破音的沙沙聲濾掉的喇叭</sub></td>
+    <td><img src="screenshots/mac_cable.jpg" alt="Mac 上的吉他輸入面板：40 英尺導線、buffer、音量踏板與 noise gate，頻率響應在 2.8 kHz 以上滾降"><br><sub><b>吉他與導線</b> —— 量得到的 tone suck：f = 1/(2π√LC)</sub></td>
+  </tr>
+  <tr>
     <td colspan="2"><img src="screenshots/mac_learn.jpg" alt="Mac 上的 Learn 分頁：試聽 Overdrive，即時 Signal Lab 顯示輸入與被圓滑削波的輸出"><br><sub><b>Learn</b> —— 單獨聽一顆踏板，同時看它對波形做了什麼</sub></td>
   </tr>
 </table>
@@ -148,7 +162,9 @@
 - **Swift 6 的音訊 tap** —— tap block 是全域、非隔離的函式，寫入有鎖保護的緩衝區，所以音訊執行緒上永遠不會跑到 `@MainActor` 的 closure。
 - **啟動不卡頓** —— `AVAudioSession` 的啟用放在主執行緒之外。
 - **Demo riff 與 groove** —— Karplus–Strong 撥弦合成（all-pass 校正音準、濾波過的撥弦雜訊、悶音 ghost note），加上合成的大鼓、小鼓、hi-hat 和貝斯，都用固定種子在裝置上產生 —— 沒有打包任何音檔。匯入的歌曲會用 `AVAudioConverter` 轉成引擎的取樣率。
-- **即時 DSP** —— 自製的 `AUAudioUnit` 在音訊執行緒上原地處理，不配置記憶體、不用鎖；參數透過 `Synchronization.Atomic` 跨執行緒傳遞。
+- **即時 DSP** —— 自製的 `AUAudioUnit` 在音訊執行緒上原地處理，不配置記憶體、不用鎖；旋鈕數值透過 `Synchronization.Atomic` 跨執行緒傳遞，音箱的濾波器係數在主執行緒設計好，再用雙緩衝區交給音訊執行緒。
+- **乾淨的削波** —— overdrive、distortion、fuzz 的削波以 4 倍 oversampling 運算，超過 Nyquist 的諧波不會折回成刺耳的 aliasing。
+- **喇叭箱 IR** —— 載入的檔案用 `AVAudioConverter` 重新取樣、截成 2048 tap、依峰值正規化，再用 `vDSP_conv` 卷積。
 - **快速的裝置端 AI** —— 模型只填一個小小的 `@Generable` 輪廓（風格、gain、空間感、最多三顆代表性踏板），而不是直接給旋鈕數值；每次請求使用預熱過的新 session，在 macOS 27 的模型上約 3.5 秒回應，且不會超出 4K 的 context window。
 
 ## 架構

@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <img src="screenshots/mac_pedalboard.jpg" width="900" alt="RiffNode on Mac: the pedalboard, the Distortion pedal's knobs and the Signal Lab showing the waveform flattened, with the tuner and Play Along groove on the left">
+  <img src="screenshots/mac_board.jpg" width="900" alt="RiffNode on Mac: a pedalboard of painted stompboxes from the guitar input to the amp, the Distortion knobs and the Signal Lab showing the flattened waveform">
 </p>
 
 Guitar effects are usually explained with jargon and sold as expensive boxes. RiffNode turns them into something you can **see, touch and hear** in a few minutes: drag pedals into a signal chain, watch the waveform and spectrum change as you play, ask the on-device AI for a tone in plain English, and switch presets with a nod of your head while both hands stay on the guitar.
@@ -39,6 +39,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 
 - **No guitar? Still playable.** A built-in demo riff – an original J-rock arpeggio over the IV–V–iii–vi "royal road" progression – is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
 - **Always something to jam with.** A built-in drums-and-bass groove (C · D · Bm · Em, 150 BPM, any minor key) is also synthesized on device – or import your own song, or play along with Apple Music and Spotify.
+- **A free pedalboard that behaves like a real one.** Painted stompboxes run from the guitar jack to an amp and speaker cabinet, in the order real players use – and RiffNode explains what an unusual order does to the sound. Even the cable is modelled: longer cable, duller highs.
 - **See the physics.** The Signal Lab draws each pedal's input against its output, live – distortion flattening the peaks, a compressor squeezing the volume, a flanger's comb of notches – with measurements that put numbers on the change.
 - **Hands-free control.** Vision face tracking turns head nods and tilts into preset changes and bypass, and your mouth into a wah pedal – a resonant band-pass that sweeps from 350 Hz to 2.2 kHz as you open it.
 - **Describe the tone, get the tone.** Foundation Models recognises "surf rock" or "Comfortably Numb solo" and RiffNode dials in the pedals, entirely on device – showing each step live as it thinks.
@@ -76,7 +77,16 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 
 ### Real-time effects
 
-11 effect types, built on `AVAudioEngine`. Every pedal stays wired in chain order, so switching one on or off is an instant bypass. Chorus, Flanger, Phaser and Tremolo, and the Overdrive (soft clip), Distortion (hard clip) and Fuzz waveshapers, run in a custom in-process **Audio Unit** with real DSP – every knob changes the signal.
+11 effect types, built on `AVAudioEngine`. Every pedal stays wired in chain order, so switching one on or off is an instant bypass. Chorus, Flanger, Phaser, Tremolo, the analog-style Delay, and the Overdrive (soft clip), Distortion (hard clip) and Fuzz waveshapers run in a custom in-process **Audio Unit** with real DSP – every knob changes the signal.
+
+The board is laid out like a real one: **guitar → input stage → pedals → amp → cabinet**.
+
+| Stage | What it models |
+| --- | --- |
+| Guitar & cable | The pickup (≈2.5 H) and cable (≈30 pF per foot) form a resonant low-pass, f = 1/(2π√LC): 3 ft rolls off above 7.3 kHz, 60 ft above 2.3 kHz. A front-of-board buffer saves the highs. Plus a volume pedal and a noise gate |
+| Pedals | Drag to reorder; RiffNode flags unusual orders (time effects before drive, fuzz not first…), explains the sound, and restores the standard order in one tap |
+| Amp | Clean, Crunch or Lead: asymmetric tube-style preamp, bass / mid / treble tone stack, power-amp saturation |
+| Cabinet | 1×12, 2×12 or 4×12 speaker models – the roll-off above ~5 kHz that turns fizzy distortion into a guitar tone – or load your own **impulse response** (.wav), convolved in real time |
 
 | Category | Effects |
 | --- | --- |
@@ -125,6 +135,10 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
     <td width="50%"><img src="screenshots/mac_eq.jpg" alt="EQ and Tone tab on Mac: tone balance card suggesting Boost 1 kHz above the parametric EQ and live spectrum"><br><sub><b>EQ &amp; Tone</b> – where your sound sits, and the EQ move to fix it in one tap</sub></td>
   </tr>
   <tr>
+    <td><img src="screenshots/mac_amp.jpg" alt="Amp and Cabinet panel on Mac: amp model, cabinet and IR choices, five knobs and the response curve rolling off above 5 kHz"><br><sub><b>Amp &amp; Cabinet</b> – the speaker that takes the fizz out of distortion</sub></td>
+    <td><img src="screenshots/mac_cable.jpg" alt="Guitar input panel on Mac: 40 ft of cable, buffer, volume pedal and noise gate, with the pickup and cable response rolling off above 2.8 kHz"><br><sub><b>Guitar &amp; cable</b> – tone suck, measured: f = 1/(2π√LC)</sub></td>
+  </tr>
+  <tr>
     <td colspan="2"><img src="screenshots/mac_learn.jpg" alt="Learn tab on Mac auditioning Overdrive with the live Signal Lab showing the input and the rounded, clipped output"><br><sub><b>Learn</b> – hear a pedal on its own and watch what it does to the wave</sub></td>
   </tr>
 </table>
@@ -146,7 +160,9 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 - **Swift 6 audio taps** – tap blocks are global, non-isolated functions writing into a lock-protected buffer, so no `@MainActor` closure ever runs on the audio thread.
 - **Responsive start-up** – `AVAudioSession` activation runs off the main thread.
 - **Demo riff and groove** – Karplus–Strong plucked strings (all-pass tuned, with filtered pick noise and ghost-note mutes), plus synthesized kick, snare, hi-hat and bass, render on device with seeded generators – no bundled audio files. Imported songs are converted to the engine's sample rate with `AVAudioConverter`.
-- **Real-time modulation DSP** – a custom `AUAudioUnit` processes in place on the audio thread with no allocation or locks; parameters cross threads through `Synchronization.Atomic`.
+- **Real-time DSP** – a custom `AUAudioUnit` processes in place on the audio thread with no allocation or locks; knob values cross threads through `Synchronization.Atomic`, and the amp's filter coefficients are designed on the main thread and handed over in double-buffered banks.
+- **Clean clipping** – the overdrive, distortion and fuzz clippers run 4× oversampled, so harmonics above Nyquist don't fold back as harsh aliasing.
+- **Cabinet IRs** – loaded files are resampled with `AVAudioConverter`, trimmed to 2048 taps, peak-normalised and convolved with `vDSP_conv`.
 - **Fast on-device AI** – the model fills a small `@Generable` sketch (style, gain, space, up to three signature pedals) instead of raw knob values; a prewarmed session per request answers in about 3.5 seconds on the macOS 27 model and never overflows the 4K context window.
 
 ## Architecture
