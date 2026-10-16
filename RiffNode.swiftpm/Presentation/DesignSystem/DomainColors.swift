@@ -93,3 +93,40 @@ extension AudioInputDeviceType {
         }
     }
 }
+
+// MARK: - Stompbox Enclosures
+// The paint each pedal type is famous for on a real board (generic, no brands).
+
+extension EffectType {
+    var enclosureColor: Color {
+        switch self {
+        case .compressor: Color(red: 0.18, green: 0.42, blue: 0.70)   // blue
+        case .equalizer: Color(red: 0.82, green: 0.82, blue: 0.80)    // silver-white
+        case .overdrive: Color(red: 0.24, green: 0.62, blue: 0.36)    // green
+        case .distortion: Color(red: 0.94, green: 0.55, blue: 0.16)   // orange
+        case .fuzz: Color(red: 0.74, green: 0.75, blue: 0.77)         // brushed silver
+        case .chorus: Color(red: 0.36, green: 0.72, blue: 0.86)       // light blue
+        case .phaser: Color(red: 0.88, green: 0.36, blue: 0.13)       // burnt orange
+        case .flanger: Color(red: 0.42, green: 0.31, blue: 0.70)      // purple
+        case .tremolo: Color(red: 0.18, green: 0.52, blue: 0.50)      // teal
+        case .delay: Color(red: 0.90, green: 0.90, blue: 0.88)        // white
+        case .reverb: Color(red: 0.17, green: 0.23, blue: 0.34)       // navy
+        }
+    }
+
+    /// Light paint takes dark lettering, like the real thing.
+    var enclosureIsLight: Bool {
+        switch self {
+        case .equalizer, .fuzz, .delay, .chorus: true
+        default: false
+        }
+    }
+
+    /// How many knobs the pedal has on top.
+    var knobCount: Int {
+        switch self {
+        case .tremolo, .reverb: 2
+        default: 3
+        }
+    }
+}

@@ -59,6 +59,14 @@ protocol EffectsChainManaging: AnyObject {
     func rebuildEffectsChain()
 }
 
+/// The amp and speaker cabinet at the end of the chain.
+@MainActor
+protocol AmpControlling: AnyObject {
+    var ampSettings: AmpSettings { get set }
+    /// Tone stack + cabinet response, dB at each frequency.
+    func ampResponse(at frequencies: [Float]) -> [Float]
+}
+
 /// The 10-band parametric EQ.
 @MainActor
 protocol EqualizerControlling: AnyObject {
@@ -185,7 +193,7 @@ protocol PresetProviding {
 /// Everything the audio engine offers, for the few places that coordinate it all
 /// (MainViewModel, ContentView). Views take only the pieces they need.
 @MainActor
-protocol AudioManaging: AudioEngineControlling, AudioLevelProviding, AudioAnalysisSource, EffectsChainManaging,
+protocol AudioManaging: AudioEngineControlling, AudioLevelProviding, AudioAnalysisSource, EffectsChainManaging, AmpControlling,
     EqualizerControlling, DemoRiffPlaying, EffectAuditioning, SignalProbing, ExpressionControlling {
     /// The groove and imported songs.
     var playAlong: any BackingTrackManaging { get }

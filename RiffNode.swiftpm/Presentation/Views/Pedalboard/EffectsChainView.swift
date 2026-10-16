@@ -8,6 +8,8 @@ struct EffectsChainView: View {
     /// Selection is kept by ID and resolved against the live chain: presets and the AI
     /// replace every node, and editing a stale node would change nothing you can hear.
     @State private var selectedEffectID: UUID?
+    /// The amp at the end of the chain is selected instead of a pedal.
+    @State private var isAmpSelected = false
     @State private var width: CGFloat = 800
 
     private var selectedEffect: EffectNode? {
@@ -16,8 +18,11 @@ struct EffectsChainView: View {
 
     private var selection: Binding<EffectNode?> {
         Binding(
-            get: { selectedEffect },
-            set: { selectedEffectID = $0?.id }
+            get: { isAmpSelected ? nil : selectedEffect },
+            set: {
+                selectedEffectID = $0?.id
+                if $0 != nil { isAmpSelected = false }
+            }
         )
     }
 
@@ -92,17 +97,26 @@ struct EffectsChainView: View {
                 // Signal chain visualization
                 GlassSignalChainView(
                     engine: engine,
-                    selectedEffect: selection
+                    selectedEffect: selection,
+                    isAmpSelected: $isAmpSelected
                 )
 
-                Text("Tap a pedal to tweak it · Double-tap to switch it on or off")
+                Text("Guitar → pedals → amp, like a real board · Tap to tweak · Double-tap to switch on or off · Drag to reorder")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
 
+                PedalOrderAdviceView(engine: engine)
+
+                if isAmpSelected {
+                    AmpPanelView(engine: engine, isWide: width > 980)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity),
+                            removal: .opacity
+                        ))
+                } else if let effect = selectedEffect {
                 // The selected pedal: its knobs, and what it does to the signal
-                if let effect = selectedEffect {
                     let layout = width > 980
                         ? AnyLayout(HStackLayout(alignment: .top, spacing: Spacing.md))
                         : AnyLayout(VStackLayout(spacing: Spacing.md))
@@ -123,13 +137,14 @@ struct EffectsChainView: View {
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         }
         .animation(.spring(duration: 0.3), value: selectedEffectID)
+        .animation(.spring(duration: 0.3), value: isAmpSelected)
         .onAppear(perform: ensureSelection)
         .onChange(of: engine.effectsChain.map(\.id)) { _, _ in ensureSelection() }
     }
 
     /// Keep a pedal selected so its knobs are always on screen – prefer one that's switched on.
     private func ensureSelection() {
-        guard selectedEffect == nil else { return }
+        guard selectedEffect == nil, !isAmpSelected else { return }
         selectedEffectID = (engine.effectsChain.first(where: \.isEnabled) ?? engine.effectsChain.first)?.id
     }
 }
@@ -139,6 +154,7 @@ struct EffectsChainView: View {
 struct GlassSignalChainView: View {
     let engine: any PedalboardEngine
     @Binding var selectedEffect: EffectNode?
+    @Binding var isAmpSelected: Bool
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -191,7 +207,7 @@ struct GlassSignalChainView: View {
 
     private var signalChainContent: some View {
         HStack(spacing: 0) {
-            PedalboardJack(label: "IN", isInput: true)
+            PedalboardJack(label: "GUITAR", isInput: true)
             PedalboardCable()
 
             ForEach(Array(engine.effectsChain.enumerated()), id: \.element.id) { index, effect in
@@ -199,7 +215,13 @@ struct GlassSignalChainView: View {
                 PedalboardCable()
             }
 
-            PedalboardJack(label: "OUT", isInput: false)
+            // The amp the board plugs into
+            AmpHeadTile(settings: engine.ampSettings, isSelected: isAmpSelected) {
+                withAnimation(.spring(duration: 0.25)) {
+                    selectedEffect = nil
+                    isAmpSelected = true
+                }
+            }
         }
         .padding(.vertical, 22)
         .padding(.horizontal, 12)

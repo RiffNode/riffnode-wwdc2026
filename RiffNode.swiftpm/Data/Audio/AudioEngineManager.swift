@@ -417,6 +417,24 @@ final class AudioEngineManager: AudioManaging {
         return min(max(bandwidth, 0.05), 5)
     }
 
+    // MARK: - Amp & Cabinet
+
+    /// The amp at the end of the chain. Every change is heard immediately.
+    var ampSettings = AmpSettings() {
+        didSet { if ampSettings != oldValue { applyAmpSettings() } }
+    }
+
+    private func applyAmpSettings() {
+        guard let units = effectUnits else { return }
+        units.ampKernel.amp.apply(ampSettings)
+        units.amp.auAudioUnit.shouldBypassEffect = !ampSettings.isEnabled
+    }
+
+    /// Tone stack + cabinet response in dB, for drawing the amp's curve.
+    func ampResponse(at frequencies: [Float]) -> [Float] {
+        AmpDesign.response(for: ampSettings, at: frequencies)
+    }
+
     // MARK: - Tone Suggestions
 
     /// Applies one EQ move from the Tone balance card and switches the EQ on so it's heard.
@@ -619,6 +637,7 @@ final class AudioEngineManager: AudioManaging {
         engine.attach(units.distortion)
         engine.attach(units.fuzz)
         engine.attach(units.wah)
+        engine.attach(units.amp)
         
         // Modulation
         engine.attach(units.chorus)
@@ -678,7 +697,10 @@ final class AudioEngineManager: AudioManaging {
             engine.connect(currentNode, to: unit, format: format)
             currentNode = unit
         }
-        engine.connect(currentNode, to: mixer, format: format)
+        // The amp and cabinet sit last, like the amp a real pedalboard plugs into
+        engine.connect(currentNode, to: units.amp, format: format)
+        engine.connect(units.amp, to: mixer, format: format)
+        applyAmpSettings()
         connectedEffectOrder = order
         installProbeTaps()
 

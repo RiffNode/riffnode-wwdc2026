@@ -412,8 +412,8 @@ struct ChatMessageBubble: View {
                 // Effect badges + apply button
                 if let effects = message.appliedEffects, !effects.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        // Mode label + badges
-                        HStack(spacing: 6) {
+                        // Mode label + badges – whole badges wrap to the next line, never their words
+                        FlowLayout(spacing: 6) {
                             if let mode = message.commandMode, mode != "preset" {
                                 let label = mode == "remove" ? "BYPASSED" : mode == "delete" ? "DELETED" : mode == "set" ? "SET" : "ADDED"
                                 let color: Color = (mode == "remove" || mode == "delete") ? .orange : .green
@@ -529,6 +529,8 @@ struct EffectBadge: View {
                 .font(.system(size: 8, weight: .bold))
             Text(effectName.uppercased())
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .lineLimit(1)
+                .fixedSize()
         }
         .foregroundStyle(isRemoving ? Color.orange : effectColor)
         .padding(.horizontal, 7)

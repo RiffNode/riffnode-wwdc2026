@@ -6,7 +6,7 @@ import Foundation
 // only reach the capabilities it actually uses (and could run against a test double).
 
 typealias SignalLabEngine = AudioEngineControlling & DemoRiffPlaying & SignalProbing & EffectsChainManaging
-typealias PedalboardEngine = SignalLabEngine
+typealias PedalboardEngine = SignalLabEngine & AmpControlling
 typealias LearnEngine = SignalLabEngine & EffectAuditioning & AudioLevelProviding
 typealias InputEngine = AudioEngineControlling & AudioLevelProviding & DemoRiffPlaying
 typealias StatusEngine = AudioEngineControlling & AudioLevelProviding & EffectsChainManaging

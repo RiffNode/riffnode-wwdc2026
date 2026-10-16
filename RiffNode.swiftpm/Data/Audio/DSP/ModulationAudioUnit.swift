@@ -123,10 +123,14 @@ final class ModulationKernel: @unchecked Sendable {
         case tremolo, chorus, flanger, phaser
         case overdrive, distortion, fuzz
         case wah
+        case amp
     }
 
     /// Set once, before the unit starts rendering.
     var mode: Mode = .tremolo
+
+    /// The amp and cabinet (mode .amp only).
+    let amp = AmpProcessor()
 
     // MARK: Parameters (written on the main thread, read on the audio thread)
 
@@ -219,6 +223,7 @@ final class ModulationKernel: @unchecked Sendable {
     func prepare(sampleRate: Float, channelCount: Int) {
         self.sampleRate = max(sampleRate, 8_000)
         self.channelCount = min(max(channelCount, 1), Self.maxChannels)
+        amp.prepare(sampleRate: self.sampleRate)
         reset()
     }
 
@@ -261,6 +266,15 @@ final class ModulationKernel: @unchecked Sendable {
         }
         if mode == .wah {
             processWah(input: input, output: output, frameCount: frameCount, channels: channels)
+            return
+        }
+        if mode == .amp {
+            for channel in 0..<channels {
+                guard let source = input[channel].mData?.assumingMemoryBound(to: Float.self),
+                      let destination = output[channel].mData?.assumingMemoryBound(to: Float.self) else { continue }
+                if source != destination { destination.update(from: source, count: frameCount) }
+                amp.process(destination, frames: frameCount, channel: channel)
+            }
             return
         }
 
@@ -315,7 +329,7 @@ final class ModulationKernel: @unchecked Sendable {
                     phaserFeedbackSample[channel] = signal
                     destination[frame] = 0.5 * (dry + signal)
 
-                case .overdrive, .distortion, .fuzz, .wah:
+                case .overdrive, .distortion, .fuzz, .wah, .amp:
                     continue  // handled by processDrive / processWah
                 }
             }
