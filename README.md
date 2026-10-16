@@ -245,8 +245,11 @@ RiffNode was selected by Apple as a **2026 Swift Student Challenge Winner** – 
 
 <table>
   <tr>
-    <td width="50%"><img src="screenshots/ssc-2026-winner-certificate.jpg" alt="Swift Student Challenge 2026 Winner certificate from Apple, awarded to Yu-Jia Liang"><br><sub>The certificate from Apple</sub></td>
-    <td width="50%"><img src="screenshots/ssc-2026-winner-notice.jpg" alt="Apple Developer page: Congratulations, you've been selected as a Swift Student Challenge 2026 winner"><br><sub>The winner notice on Apple Developer</sub></td>
+    <td width="50%"><img src="screenshots/ssc-2026-winner-certificate.jpg" alt="Swift Student Challenge 2026 Winner letter from Apple, awarded to Yu-Jia Liang"><br><sub>The winner letter from Apple</sub></td>
+    <td width="50%"><img src="screenshots/ssc-2026-winner-card.jpg" alt="Award card printed with SwiftStudentChallenge(classOf: twentytwentysix, achievement: .winner)"><br><sub>The award card – <code>achievement: .winner</code></sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="screenshots/ssc-2026-winner-notice.jpg" alt="Apple Developer page: Congratulations, you've been selected as a Swift Student Challenge 2026 winner"><br><sub>The winner notice on Apple Developer</sub></td>
   </tr>
 </table>
 
