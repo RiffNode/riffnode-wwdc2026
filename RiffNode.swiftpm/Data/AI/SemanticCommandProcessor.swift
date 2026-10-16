@@ -155,6 +155,13 @@ final class SemanticCommandProcessor {
     private(set) var lastDisabledEffects: [String] = []
     private(set) var lastDeletedEffects: [String] = []          // actually removed from chain
     private(set) var lastParameterOverrides: [String: Float] = [:] // e.g. ["distortion.level": 80]
+    private struct ParameterEdit {
+        let type: EffectType
+        let key: String
+        let value: Float
+        let isRelative: Bool
+    }
+    private var pendingParameterEdit: ParameterEdit?
     private(set) var lastCommandMode: String = "preset" // "preset", "additive", "remove", "delete", "set"
     private(set) var lastParameters: FallbackToneParameters?
     private(set) var lastExplanation: String = ""
@@ -274,6 +281,7 @@ final class SemanticCommandProcessor {
         isProcessing = true
         defer { isProcessing = false }
         lastCommand = command
+        pendingParameterEdit = nil
         errorMessage = nil
         lastDeletedEffects = []
         thinkingSteps = [ThinkingStep(id: "context", text: "Reading your request", isDone: true)]
@@ -288,6 +296,7 @@ final class SemanticCommandProcessor {
         case .command:
             setStep("local", "Adjusting the pedals you named", done: true)
             lastResponder = .offlineMatcher
+            if processParameterEdit(command) { return true }
             return processCommandFallback(command)
         case .tone:
             break
@@ -392,7 +401,7 @@ final class SemanticCommandProcessor {
         // "turn off the delay", "less gain, brighter", "set delay time 0.4").
         let namesKnob = knobWords.contains { lower.contains($0) }
         let startsWithVerb = commandVerbs.contains { words[0] == $0 || lower.hasPrefix($0 + " ") }
-        if namesKnob && (startsWithVerb || words.count <= 2) { return .command }
+        if namesKnob && (startsWithVerb || words.count <= 2 || lower.contains(where: \.isNumber)) { return .command }
         if commandVerbs.contains(words[0]) && ["brighter", "darker", "louder", "quieter", "warmer"].contains(where: lower.contains) {
             return .command
         }
@@ -985,6 +994,16 @@ final class SemanticCommandProcessor {
 
     /// Apply the last recommendation to the audio engine
     func applyToEngine(_ engine: any EffectsChainManaging) {
+        if let edit = pendingParameterEdit {
+            engine.ensureEffectInChain(edit.type)
+            guard let effect = engine.effectsChain.first(where: { $0.type == edit.type }) else { return }
+            let current = effect.parameters[edit.key] ?? edit.type.defaultParameters[edit.key] ?? 0
+            let proposed = edit.isRelative ? current + edit.value : edit.value
+            let range = Self.parameterRange(edit.key, for: edit.type)
+            engine.updateEffectParameter(effect, key: edit.key, value: min(range.upperBound, max(range.lowerBound, proposed)))
+            if !effect.isEnabled { engine.toggleEffect(effect) }
+            return
+        }
         guard lastCommandMode != "chat", let params = lastParameters else { return }
 
         // Ensure every effect the AI wants to enable actually exists in the chain.
@@ -1044,6 +1063,89 @@ final class SemanticCommandProcessor {
     // MARK: - Private Helpers
 
     // MARK: - Parameter Command Parser
+
+    /// Explicit and relative edits touch one knob; all other settings remain intact.
+    private func processParameterEdit(_ command: String) -> Bool {
+        let lower = command.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let increases = ["more ", "increase ", "boost ", "crank ", "push ", "raise "]
+        let decreases = ["less ", "decrease ", "reduce ", "dial back ", "lower ", "cut "]
+        let relative = increases.contains(where: lower.hasPrefix) || decreases.contains(where: lower.hasPrefix)
+        let hasNumber = lower.range(of: #"-?\d+(?:\.\d+)?(?![\w.])"#, options: .regularExpression) != nil
+        let forbidden = ["remove ", "delete ", "disable ", "bypass ", "turn off "]
+        guard !forbidden.contains(where: lower.hasPrefix), relative || hasNumber else { return false }
+
+        let type: EffectType
+        if lower.contains("reverb") { type = .reverb }
+        else if lower.contains("delay") || lower.contains("echo") { type = .delay }
+        else if lower.contains("fuzz") { type = .fuzz }
+        else if lower.contains("distortion") || lower.contains("gain") || lower.contains("dirt") { type = .distortion }
+        else if lower.contains("overdrive") || lower.contains("drive") { type = .overdrive }
+        else if lower.contains("chorus") { type = .chorus }
+        else if lower.contains("phaser") { type = .phaser }
+        else if lower.contains("flanger") { type = .flanger }
+        else if lower.contains("tremolo") { type = .tremolo }
+        else if lower.contains("compress") { type = .compressor }
+        else if ["bass", "mid", "treble", "bright", "dark", "eq", "equalizer"].contains(where: lower.contains) { type = .equalizer }
+        else { return false }
+
+        let key: String
+        switch type {
+        case .equalizer: key = lower.contains("bass") ? "bass" : (lower.contains("mid") || lower.contains("eq") ? "mid" : "treble")
+        case .compressor:
+            key = lower.contains("ratio") ? "ratio" : (lower.contains("attack") ? "attack" : (lower.contains("release") ? "release" : "threshold"))
+        case .overdrive, .distortion, .fuzz:
+            key = lower.contains("tone") ? "tone" : (["level", "vol", "output"].contains(where: lower.contains) ? "level" : (type == .fuzz ? "fuzz" : "drive"))
+        case .delay:
+            key = ["time", "sec", "ms"].contains(where: lower.contains) ? "time" : (["feedback", "regen", "repeat"].contains(where: lower.contains) ? "feedback" : "mix")
+        case .reverb:
+            key = ["decay", "time", "tail", "sec"].contains(where: lower.contains) ? "decay" : "wetDryMix"
+        case .chorus, .phaser, .flanger, .tremolo:
+            key = ["rate", "speed", "hz"].contains(where: lower.contains) ? "rate" : (["feedback", "regen"].contains(where: lower.contains) ? "feedback" : (["mix", "wet"].contains(where: lower.contains) ? "mix" : "depth"))
+        }
+        guard type.defaultParameters[key] != nil else { return false }
+        let range = Self.parameterRange(key, for: type)
+        var value: Float
+        if relative {
+            value = (range.upperBound - range.lowerBound) * 0.1
+            if decreases.contains(where: lower.hasPrefix) { value = -value }
+        } else {
+            guard let match = lower.range(of: #"-?\d+(?:\.\d+)?"#, options: .regularExpression),
+                  let number = Float(lower[match]), number.isFinite else { return false }
+            value = number
+            if key == "time", type == .delay, lower.contains("ms") { value /= 1000 }
+        }
+        pendingParameterEdit = ParameterEdit(type: type, key: key, value: value, isRelative: relative)
+        lastParameters = nil
+        lastEnabledEffects = [effectName(for: type)]
+        lastDisabledEffects = []
+        lastDeletedEffects = []
+        lastCommandMode = "set"
+        lastExplanation = relative
+            ? "\(value >= 0 ? "Increased" : "Reduced") \(type.rawValue) \(key). Other settings stay the same."
+            : "Set \(type.rawValue) \(key) to \(min(range.upperBound, max(range.lowerBound, value)))."
+        return true
+    }
+
+    private static func parameterRange(_ key: String, for type: EffectType) -> ClosedRange<Float> {
+        switch key {
+        case "bass", "mid", "treble": return -12...12
+        case "threshold": return -40...0
+        case "ratio": return 1...20
+        case "attack": return 0.1...100
+        case "release": return 10...500
+        case "time": return 0.05...2
+        case "decay": return 0.1...10
+        case "feedback": return 0...90
+        case "rate":
+            switch type {
+            case .phaser: return 0.1...5
+            case .flanger: return 0.1...2
+            case .tremolo: return 0.5...15
+            default: return 0.1...10
+            }
+        default: return 0...100
+        }
+    }
 
     /// Parses "set [effect] [param] to [value]" style commands.
     /// Mutates `params` in place and returns the canonical effect name, or nil if unrecognized.
@@ -1346,6 +1448,7 @@ final class SemanticCommandProcessor {
     // MARK: - Reset Conversation
 
     func resetConversation() {
+        pendingParameterEdit = nil
         // Sessions are per request, so there is no history to clear – just re-check the model
         refreshAvailability()
         lastCommand = ""

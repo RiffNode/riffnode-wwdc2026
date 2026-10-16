@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Input Source Card
 // Everything about the sound going in: where it comes from (your guitar or the built-in demo
@@ -11,16 +12,25 @@ struct InputSourceCard: View {
 
     enum Source: Hashable { case guitar, demo }
 
+    @State private var isImportingRecording = false
+
     private var source: Binding<Source> {
         Binding(
             get: { engine.isDemoRiffPlaying ? .demo : .guitar },
             set: { newValue in
-                if (newValue == .demo) != engine.isDemoRiffPlaying { engine.toggleDemoRiff() }
+                if newValue == .demo {
+                    engine.startDemoRiff()
+                } else {
+                    Task {
+                        do { try await engine.enableLiveInput() }
+                        catch { engine.errorMessage = error.localizedDescription }
+                    }
+                }
             }
         )
     }
 
-    private var isSilent: Bool { engine.inputLevel < 0.01 }
+    private var isSilent: Bool { engine.inputLevel < 0.002 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -37,6 +47,39 @@ struct InputSourceCard: View {
                 .fixedSize()
                 .disabled(!engine.canPlayDemoRiff)
                 .help("⌘D toggles the demo riff")
+            }
+
+            if engine.isDemoRiffPlaying {
+                // The original arpeggio, or a clean recording of your own
+                Menu {
+                    Button(DemoRiff.originalArpeggio.title) { engine.selectedDemoRiff = .originalArpeggio }
+                    if let name = engine.demoRecordingName {
+                        Button(name) { engine.selectedDemoRiff = .recording }
+                    }
+                    Divider()
+                    Button("Import a Recording…", systemImage: "square.and.arrow.down") { isImportingRecording = true }
+                } label: {
+                    Label(engine.selectedDemoRiff == .recording ? (engine.demoRecordingName ?? "Your Recording") : DemoRiff.originalArpeggio.title,
+                          systemImage: "music.note")
+                        .font(.subheadline)
+                }
+                .menuStyle(.button)
+                .fileImporter(isPresented: $isImportingRecording, allowedContentTypes: [.audio]) { result in
+                    guard case .success(let url) = result else { return }
+                    do { try engine.importDemoRecording(from: url) }
+                    catch { engine.errorMessage = "Couldn't use that recording." }
+                }
+
+                Toggle("Bypass pedals to compare", isOn: Binding(
+                    get: { engine.isPedalboardBypassed }, set: { engine.isPedalboardBypassed = $0 }
+                ))
+                .font(.caption)
+                .tint(.orange)
+                .accessibilityHint("Compares the same riff with all pedals bypassed. Individual pedal settings are preserved.")
+            }
+
+            if let error = engine.errorMessage {
+                Text(error).font(.caption).foregroundStyle(.red)
             }
 
             tuner
@@ -172,12 +215,8 @@ private struct LevelBar: View {
     let label: String
     let level: Float
 
-    /// Levels arrive as RMS × 5; meters read in decibels (−60…0 dBFS) like a real mixer,
-    /// so a normal signal sits in the green and only real peaks reach the red.
-    private var meter: Float {
-        let db = 20 * log10(max(level / 5, 1e-6))
-        return min(max((db + 60) / 60, 0), 1)
-    }
+    /// Raw RMS is retained until the display maps −60…0 dBFS to its width.
+    private var meter: Float { AudioMeter.normalized(level) }
 
     var body: some View {
         HStack(spacing: 8) {

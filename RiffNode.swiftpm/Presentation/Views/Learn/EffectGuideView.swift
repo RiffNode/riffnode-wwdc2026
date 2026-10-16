@@ -660,7 +660,7 @@ private struct NotchLevelIndicator: View {
             ForEach(0..<4, id: \.self) { index in
                 Capsule()
                     .fill(tint)
-                    .frame(width: 3, height: max(4, CGFloat(level) * 40 * (1 - CGFloat(index) * 0.15)))
+                    .frame(width: 3, height: max(4, CGFloat(AudioMeter.normalized(level)) * 18 * (1 - CGFloat(index) * 0.15)))
             }
         }
         .frame(height: 18)

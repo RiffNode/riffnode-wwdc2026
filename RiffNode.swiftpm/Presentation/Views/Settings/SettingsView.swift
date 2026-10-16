@@ -79,7 +79,7 @@ struct SettingsView: View {
                                     ForEach(0..<8, id: \.self) { i in
                                         RoundedRectangle(cornerRadius: 1)
                                             .fill(
-                                                i < Int(engine.inputLevel * 8)
+                                                i < Int(AudioMeter.normalized(engine.inputLevel) * 8)
                                                     ? (i < 6 ? Color.green : Color.orange)
                                                     : Color.primary.opacity(0.15)
                                             )
@@ -189,16 +189,11 @@ struct SettingsView: View {
             }
             .confirmationDialog("Reset Effects Chain?", isPresented: $showResetConfirmation) {
                 Button("Reset to Default", role: .destructive) {
-                    // Reset effects chain to default
-                    engine.effectsChain.forEach { effect in
-                        if !effect.isEnabled {
-                            engine.toggleEffect(effect)
-                        }
-                    }
+                    engine.resetEffectsToDefaults()
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This will enable all effects and reset their parameters to default values.")
+                Text("This restores the six default pedals, turns them off, and resets the pedal settings and EQ.")
             }
         }
         #if os(macOS)

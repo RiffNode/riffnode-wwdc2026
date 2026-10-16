@@ -11,6 +11,7 @@ struct ChatMessage: Identifiable {
     var appliedEffects: [String]?
     var commandMode: String?  // "preset", "additive", "remove"
     var isApplied: Bool = false
+    var toneSnapshot: EffectPreset?
     /// Which engine answered (assistant replies only).
     var responder: SemanticCommandProcessor.Responder?
 
@@ -71,7 +72,7 @@ final class AIChatbotController {
     }
 
     func sendMessage(_ text: String, processor: SemanticCommandProcessor, engine: any EffectsChainManaging) async {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !isProcessing, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         messages.append(ChatMessage(role: .user, content: text))
         inputText = ""
@@ -112,11 +113,15 @@ final class AIChatbotController {
             messages.append(response)
 
             let responseIndex = messages.count - 1
-            try? await Task.sleep(for: .milliseconds(300))
             processor.applyToEngine(engine)
 
             if responseIndex < messages.count {
                 messages[responseIndex].isApplied = true
+                messages[responseIndex].toneSnapshot = EffectPreset(
+                    name: "AI Tone", icon: "sparkles", description: text,
+                    effects: engine.effectsChain.map {
+                        EffectPreset.PresetEffect(type: $0.type, isEnabled: $0.isEnabled, parameters: $0.parameters)
+                    }, category: .clean)
             }
         } else {
             let fallbackMsg = processor.lastExplanation.isEmpty
@@ -133,8 +138,8 @@ final class AIChatbotController {
     }
 
     func applyEffects(from message: ChatMessage, processor: SemanticCommandProcessor, engine: any EffectsChainManaging) {
-        guard message.appliedEffects != nil else { return }
-        processor.applyToEngine(engine)
+        guard let snapshot = message.toneSnapshot else { return }
+        engine.applyPreset(snapshot)
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
             messages[index].isApplied = true
         }

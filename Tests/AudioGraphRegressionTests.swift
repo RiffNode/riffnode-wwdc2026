@@ -1,0 +1,86 @@
+import AVFoundation
+import Foundation
+
+
+@main
+struct AudioGraphRegressionTests {
+    nonisolated static func discardTap(_ buffer: AVAudioPCMBuffer, _ time: AVAudioTime) {}
+
+    /// A synthetic clean "recording" (decaying plucked notes, 44.1 kHz mono) written to a temp
+    /// file, standing in for a player's imported recording – the tests need no bundled audio.
+    static func makeTestRecording() throws -> URL {
+        let rate = 44_100.0
+        let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
+        let frames = AVAudioFrameCount(rate * 2)
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames)!
+        buffer.frameLength = frames
+        let data = buffer.floatChannelData![0]
+        for i in 0..<Int(frames) {
+            let t = Double(i) / rate
+            let note = [82.41, 110.0, 146.83, 196.0][Int(t * 2) % 4]
+            data[i] = Float(0.3 * sin(2 * .pi * note * t) * exp(-(t.truncatingRemainder(dividingBy: 0.5)) * 4))
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("riffnode-test-recording.wav")
+        try? FileManager.default.removeItem(at: url)
+        try AVAudioFile(forWriting: url, settings: format.settings).write(from: buffer)
+        return url
+    }
+
+    @MainActor static func render(rate: Double, bypassed: Bool, riff: DemoRiff = .recording) async throws -> [Float] {
+        let engine = AVAudioEngine()
+        let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 2)!
+        let (distortion, kernel) = try await ModulationAudioUnit.make(.distortion)
+        kernel.depth = 0.65
+        kernel.level = 0.5
+        kernel.isBypassed = bypassed
+        engine.attach(distortion)
+        engine.connect(distortion, to: engine.mainMixerNode, format: format)
+        let player = DemoRiffPlayer(recordingURL: try makeTestRecording())
+        player.riff = riff
+        player.attach(to: engine, output: distortion, format: format)
+        try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4096)
+        try engine.start()
+        try player.play(analysisTap: discardTap)
+        defer { player.stop(); engine.stop() }
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096)!
+        var samples: [Float] = []
+        let target = Int(rate)
+        var attempts = 0
+        while samples.count < target && attempts < 100 {
+            attempts += 1
+            let count = AVAudioFrameCount(min(4096, target - samples.count))
+            let status = try engine.renderOffline(count, to: buffer)
+            if status == .success, let data = buffer.floatChannelData {
+                samples.append(contentsOf: UnsafeBufferPointer(start: data[0], count: Int(buffer.frameLength)))
+                // Mono source must reach both stereo output channels.
+                for i in 0..<Int(buffer.frameLength) {
+                    guard abs(data[0][i] - data[1][i]) < 0.0001 else { throw Failure.stereoMismatch }
+                }
+            }
+        }
+        guard samples.count == target, samples.allSatisfy(\.isFinite), samples.contains(where: { abs($0) > 0.001 }) else {
+            throw Failure.missingAudio
+        }
+        return samples
+    }
+
+    enum Failure: Error { case missingAudio, stereoMismatch, noPedalDifference }
+
+    @MainActor static func main() async throws {
+        var count = 0
+        for rate in [44100.0, 48000.0] {
+            for riff in [DemoRiff.recording] {
+            let clean = try await render(rate: rate, bypassed: true, riff: riff)
+            let processed = try await render(rate: rate, bypassed: false, riff: riff)
+            let difference = zip(clean, processed).reduce(Float(0)) { $0 + abs($1.0 - $1.1) } / Float(clean.count)
+            guard difference > 0.001 else { throw Failure.noPedalDifference }
+            count += 1
+            print("PASS \(riff.title) -> stereo at \(Int(rate)) Hz; distortion mean difference \(difference)")
+            }
+        }
+        _ = try await render(rate: 48000, bypassed: true, riff: .originalArpeggio)
+        count += 1
+        print("PASS original synthesized riff remains playable")
+        print("\(count)/\(count) offline audio graph checks passed")
+    }
+}

@@ -51,6 +51,9 @@ final class AudioEngineManager: AudioManaging {
     var effectsChain: [EffectNode] = [] {
         didSet { scheduleAudioChainRebuild() }
     }
+    var isPedalboardBypassed = false {
+        didSet { if oldValue != isPedalboardBypassed { syncBypassStates() } }
+    }
     /// The pedal order currently wired into the audio graph (nil = not wired yet).
     @ObservationIgnored private var connectedEffectOrder: [EffectType]?
     @ObservationIgnored private var isChainRebuildScheduled = false
@@ -87,9 +90,9 @@ final class AudioEngineManager: AudioManaging {
     // Audition – hear one effect on its own, A/B against the dry riff (Learn tab)
     private(set) var auditionEffect: EffectType?
     private(set) var isAuditionBypassed = false
-    @ObservationIgnored private var auditionSnapshot: (chain: [EffectNode], eqBands: [EQBand], startedDemo: Bool)?
+    @ObservationIgnored private var auditionSnapshot: (chain: [EffectNode], eqBands: [EQBand], startedDemo: Bool, bypassed: Bool)?
 
-    // Demo riff – a synthesized guitar that stands in for a real one
+    // Demo source – a clean performance or the original synthesized arpeggio.
     private let demoRiff = DemoRiffPlayer()
 
     // Visualization
@@ -149,11 +152,21 @@ final class AudioEngineManager: AudioManaging {
         effectsChain = [
             EffectNode(type: .compressor,  isEnabled: false),
             EffectNode(type: .overdrive,   isEnabled: false),
-            EffectNode(type: .distortion,  isEnabled: true),
+            EffectNode(type: .distortion,  isEnabled: false),
             EffectNode(type: .chorus,      isEnabled: false),
             EffectNode(type: .delay,       isEnabled: false),
-            EffectNode(type: .reverb,      isEnabled: true),
+            EffectNode(type: .reverb,      isEnabled: false),
         ]
+    }
+
+    func resetEffectsToDefaults() {
+        stopAudition()
+        isPedalboardBypassed = false
+        parametricEQBands = EQBand.defaultBands
+        setupDefaultEffectsChain()
+        currentPreset = nil
+        syncBypassStates()
+        for effect in effectsChain { applyEffectParameters(effect) }
     }
 
     /// Ensure an effect type exists in the chain, inserting it in the correct
@@ -218,34 +231,32 @@ final class AudioEngineManager: AudioManaging {
     func setupEngine() async throws {
         print("setupEngine: START")
 
+        stopVisualization()
+        demoRiff.stop()
+        backingTrack.stopBackingTrack()
+        if let previous = audioEngine {
+            previous.stop()
+            demoRiff.detach(from: previous)
+            backingTrack.detach(from: previous)
+        }
+        isRunning = false
+        inputNode = nil
+        formatConverterMixer = nil
+        connectedEffectOrder = nil
+        probedNodes = []
+
         // Configure audio session (required for iOS/Mac Catalyst)
         #if os(iOS) || targetEnvironment(macCatalyst)
-        try await Self.configureAudioSession()
+        try await Self.configureAudioSession(useLiveInput: hasPermission)
         #endif
 
         let engine = AVAudioEngine()
         self.audioEngine = engine
         mainMixer = engine.mainMixerNode
 
-        // Setup input
-        print("setupEngine: Getting input node...")
-        let input = engine.inputNode
-        let inputFormat = input.outputFormat(forBus: 0)
-        print("setupEngine: Input format: \(inputFormat.sampleRate)Hz, \(inputFormat.channelCount)ch")
-
-        guard inputFormat.sampleRate > 0 && inputFormat.channelCount > 0 else {
-            inputNode = nil
-            print("setupEngine: No valid input - demo mode")
-            return
-        }
-
-        inputNode = input
-        print("setupEngine: Input node ready")
-
-        // Create format conversion mixer
-        let converter = AVAudioMixerNode()
-        formatConverterMixer = converter
-        engine.attach(converter)
+        // Playback is a complete graph on its own. Never open the microphone for Demo.
+        let outputFormat = engine.outputNode.inputFormat(forBus: 0)
+        let sampleRate = outputFormat.sampleRate.isFinite && outputFormat.sampleRate > 0 ? outputFormat.sampleRate : 48_000
 
         // Pre-effects input mixer (guitar converter + optionally backing track feed into here)
         let fxMixer = AVAudioMixerNode()
@@ -262,16 +273,27 @@ final class AudioEngineManager: AudioManaging {
         
         // Use standard processing format to avoid format mismatch issues
         let format = AVAudioFormat(
-            standardFormatWithSampleRate: inputFormat.sampleRate,
+            standardFormatWithSampleRate: sampleRate,
             channels: 2
-        ) ?? inputFormat
+        )!
         
         self.processingFormat = format
 
         print("setupEngine: Processing format: \(format.sampleRate)Hz, \(format.channelCount)ch")
 
-        // Connect signal chain
-        connectSignalChain(engine: engine, input: input, converter: converter, inputFormat: inputFormat, processingFormat: format)
+        if hasPermission {
+            let input = engine.inputNode
+            let inputFormat = input.outputFormat(forBus: 0)
+            if inputFormat.sampleRate > 0, inputFormat.channelCount > 0 {
+                inputNode = input
+                let converter = AVAudioMixerNode()
+                formatConverterMixer = converter
+                engine.attach(converter)
+                engine.connect(input, to: converter, format: inputFormat)
+                engine.connect(converter, to: fxMixer, format: format)
+            }
+        }
+        rebuildAudioChain()
         
         // Play-along player: dry into the main mixer, or through the pedals on request
         if let mixer = mainMixer {
@@ -291,6 +313,19 @@ final class AudioEngineManager: AudioManaging {
                               block: OutputLevelStore.tapBlock(for: outputLevelStore))
 
         print("setupEngine: DONE - audio chain ready")
+    }
+
+    func enableLiveInput() async throws {
+        if !hasPermission { await requestMicrophonePermission() }
+        guard hasPermission else { throw AudioEngineError.noPermission }
+        stopDemoRiff()
+        if inputNode == nil {
+            try await setupEngine()
+            guard inputNode != nil else { throw AudioEngineError.noInputDevice }
+        }
+        if !isRunning { try start() }
+        formatConverterMixer?.outputVolume = 1
+        startRealAudioVisualization()
     }
 
     func start() throws {
@@ -318,6 +353,7 @@ final class AudioEngineManager: AudioManaging {
     }
 
     func stop() {
+        backingTrack.stopBackingTrack()
         stopDemoRiff()
         stopVisualization()
         
@@ -359,12 +395,15 @@ final class AudioEngineManager: AudioManaging {
         }
         
         // Set bypass directly on the specific effect unit
-        units.setBypass(for: effect.type, bypassed: !effect.isEnabled)
+        units.setBypass(for: effect.type, bypassed: isPedalboardBypassed || !effect.isEnabled)
         print("toggleEffect: \(effect.type.rawValue) \(effect.isEnabled ? "enabled" : "bypassed")")
     }
 
     func updateEffectParameter(_ effect: EffectNode, key: String, value: Float) {
         effect.parameters[key] = value
+        if effect.type == .equalizer, let index = ["bass": 0, "mid": 4, "treble": 9][key] {
+            parametricEQBands[index].gain = value
+        }
         applyEffectParameters(effect)
     }
 
@@ -383,6 +422,11 @@ final class AudioEngineManager: AudioManaging {
             applyParametricEQ()
             // Shaping the curve should be audible: make sure the EQ pedal is on the board
             if parametricEQBands != EQBand.defaultBands { activateEqualizerPedal() }
+            if let pedal = effectsChain.first(where: { $0.type == .equalizer }) {
+                pedal.parameters["bass"] = parametricEQBands[0].gain
+                pedal.parameters["mid"] = parametricEQBands[4].gain
+                pedal.parameters["treble"] = parametricEQBands[9].gain
+            }
         }
     }
 
@@ -528,7 +572,7 @@ final class AudioEngineManager: AudioManaging {
         guard let units = effectUnits else { return }
         if let position {
             units.wahKernel.depth = position
-            if units.wah.auAudioUnit.shouldBypassEffect { units.wah.auAudioUnit.shouldBypassEffect = false }
+            units.wah.auAudioUnit.shouldBypassEffect = isPedalboardBypassed
         } else {
             units.wah.auAudioUnit.shouldBypassEffect = true
         }
@@ -592,6 +636,13 @@ final class AudioEngineManager: AudioManaging {
 
     func applyPreset(_ preset: EffectPreset) {
         effectsChain = preset.effects.map { $0.toEffectNode() }
+        if let eq = preset.effects.first(where: { $0.type == .equalizer && $0.isEnabled }) {
+            var bands = parametricEQBands
+            bands[0].gain = eq.parameters["bass"] ?? 0
+            bands[4].gain = eq.parameters["mid"] ?? 0
+            bands[9].gain = eq.parameters["treble"] ?? 0
+            parametricEQBands = bands
+        }
 
         // Sync bypass states
         syncBypassStates()
@@ -627,12 +678,20 @@ final class AudioEngineManager: AudioManaging {
             let savedChain = effectsChain.map {
                 EffectNode(id: $0.id, type: $0.type, isEnabled: $0.isEnabled, parameters: $0.parameters)
             }
-            auditionSnapshot = (savedChain, parametricEQBands, !isDemoRiffPlaying)
+            auditionSnapshot = (savedChain, parametricEQBands, !isDemoRiffPlaying, isPedalboardBypassed)
         }
+        isPedalboardBypassed = false
 
         var parameters = type.defaultParameters
         for (key, value) in type.auditionParameters { parameters[key] = value }
         effectsChain = [EffectNode(type: type, isEnabled: true, parameters: parameters)]
+        if type == .equalizer {
+            var bands = EQBand.defaultBands
+            bands[0].gain = parameters["bass"] ?? 0
+            bands[4].gain = parameters["mid"] ?? 0
+            bands[9].gain = parameters["treble"] ?? 0
+            parametricEQBands = bands
+        }
         if let node = effectsChain.first { applyEffectParameters(node) }
 
         auditionEffect = type
@@ -655,6 +714,7 @@ final class AudioEngineManager: AudioManaging {
         if snapshot.startedDemo { stopDemoRiff() }
         effectsChain = snapshot.chain
         parametricEQBands = snapshot.eqBands
+        isPedalboardBypassed = snapshot.bypassed
         for effect in effectsChain { applyEffectParameters(effect) }
         syncBypassStates()
     }
@@ -662,6 +722,29 @@ final class AudioEngineManager: AudioManaging {
     // MARK: - Demo Riff
 
     var isDemoRiffPlaying: Bool { demoRiff.isPlaying }
+
+    var selectedDemoRiff: DemoRiff {
+        get { demoRiff.riff }
+        set {
+            guard newValue != demoRiff.riff else { return }
+            let wasPlaying = isDemoRiffPlaying
+            if wasPlaying { stopDemoRiff() }
+            demoRiff.riff = newValue
+            if wasPlaying { startDemoRiff() }
+        }
+    }
+
+    var demoRecordingName: String? { demoRiff.recordingName }
+
+    /// Imports a clean recording (the player's own) as the demo riff, and plays it if the demo is on.
+    func importDemoRecording(from url: URL) throws {
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        let wasPlaying = isDemoRiffPlaying
+        if wasPlaying { stopDemoRiff() }
+        try demoRiff.importRecording(from: url)
+        if wasPlaying { startDemoRiff() }
+    }
 
     /// True once the effects chain exists, i.e. there is somewhere to send the riff.
     var canPlayDemoRiff: Bool { demoRiff.isReady }
@@ -676,12 +759,24 @@ final class AudioEngineManager: AudioManaging {
         if !isRunning { try? start() }
         guard isRunning else { return }
         inputNode?.removeTap(onBus: 0)   // the analysis tap moves from the mic to the riff
-        demoRiff.play(analysisTap: audioTapCallback)
+        tapInstalled = false
+        formatConverterMixer?.outputVolume = 0
+        AudioSampleBuffer.shared.reset()
+        do {
+            try demoRiff.play(analysisTap: audioTapCallback)
+        } catch {
+            errorMessage = "Couldn't load the demo riff: \(error.localizedDescription)"
+            formatConverterMixer?.outputVolume = 1
+            startRealAudioVisualization()
+        }
+        startVisualizationPolling()
     }
 
     func stopDemoRiff() {
         guard isDemoRiffPlaying else { return }
         demoRiff.stop()
+        formatConverterMixer?.outputVolume = 1
+        AudioSampleBuffer.shared.reset()
         // Hand the analysis tap back to the microphone
         if isRunning { startRealAudioVisualization() }
     }
@@ -691,10 +786,15 @@ final class AudioEngineManager: AudioManaging {
     #if os(iOS) || targetEnvironment(macCatalyst)
     /// Activating the session blocks while the audio hardware spins up,
     /// so it runs off the main thread to keep the UI responsive.
-    private nonisolated static func configureAudioSession() async throws {
+    private nonisolated static func configureAudioSession(useLiveInput: Bool) async throws {
         try await Task.detached(priority: .userInitiated) {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .mixWithOthers])
+            if useLiveInput {
+                try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .mixWithOthers])
+            } else {
+                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            }
+            try session.setPreferredIOBufferDuration(0.005)
             try session.setActive(true)
         }.value
         print("setupEngine: Audio session configured")
@@ -729,19 +829,6 @@ final class AudioEngineManager: AudioManaging {
         engine.attach(units.reverb)
         
         print("attachAllEffects: All effect units attached")
-    }
-
-    private func connectSignalChain(engine: AVAudioEngine, input: AVAudioInputNode, converter: AVAudioMixerNode, inputFormat: AVAudioFormat, processingFormat: AVAudioFormat) {
-        guard let fxMixer = fxInputMixer else { return }
-
-        // Input -> Converter -> fxInputMixer. The backing track and demo riff also
-        // feed fxInputMixer, so everything entering it passes through the pedals.
-        engine.connect(input, to: converter, format: inputFormat)
-        engine.connect(converter, to: fxMixer, format: processingFormat)
-
-        // fxInputMixer -> every pedal in effectsChain order -> mainMixer
-        connectedEffectOrder = nil
-        rebuildAudioChain()
     }
 
     /// Wires fxInputMixer through **every** pedal in `effectsChain` (enabled or not) in order.
@@ -895,15 +982,8 @@ final class AudioEngineManager: AudioManaging {
             AudioUnitSetParameter(au, 5, kAudioUnitScope_Global, 0, releaseMs / 1000.0, 0)
 
         case .equalizer:
-            // The EQ pedal's bass / mid / treble knobs (used by the AI and the
-            // mouth-wah) drive bands 0, 4 and 9 of the shared parametric curve,
-            // so the change is both audible and visible on the EQ tab.
-            guard effect.isEnabled else { break }
-            var bands = parametricEQBands
-            bands[0].gain = effect.parameters["bass"] ?? 0
-            bands[4].gain = effect.parameters["mid"] ?? 0
-            bands[9].gain = effect.parameters["treble"] ?? 0
-            parametricEQBands = bands
+            // A graph rebuild must not overwrite edits made on the parametric curve.
+            applyParametricEQ()
 
         case .overdrive:
             setDrive(units.overdriveKernel, effect, driveKey: "drive")
@@ -976,7 +1056,7 @@ final class AudioEngineManager: AudioManaging {
         
         // Create a set of enabled effect types
         var enabledTypes = Set<EffectType>()
-        for effect in effectsChain where effect.isEnabled {
+        for effect in effectsChain where effect.isEnabled && !isPedalboardBypassed {
             enabledTypes.insert(effect.type)
         }
         
@@ -991,6 +1071,7 @@ final class AudioEngineManager: AudioManaging {
         units.delay.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.delay)
         units.reverb.bypass = !enabledTypes.contains(.reverb)
         units.equalizer?.bypass = !enabledTypes.contains(.equalizer)
+        units.wah.auAudioUnit.shouldBypassEffect = isPedalboardBypassed || !isWahActive
         
         print("syncBypassStates: Bypass states synchronized")
     }
@@ -1004,6 +1085,10 @@ final class AudioEngineManager: AudioManaging {
 
     private func startRealAudioVisualization() {
         stopVisualization()
+        AudioSampleBuffer.shared.reset()
+        startVisualizationPolling()
+
+        guard !isDemoRiffPlaying else { return }
 
         // Refresh device detection
         detectAudioInputDevices()
@@ -1046,6 +1131,7 @@ final class AudioEngineManager: AudioManaging {
     }
 
     private func startVisualizationPolling() {
+        visualizationTask?.cancel()
         // Use a simple async loop that's fully MainActor-isolated
         visualizationTask = Task {
             await runVisualizationLoop()
@@ -1057,8 +1143,8 @@ final class AudioEngineManager: AudioManaging {
         while !Task.isCancelled && isRunning {
             let data = AudioSampleBuffer.shared.read()
 
-            inputLevel = min(1.0, data.rms * 5)
-            outputLevel = min(1.0, outputLevelStore.rms * 5)
+            inputLevel = data.rms
+            outputLevel = outputLevelStore.rms
             waveformSamples = data.waveform
 
             // Feed audio samples to FFT/chord every 3rd frame (~10 Hz at 30fps base rate)

@@ -361,7 +361,7 @@ private struct NotchMetersTile: View {
             .padding(.horizontal, 12)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Input \(Int(engine.inputLevel * 100)) percent, output \(Int(engine.outputLevel * 100)) percent")
+        .accessibilityLabel("Input \(Int(AudioMeter.normalized(engine.inputLevel) * 100)) percent, output \(Int(AudioMeter.normalized(engine.outputLevel) * 100)) percent")
     }
 
     private func meter(label: String, level: Float) -> some View {
@@ -375,7 +375,7 @@ private struct NotchMetersTile: View {
                     Capsule().fill(Color.white.opacity(0.12))
                     Capsule()
                         .fill(LinearGradient(colors: [.green, .yellow, .orange], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: geo.size.width * CGFloat(min(max(level, 0), 1)))
+                        .frame(width: geo.size.width * CGFloat(AudioMeter.normalized(level)))
                 }
             }
             .frame(height: 6)
@@ -436,7 +436,7 @@ private struct NotchLevelBars: View {
                 // Centre bars react most, like an audio "pulse"
                 let centre = CGFloat(barCount - 1) / 2
                 let falloff = 1 - abs(CGFloat(index) - centre) / (centre + 1)
-                let amount = min(1, CGFloat(level) * 2.2 * falloff)
+                let amount = min(1, CGFloat(AudioMeter.normalized(level)) * falloff)
                 Capsule()
                     .fill(tint.opacity(0.5 + 0.5 * amount))
                     .frame(width: 2.5, height: max(3, height * amount))

@@ -547,7 +547,7 @@ struct PerformanceLevelMeter: View {
                                 endPoint: .top
                             )
                         )
-                        .frame(height: geometry.size.height * CGFloat(level))
+                        .frame(height: geometry.size.height * CGFloat(AudioMeter.normalized(level)))
                 }
             }
             .frame(width: 20, height: 100)
@@ -558,7 +558,7 @@ struct PerformanceLevelMeter: View {
                 .foregroundStyle(.secondary)
 
             // dB value
-            Text(String(format: "%.0fdB", 20 * log10(max(level, 0.001))))
+            Text(String(format: "%.0fdB", AudioMeter.decibels(level)))
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.secondary)
         }

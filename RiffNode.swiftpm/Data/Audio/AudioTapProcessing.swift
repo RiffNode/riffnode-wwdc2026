@@ -34,19 +34,10 @@ func audioTapCallback(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
     let rms = audioCalculateRMS(fullSamples)
     let waveform = audioDownsampleForDisplay(fullSamples, targetCount: 128)
 
-    // DEBUG: Print RMS every ~1 second (every ~43 callbacks at 44100Hz/1024 buffer)
-    audioTapDebugCounter += 1
-    if audioTapDebugCounter % 43 == 0 {
-        print("🎸 Audio tap: channels=\(channelCount), frames=\(frameLength), rms=\(rms), maxSample=\(fullSamples.max() ?? 0)")
-    }
-
     // Write to thread-safe buffer (no MainActor dependency)
     // Full samples will be accumulated in the buffer for FFT analysis
     AudioSampleBuffer.shared.write(samples: fullSamples, waveform: waveform, rms: rms)
 }
-
-// Debug counter for tap callback (nonisolated(unsafe) required for Swift 6 strict concurrency)
-nonisolated(unsafe) private var audioTapDebugCounter: Int = 0
 
 // MARK: - Free Functions for Audio Processing (Thread-Safe)
 // These are NOT associated with any actor - safe to call from any thread
@@ -109,6 +100,10 @@ final class AudioSampleBuffer: @unchecked Sendable {
     }
 
     private init() {}
+
+    func reset() {
+        lock.withLock { $0 = AudioBufferState() }
+    }
 
     /// Write audio data from audio thread (thread-safe, lock-free optimized)
     func write(samples: [Float], waveform: [Float], rms: Float) {

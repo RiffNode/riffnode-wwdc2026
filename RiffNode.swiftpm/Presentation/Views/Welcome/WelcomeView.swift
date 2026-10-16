@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Welcome View
 
 struct WelcomeView: View {
-    let engine: any AudioEngineControlling
+    let engine: any AudioEngineControlling & DemoRiffPlaying
     let onStartTour: () -> Void
     let onSkipToMain: () -> Void
 
@@ -136,7 +136,7 @@ struct WelcomeView: View {
                     } label: {
                         HStack(spacing: Spacing.sm) {
                             Image(systemName: "play.fill")
-                            Text("Get Started")
+                            Text("Try the Demo Riff")
                                 .font(.headline.weight(.semibold))
                         }
                         .foregroundStyle(.primary)
@@ -146,8 +146,12 @@ struct WelcomeView: View {
                     }
                     .buttonStyle(.plain)
 
+                    Button("Connect a Guitar") { startSetup(useGuitar: true) }
+                        .buttonStyle(.plain)
+                        .font(.subheadline.weight(.medium))
+
                     // Subtitle explaining what happens
-                    Text("Requests microphone access and starts audio engine")
+                    Text("Explore with a clean riff. No guitar or microphone access needed.")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .multilineTextAlignment(.center)
@@ -172,15 +176,16 @@ struct WelcomeView: View {
         }
     }
 
-    private func startSetup() {
+    private func startSetup(useGuitar: Bool = false) {
+        guard !isSettingUp else { return }
+        isSettingUp = true
         Task {
-            // Step 1: Request microphone permission FIRST (shows system dialog immediately)
-            await engine.requestMicrophonePermission()
-
-            // Check if permission was granted
-            guard engine.hasPermission else {
-                engine.errorMessage = "Microphone access is required to use RiffNode."
-                return
+            if useGuitar {
+                await engine.requestMicrophonePermission()
+                guard engine.hasPermission else {
+                    isSettingUp = false
+                    return
+                }
             }
 
             // Permission granted - now show loading UI for remaining steps
@@ -212,6 +217,7 @@ struct WelcomeView: View {
                     setupSteps[2].isActive = true
                 }
                 try engine.start()
+                if !useGuitar { engine.startDemoRiff() }
 
                 // Complete
                 try? await Task.sleep(for: .milliseconds(300))

@@ -299,6 +299,7 @@ struct GlassKnob: View {
     var size: CGFloat
 
     @State private var isDragging = false
+    @State private var dragStartValue: Float?
 
     init(
         value: Binding<Float>,
@@ -374,13 +375,14 @@ struct GlassKnob: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { gesture in
                         isDragging = true
-                        let delta = Float(-gesture.translation.height / 100)
-                        let sensitivity: Float = (range.upperBound - range.lowerBound) * 0.01
-                        let newValue = value + delta * sensitivity
+                        if dragStartValue == nil { dragStartValue = value }
+                        let delta = Float(-gesture.translation.height / 200)
+                        let newValue = (dragStartValue ?? value) + delta * (range.upperBound - range.lowerBound)
                         value = min(max(newValue, range.lowerBound), range.upperBound)
                     }
                     .onEnded { _ in
                         isDragging = false
+                        dragStartValue = nil
                     }
             )
 
@@ -388,6 +390,17 @@ struct GlassKnob: View {
                 Text(label)
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label.isEmpty ? "Parameter" : label)
+        .accessibilityValue(String(format: format, value))
+        .accessibilityAdjustableAction { direction in
+            let step = (range.upperBound - range.lowerBound) / 100
+            switch direction {
+            case .increment: value = min(range.upperBound, value + step)
+            case .decrement: value = max(range.lowerBound, value - step)
+            @unknown default: break
             }
         }
     }

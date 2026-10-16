@@ -8,7 +8,7 @@ import Foundation
 typealias SignalLabEngine = AudioEngineControlling & DemoRiffPlaying & SignalProbing & EffectsChainManaging
 typealias PedalboardEngine = SignalLabEngine & AmpControlling & InputStageControlling
 typealias LearnEngine = SignalLabEngine & EffectAuditioning & AudioLevelProviding
-typealias InputEngine = AudioEngineControlling & AudioLevelProviding & DemoRiffPlaying & InputStageControlling
+typealias InputEngine = AudioEngineControlling & AudioLevelProviding & DemoRiffPlaying & InputStageControlling & EffectsChainManaging
 typealias StatusEngine = AudioEngineControlling & AudioLevelProviding & EffectsChainManaging
 typealias ToneBalanceEngine = EqualizerControlling & DemoRiffPlaying & AudioLevelProviding
 typealias PerformanceEngine = EffectsChainManaging & AudioLevelProviding & ExpressionControlling

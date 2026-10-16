@@ -198,6 +198,7 @@ final class MainViewModel {
     }
 
     func engineRunningDidChange(_ isRunning: Bool) {
+        if !isRunning { chordDetector.reset() }
         notch.announce(icon: isRunning ? "waveform" : "stop.fill",
                        title: isRunning ? "Engine Live" : "Engine Stopped",
                        detail: engine.currentInputDeviceName,
@@ -205,6 +206,7 @@ final class MainViewModel {
     }
 
     func demoRiffDidChange(_ isPlaying: Bool) {
+        chordDetector.reset()
         notch.announce(icon: isPlaying ? "guitars.fill" : "stop.fill",
                        title: isPlaying ? "Demo Riff" : "Demo Riff Stopped",
                        detail: isPlaying ? "Playing through your pedals" : nil,
