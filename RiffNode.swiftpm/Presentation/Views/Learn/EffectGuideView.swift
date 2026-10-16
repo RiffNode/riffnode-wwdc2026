@@ -8,7 +8,7 @@ struct EffectGuideView: View {
     // MARK: - Dependencies
 
     private let guideService: EffectGuideServiceProtocol
-    var engine: AudioEngineManager?
+    var engine: (any LearnEngine)?
 
     // MARK: - State
 
@@ -24,7 +24,7 @@ struct EffectGuideView: View {
 
     // MARK: - Initialization
 
-    init(guideService: EffectGuideServiceProtocol = EffectGuideService.shared, engine: AudioEngineManager? = nil) {
+    init(guideService: EffectGuideServiceProtocol = EffectGuideService.shared, engine: (any LearnEngine)? = nil) {
         self.guideService = guideService
         self.engine = engine
     }
@@ -311,198 +311,13 @@ struct SoundVisualization: View {
     }
 }
 
-
-// MARK: - Glass Effect Category Visualization
-
-struct GlassEffectCategoryVisualization: View {
-    let category: any EffectCategoryProviding
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(.black.opacity(0.3))
-
-            TimelineView(.animation(minimumInterval: 0.03)) { timeline in
-                Canvas { context, size in
-                    let time = timeline.date.timeIntervalSinceReferenceDate
-                    let midY = size.height / 2
-
-                    switch category.name.lowercased() {
-                    case "dynamics":
-                        drawDynamicsEffect(context: context, size: size, midY: midY, time: time, color: category.color)
-                    case "gain / dirt":
-                        drawDistortionEffect(context: context, size: size, midY: midY, time: time, color: category.color)
-                    case "modulation":
-                        drawModulationEffect(context: context, size: size, midY: midY, time: time, color: category.color)
-                    case "time & ambience":
-                        drawTimeEffect(context: context, size: size, midY: midY, time: time, color: category.color)
-                    case "filter & pitch":
-                        drawFilterEffect(context: context, size: size, midY: midY, time: time, color: category.color)
-                    default:
-                        drawGenericWaveform(context: context, size: size, midY: midY, time: time, color: category.color)
-                    }
-                }
-            }
-            .padding(8)
-
-            // Labels
-            HStack {
-                VStack(alignment: .leading) {
-                    Text("INPUT")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                }
-                Spacer()
-                VStack(alignment: .trailing) {
-                    Text("OUTPUT")
-                        .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(category.color)
-                    Spacer()
-                }
-            }
-            .padding(8)
-        }
-        .frame(height: 80)
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(.white.opacity(0.1), lineWidth: 1)
-        }
-    }
-
-    private func drawDynamicsEffect(context: GraphicsContext, size: CGSize, midY: CGFloat, time: Double, color: Color) {
-        var inputPath = Path()
-        var outputPath = Path()
-
-        inputPath.move(to: CGPoint(x: 0, y: midY))
-        outputPath.move(to: CGPoint(x: 0, y: midY))
-
-        for x in stride(from: 0, through: size.width, by: 2) {
-            let relativeX = x / size.width
-            let inputAmplitude = (0.3 + sin(relativeX * .pi * 2) * 0.5) * size.height * 0.4
-            let inputY = midY + sin(relativeX * .pi * 6 + time * 2) * inputAmplitude
-
-            let compressedAmplitude = size.height * 0.25
-            let outputY = midY + sin(relativeX * .pi * 6 + time * 2) * compressedAmplitude
-
-            inputPath.addLine(to: CGPoint(x: x, y: inputY))
-            outputPath.addLine(to: CGPoint(x: x, y: outputY))
-        }
-
-        context.stroke(inputPath, with: .color(.gray.opacity(0.5)), lineWidth: 1.5)
-        context.stroke(outputPath, with: .color(color), lineWidth: 2)
-    }
-
-    private func drawDistortionEffect(context: GraphicsContext, size: CGSize, midY: CGFloat, time: Double, color: Color) {
-        var cleanPath = Path()
-        var clippedPath = Path()
-
-        cleanPath.move(to: CGPoint(x: 0, y: midY))
-        clippedPath.move(to: CGPoint(x: 0, y: midY))
-
-        for x in stride(from: 0, through: size.width, by: 2) {
-            let relativeX = x / size.width
-            let wave = sin(relativeX * .pi * 4 + time * 2)
-
-            let cleanY = midY + wave * size.height * 0.35
-            cleanPath.addLine(to: CGPoint(x: x, y: cleanY))
-
-            let clippedWave = max(-0.6, min(0.6, wave * 1.5))
-            let clippedY = midY + clippedWave * size.height * 0.35
-            clippedPath.addLine(to: CGPoint(x: x, y: clippedY))
-        }
-
-        context.stroke(cleanPath, with: .color(.gray.opacity(0.4)), lineWidth: 1.5)
-        context.stroke(clippedPath, with: .color(color), lineWidth: 2)
-    }
-
-    private func drawModulationEffect(context: GraphicsContext, size: CGSize, midY: CGFloat, time: Double, color: Color) {
-        let colors: [Color] = [color.opacity(0.3), color.opacity(0.5), color]
-
-        for (i, c) in colors.enumerated() {
-            var path = Path()
-            let phaseOffset = Double(i) * 0.1
-            let pitchOffset = Double(i) * 0.05
-
-            path.move(to: CGPoint(x: 0, y: midY))
-
-            for x in stride(from: 0, through: size.width, by: 2) {
-                let relativeX = x / size.width
-                let modulatedFreq = 4.0 + sin(time * 3 + phaseOffset) * pitchOffset
-                let y = midY + sin(relativeX * .pi * modulatedFreq + time * 2 + phaseOffset) * size.height * 0.3
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
-
-            context.stroke(path, with: .color(c), lineWidth: i == 2 ? 2 : 1.5)
-        }
-    }
-
-    private func drawTimeEffect(context: GraphicsContext, size: CGSize, midY: CGFloat, time: Double, color: Color) {
-        let echoes = 4
-
-        for i in (0..<echoes).reversed() {
-            var path = Path()
-            let delay = Double(i) * 0.15
-            let fade = 1.0 - Double(i) * 0.25
-
-            path.move(to: CGPoint(x: 0, y: midY))
-
-            for x in stride(from: 0, through: size.width, by: 2) {
-                let relativeX = x / size.width
-                let y = midY + sin(relativeX * .pi * 4 + time * 2 - delay * 10) * size.height * 0.3 * fade
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
-
-            let strokeColor = i == 0 ? color : color.opacity(fade * 0.6)
-            context.stroke(path, with: .color(strokeColor), lineWidth: i == 0 ? 2 : 1.5)
-        }
-    }
-
-    private func drawFilterEffect(context: GraphicsContext, size: CGSize, midY: CGFloat, time: Double, color: Color) {
-        var fullPath = Path()
-        var filteredPath = Path()
-
-        fullPath.move(to: CGPoint(x: 0, y: midY))
-        filteredPath.move(to: CGPoint(x: 0, y: midY))
-
-        for x in stride(from: 0, through: size.width, by: 2) {
-            let relativeX = x / size.width
-
-            let low = sin(relativeX * .pi * 2 + time * 2) * 0.5
-            let mid = sin(relativeX * .pi * 6 + time * 2) * 0.3
-            let high = sin(relativeX * .pi * 16 + time * 2) * 0.2
-            let fullY = midY + (low + mid + high) * size.height * 0.3
-            fullPath.addLine(to: CGPoint(x: x, y: fullY))
-
-            let filteredY = midY + (low + mid * 0.5) * size.height * 0.3
-            filteredPath.addLine(to: CGPoint(x: x, y: filteredY))
-        }
-
-        context.stroke(fullPath, with: .color(.gray.opacity(0.4)), lineWidth: 1.5)
-        context.stroke(filteredPath, with: .color(color), lineWidth: 2)
-    }
-
-    private func drawGenericWaveform(context: GraphicsContext, size: CGSize, midY: CGFloat, time: Double, color: Color) {
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: midY))
-
-        for x in stride(from: 0, through: size.width, by: 2) {
-            let relativeX = x / size.width
-            let y = midY + sin(relativeX * .pi * 4 + time * 2) * size.height * 0.3
-            path.addLine(to: CGPoint(x: x, y: y))
-        }
-
-        context.stroke(path, with: .color(color), lineWidth: 2)
-    }
-}
-
 // MARK: - Glass Effect Card View
 
 struct GlassEffectCardView: View {
     let effect: EffectInfoModel
     let isExpanded: Bool
     var justAdded: Bool = false
-    var engine: AudioEngineManager? = nil
+    var engine: (any LearnEngine)? = nil
     let onTap: () -> Void
     var onTryEffect: ((EffectType) -> Void)? = nil
 
@@ -567,7 +382,7 @@ struct GlassEffectCardView: View {
 
 struct GlassEffectCardDetails: View {
     let effect: EffectInfoModel
-    var engine: AudioEngineManager? = nil
+    var engine: (any LearnEngine)? = nil
     var onTryEffect: ((EffectType) -> Void)? = nil
 
     var body: some View {
@@ -760,33 +575,6 @@ struct GlassEffectArtistsSection: View {
     }
 }
 
-// MARK: - Effects List View (Legacy)
-
-struct EffectsListView: View {
-    let effects: [any EffectInfoProviding]
-    @Binding var expandedEffectId: UUID?
-
-    var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(Array(effects.enumerated()), id: \.offset) { index, effect in
-                    if let effectModel = effect as? EffectInfoModel {
-                        GlassEffectCardView(
-                            effect: effectModel,
-                            isExpanded: expandedEffectId == effectModel.id
-                        ) {
-                            withAnimation(.spring(duration: 0.3)) {
-                                expandedEffectId = expandedEffectId == effectModel.id ? nil : effectModel.id
-                            }
-                        }
-                    }
-                }
-            }
-            .padding()
-        }
-    }
-}
-
 // MARK: - Preview
 
 #Preview {
@@ -804,7 +592,7 @@ struct EffectsListView: View {
 struct EffectAuditionPanel: View {
     let type: EffectType
     let tint: Color
-    @Bindable var engine: AudioEngineManager
+    let engine: any LearnEngine
 
     private var isAuditioning: Bool { engine.auditionEffect == type }
 

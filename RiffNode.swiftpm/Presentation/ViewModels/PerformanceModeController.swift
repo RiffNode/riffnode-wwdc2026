@@ -95,7 +95,7 @@ final class PerformanceModeController {
     // MARK: - Handle Gestures
 
     /// Handle a detected gesture and execute the bound action
-    func handleGesture(_ gesture: VisionGestureController.Gesture, engine: AudioEngineManager, presets: [EffectPreset] = []) {
+    func handleGesture(_ gesture: VisionGestureController.Gesture, engine: any EffectsChainManaging & ExpressionControlling, presets: [EffectPreset] = []) {
         guard isActive else { return }
 
         lastTriggeredGesture = gesture
@@ -107,7 +107,7 @@ final class PerformanceModeController {
     }
 
     /// Execute a specific action
-    private func executeAction(_ action: PerformanceGestureAction, engine: AudioEngineManager, presets: [EffectPreset]) {
+    private func executeAction(_ action: PerformanceGestureAction, engine: any EffectsChainManaging & ExpressionControlling, presets: [EffectPreset]) {
         switch action {
         case .toggleFirstEffect:
             if let firstEffect = engine.effectsChain.first {
@@ -147,18 +147,18 @@ final class PerformanceModeController {
     // MARK: - Wah/Expression Control
 
     /// Update wah position from mouth openness (0.0 to 1.0)
-    func updateWahPosition(_ value: Float, engine: AudioEngineManager) {
+    func updateWahPosition(_ value: Float, engine: any EffectsChainManaging & ExpressionControlling) {
         guard isActive else { return }
 
         wahPosition = value
 
-        // Apply wah effect via expression control
-        engine.setExpressionValue(value, for: .equalizer)
+        // The real wah: a resonant band-pass swept by the mouth
+        engine.setWah(value)
     }
 
     // MARK: - Bypass All
 
-    private func toggleBypassAll(engine: AudioEngineManager) {
+    private func toggleBypassAll(engine: any EffectsChainManaging & ExpressionControlling) {
         if allBypassed {
             // Restore previous states
             for effect in engine.effectsChain {
@@ -183,7 +183,7 @@ final class PerformanceModeController {
         }
     }
 
-    private func enableAllEffects(engine: AudioEngineManager) {
+    private func enableAllEffects(engine: any EffectsChainManaging & ExpressionControlling) {
         for effect in engine.effectsChain {
             if !effect.isEnabled {
                 engine.toggleEffect(effect)
@@ -194,7 +194,7 @@ final class PerformanceModeController {
 
     // MARK: - Momentary Boost
 
-    private func toggleMomentaryBoost(engine: AudioEngineManager) {
+    private func toggleMomentaryBoost(engine: any EffectsChainManaging & ExpressionControlling) {
         if isBoostActive {
             // Restore previous levels
             for effect in engine.effectsChain {

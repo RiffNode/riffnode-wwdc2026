@@ -15,7 +15,7 @@ import MediaPlayer
 
 @Observable
 @MainActor
-final class SystemMusicService {
+final class SystemMusicService: MusicAppControlling {
 
     /// Apple Music remote control is available (iPad; not on Mac).
     let canControlAppleMusic: Bool

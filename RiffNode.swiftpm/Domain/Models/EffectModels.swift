@@ -1,4 +1,4 @@
-import SwiftUI
+import Foundation
 import Observation
 
 // MARK: - Domain Models
@@ -29,15 +29,6 @@ enum EffectCategory: String, CaseIterable, Identifiable, Sendable {
         }
     }
     
-    var color: Color {
-        switch self {
-        case .dynamics: return .riffDynamics
-        case .filterPitch: return .riffFilter
-        case .gainDirt: return .riffGain
-        case .modulation: return .riffModulation
-        case .timeAmbience: return .riffAmbience
-        }
-    }
     
     var description: String {
         switch self {
@@ -134,21 +125,6 @@ enum EffectType: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
-    var color: Color {
-        switch self {
-        case .compressor: return .riffDynamics
-        case .equalizer: return .riffFilter
-        case .overdrive: return .riffGain
-        case .distortion: return .riffGain
-        case .fuzz: return Color(red: 0.7, green: 0.45, blue: 0.55) // Warm rose
-        case .chorus: return .riffModulation
-        case .phaser: return .riffModulation
-        case .flanger: return .riffModulation
-        case .tremolo: return Color(red: 0.65, green: 0.5, blue: 0.6) // Soft mauve
-        case .delay: return .riffAmbience
-        case .reverb: return .riffAmbience
-        }
-    }
 
     var defaultParameters: [String: Float] {
         switch self {
@@ -410,14 +386,6 @@ struct EffectPreset: Identifiable, Hashable {
         case heavy = "Heavy"
         case ambient = "Ambient"
 
-        var color: Color {
-            switch self {
-            case .clean: return .riffDynamics
-            case .crunch: return .riffGain
-            case .heavy: return Color(red: 0.7, green: 0.4, blue: 0.4)
-            case .ambient: return .riffAmbience
-            }
-        }
     }
 
     struct PresetEffect: Hashable {
@@ -445,13 +413,6 @@ struct AudioVisualizationData {
         inputLevel: 0,
         outputLevel: 0
     )
-}
-
-// MARK: - Waveform Sample (for Charts)
-
-struct WaveformSample: Identifiable {
-    let id: Int
-    let amplitude: Float
 }
 
 // MARK: - Audio Engine State

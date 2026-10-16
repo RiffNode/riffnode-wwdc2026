@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Preset Picker View
 
 struct PresetPickerView: View {
-    @Bindable var engine: AudioEngineManager
+    let engine: any EffectsChainManaging
     let presetService: PresetProviding
     @Environment(\.dismiss) private var dismiss
 

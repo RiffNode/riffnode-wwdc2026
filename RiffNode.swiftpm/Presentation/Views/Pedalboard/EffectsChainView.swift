@@ -4,7 +4,7 @@ import SwiftUI
 // Liquid Glass UI Design - iOS 26+
 
 struct EffectsChainView: View {
-    @Bindable var engine: AudioEngineManager
+    let engine: any PedalboardEngine
     /// Selection is kept by ID and resolved against the live chain: presets and the AI
     /// replace every node, and editing a stale node would change nothing you can hear.
     @State private var selectedEffectID: UUID?
@@ -137,7 +137,7 @@ struct EffectsChainView: View {
 // MARK: - Glass Signal Chain View
 
 struct GlassSignalChainView: View {
-    @Bindable var engine: AudioEngineManager
+    let engine: any PedalboardEngine
     @Binding var selectedEffect: EffectNode?
 
     var body: some View {
@@ -334,7 +334,7 @@ struct PedalboardCable: View {
 
 struct GlassPedalControlsView: View {
     @Bindable var effect: EffectNode
-    let engine: AudioEngineManager
+    let engine: any PedalboardEngine
     /// Narrow column next to the Signal Lab: knobs wrap onto more rows.
     var isCompact = false
     @State private var showingInfo = false

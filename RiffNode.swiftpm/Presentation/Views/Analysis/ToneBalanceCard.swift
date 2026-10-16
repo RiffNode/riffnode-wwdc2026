@@ -5,30 +5,27 @@ import SwiftUI
 // talk about – bass, body, mids, bite, air), what that means, and a one-tap EQ move to act on it.
 
 struct ToneBalanceCard: View {
-    let fftAnalyzer: FFTAnalyzer
-    @Bindable var engine: AudioEngineManager
+    @State private var viewModel: ToneBalanceViewModel
 
-    /// The region shown as "where your sound sits". Held steady with hysteresis so the
-    /// legend and advice don't flicker between neighbouring regions every frame.
-    @State private var stableRegion: FrequencyRegion?
-    @State private var candidate: (region: FrequencyRegion, since: Date)?
-    @State private var appliedRegion: FrequencyRegion?
+    init(fftAnalyzer: any SpectrumProviding, engine: any ToneBalanceEngine) {
+        _viewModel = State(initialValue: ToneBalanceViewModel(engine: engine, analyzer: fftAnalyzer))
+    }
 
-    private var isHearingSound: Bool { engine.inputLevel > 0.01 }
+    private var region: FrequencyRegion? { viewModel.region }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: Spacing.md) {
-                Image(systemName: stableRegion == nil ? "ear" : "lightbulb.max.fill")
+                Image(systemName: region == nil ? "ear" : "lightbulb.max.fill")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(stableRegion?.color ?? .secondary)
+                    .foregroundStyle(region?.color ?? .secondary)
                     .frame(width: 42, height: 42)
-                    .glassEffect(.regular.tint((stableRegion?.color ?? .gray).opacity(0.15)), in: Circle())
+                    .glassEffect(.regular.tint((region?.color ?? .gray).opacity(0.15)), in: Circle())
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(stableRegion?.insight.title ?? "Tone balance")
+                    Text(region?.insight.title ?? "Tone balance")
                         .font(.headline)
-                    Text(stableRegion?.insight.detail ?? "Play your guitar, or start the demo riff, and RiffNode will tell you where your sound sits – and how to shape it.")
+                    Text(region?.insight.detail ?? "Play your guitar, or start the demo riff, and RiffNode will tell you where your sound sits – and how to shape it.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -37,76 +34,49 @@ struct ToneBalanceCard: View {
 
                 Spacer(minLength: 0)
 
-                if let region = stableRegion {
-                    Button {
-                        engine.applyToneSuggestion(region.suggestion)
-                        appliedRegion = region
-                    } label: {
-                        Label(appliedRegion == region ? "Applied" : region.suggestion.label,
-                              systemImage: appliedRegion == region ? "checkmark" : "wand.and.stars")
+                if let region {
+                    let applied = viewModel.appliedRegion == region
+                    Button(action: viewModel.applySuggestion) {
+                        Label(applied ? "Applied" : region.suggestion.label,
+                              systemImage: applied ? "checkmark" : "wand.and.stars")
                     }
                     .buttonStyle(.glassProminent)
                     .tint(region.color)
-                    .disabled(appliedRegion == region)
-                } else if engine.canPlayDemoRiff && !engine.isDemoRiffPlaying {
-                    Button("Play demo riff", systemImage: "play.fill") { engine.startDemoRiff() }
+                    .disabled(applied)
+                } else if viewModel.canOfferDemo {
+                    Button("Play demo riff", systemImage: "play.fill", action: viewModel.playDemo)
                         .buttonStyle(.glass)
                 }
             }
 
             // The five ranges, with the one your sound sits in lit up
             HStack(spacing: 6) {
-                ForEach(FrequencyRegion.allCases, id: \.self) { region in
-                    let isDominant = region == stableRegion
+                ForEach(FrequencyRegion.allCases, id: \.self) { range in
+                    let isDominant = range == region
                     VStack(spacing: 2) {
-                        Text(region.name)
+                        Text(range.name)
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(isDominant ? region.color : .primary)
-                        Text(region.feel)
+                            .foregroundStyle(isDominant ? range.color : .primary)
+                        Text(range.feel)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                        Text(region.rangeLabel)
+                        Text(range.rangeLabel)
                             .font(.system(size: 9).monospacedDigit())
                             .foregroundStyle(.tertiary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
-                    .background(region.color.opacity(isDominant ? 0.18 : 0.05), in: RoundedRectangle(cornerRadius: 8))
+                    .background(range.color.opacity(isDominant ? 0.18 : 0.05), in: RoundedRectangle(cornerRadius: 8))
                 }
             }
         }
         .padding(Spacing.md)
-        .glassEffect(.regular.tint((stableRegion?.color ?? .gray).opacity(0.08)), in: RoundedRectangle(cornerRadius: CornerRadius.xl))
-        .animation(.smooth(duration: 0.3), value: stableRegion)
-        .onChange(of: fftAnalyzer.logMagnitudes) { _, _ in updateStableRegion() }
-        .onChange(of: isHearingSound) { _, hearing in
-            if !hearing { stableRegion = nil; candidate = nil }
-        }
-        .onChange(of: stableRegion) { _, _ in appliedRegion = nil }
-    }
-
-    /// Switch only when another region is clearly louder (+0.03) for at least 0.6 s.
-    private func updateStableRegion() {
-        guard isHearingSound, let loudest = FrequencyRegion.dominant(in: fftAnalyzer) else { return }
-        guard let current = stableRegion else {
-            stableRegion = loudest
-            return
-        }
-        guard loudest != current,
-              loudest.level(in: fftAnalyzer) > current.level(in: fftAnalyzer) + 0.03 else {
-            candidate = nil
-            return
-        }
-        if let candidate, candidate.region == loudest {
-            if Date().timeIntervalSince(candidate.since) > 0.6 {
-                stableRegion = loudest
-                self.candidate = nil
-            }
-        } else {
-            candidate = (loudest, Date())
-        }
+        .glassEffect(.regular.tint((region?.color ?? .gray).opacity(0.08)), in: RoundedRectangle(cornerRadius: CornerRadius.xl))
+        .animation(.smooth(duration: 0.3), value: region)
+        .onChange(of: viewModel.analyzer.logMagnitudes) { _, _ in viewModel.spectrumDidUpdate() }
+        .onChange(of: viewModel.isHearingSound) { _, _ in viewModel.spectrumDidUpdate() }
     }
 }
 
@@ -178,7 +148,7 @@ enum FrequencyRegion: CaseIterable {
 
     /// Average level of a region on the analyzer's log spectrum (0–1).
     @MainActor
-    func level(in analyzer: FFTAnalyzer) -> Float {
+    func level(in analyzer: any SpectrumProviding) -> Float {
         let values = zip(analyzer.logFrequencies, analyzer.logMagnitudes)
             .filter { range.contains($0.0) }
             .map(\.1)
@@ -187,7 +157,7 @@ enum FrequencyRegion: CaseIterable {
     }
 
     @MainActor
-    static func dominant(in analyzer: FFTAnalyzer) -> FrequencyRegion? {
+    static func dominant(in analyzer: any SpectrumProviding) -> FrequencyRegion? {
         guard !analyzer.logMagnitudes.isEmpty else { return nil }
         return allCases.max { $0.level(in: analyzer) < $1.level(in: analyzer) }
     }
@@ -195,13 +165,6 @@ enum FrequencyRegion: CaseIterable {
 
 
 // MARK: - Suggestions
-
-/// One EQ move: a band of the 10-band EQ and how far to push it.
-struct ToneSuggestion: Equatable {
-    let band: Int
-    let gain: Float
-    let label: String
-}
 
 extension FrequencyRegion {
     /// The EQ move the insight recommends (bands: 32, 64, 125, 250, 500, 1k, 2k, 4k, 8k, 16k Hz).

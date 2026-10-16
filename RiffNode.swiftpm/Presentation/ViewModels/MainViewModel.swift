@@ -32,7 +32,7 @@ final class MainViewModel {
 
     // MARK: - Dependencies
 
-    let engine: AudioEngineManager
+    let engine: any AudioManaging
     let presetService: PresetProviding
 
     let fftAnalyzer = FFTAnalyzer()
@@ -59,7 +59,7 @@ final class MainViewModel {
     @ObservationIgnored private var lastSuggestedChord = ""
     @ObservationIgnored private var chordSuggestionTask: Task<Void, Never>?
 
-    init(engine: AudioEngineManager, presetService: PresetProviding) {
+    init(engine: any AudioManaging, presetService: PresetProviding) {
         self.engine = engine
         self.presetService = presetService
     }

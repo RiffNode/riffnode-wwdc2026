@@ -302,7 +302,7 @@ private struct NotchTile<Content: View>: View {
 }
 
 private struct NotchTunerTile: View {
-    let detector: ChordDetector
+    let detector: any ChordDetecting
 
     var body: some View {
         let hasNote = detector.detectedNote != "—"
@@ -346,7 +346,7 @@ private struct NotchTunerTile: View {
 }
 
 private struct NotchMetersTile: View {
-    let engine: AudioEngineManager
+    let engine: any StatusEngine
 
     var body: some View {
         NotchTile {

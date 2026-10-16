@@ -50,8 +50,8 @@ final class SignalLabModel {
 
     // MARK: - Update
 
-    func update(from store: SignalProbeStore) {
-        let (before, after) = store.snapshot()
+    func update(from snapshot: (before: SignalCapture, after: SignalCapture)) {
+        let (before, after) = snapshot
         guard before.samples.count >= fftSize, after.samples.count >= fftSize else {
             isSilent = true
             return

@@ -5,7 +5,7 @@ import SwiftUI
 // An interactive 3-minute educational experience about guitar effects
 
 struct GuidedTourView: View {
-    @Bindable var engine: AudioEngineManager
+    let engine: any EffectsChainManaging
     let onComplete: () -> Void
 
     @State private var currentStep = 0
@@ -571,34 +571,6 @@ struct GlassSignalChainDiagram: View {
 }
 
 // MARK: - Legacy Button Styles (for compatibility)
-
-struct PrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline)
-            .foregroundStyle(.white)
-            .frame(minWidth: 160)
-            .padding(.vertical, 14)
-            .background(
-                LinearGradient(
-                    colors: [.cyan, .cyan.opacity(0.8)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .clipShape(Capsule())
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(duration: 0.2), value: configuration.isPressed)
-    }
-}
-
-struct SecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(duration: 0.2), value: configuration.isPressed)
-    }
-}
 
 // MARK: - Preview
 

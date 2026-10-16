@@ -13,7 +13,7 @@ struct MainInterfaceView: View {
         containerWidth < 1100 ? 320 : 380
     }
 
-    init(engine: AudioEngineManager, presetService: PresetProviding) {
+    init(engine: any AudioManaging, presetService: PresetProviding) {
         _viewModel = State(initialValue: MainViewModel(engine: engine, presetService: presetService))
     }
 
@@ -42,7 +42,7 @@ struct MainInterfaceView: View {
                             InputSourceCard(engine: engine, chordDetector: viewModel.chordDetector)
 
                             // Play along with a song
-                            BackingTrackView(engine: engine)
+                            BackingTrackView(player: engine.playAlong)
 
                             GestureControlPill(
                                 controller: viewModel.gestureController,

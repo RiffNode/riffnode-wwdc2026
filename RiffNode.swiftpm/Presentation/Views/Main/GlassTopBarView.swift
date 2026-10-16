@@ -3,12 +3,12 @@ import SwiftUI
 // MARK: - Glass Top Bar View
 
 struct GlassTopBarView: View {
-    @Bindable var engine: AudioEngineManager
-    let chordDetector: ChordDetector?
+    let engine: any AudioEngineControlling
+    let chordDetector: (any ChordDetecting)?
     @Binding var showingSettings: Bool
     @Binding var showingPresets: Bool
 
-    init(engine: AudioEngineManager, chordDetector: ChordDetector? = nil, showingSettings: Binding<Bool>, showingPresets: Binding<Bool>) {
+    init(engine: any AudioEngineControlling, chordDetector: (any ChordDetecting)? = nil, showingSettings: Binding<Bool>, showingPresets: Binding<Bool>) {
         self.engine = engine
         self.chordDetector = chordDetector
         self._showingSettings = showingSettings

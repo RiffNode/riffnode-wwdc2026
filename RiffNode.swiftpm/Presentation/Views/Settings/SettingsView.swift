@@ -4,7 +4,7 @@ import SwiftUI
 // Apple-style settings with proper section grouping and professional appearance
 
 struct SettingsView: View {
-    @Bindable var engine: AudioEngineManager
+    let engine: any StatusEngine
     @Environment(\.dismiss) private var dismiss
 
     @State private var showResetConfirmation = false
@@ -295,37 +295,3 @@ private struct SettingsInfoRow: View {
     }
 }
 
-// MARK: - Settings Section Header
-
-private struct SettingsSectionHeader: View {
-    let title: String
-
-    init(_ title: String) { self.title = title }
-
-    var body: some View {
-        Text(title.uppercased())
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(.secondary)
-            .padding(.bottom, Spacing.xs)
-    }
-}
-
-// MARK: - Glass Status Row
-
-struct GlassStatusRow: View {
-    let label: String
-    let value: String
-    let isPositive: Bool
-
-    var body: some View {
-        LabeledContent(label) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(isPositive ? .green : .red)
-                    .frame(width: 8, height: 8)
-                Text(value)
-                    .foregroundStyle(isPositive ? .green : .red)
-            }
-        }
-    }
-}

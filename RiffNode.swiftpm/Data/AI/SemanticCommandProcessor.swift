@@ -139,14 +139,6 @@ extension FallbackToneParameters {
     }
 }
 
-/// Fallback effect recommendation when Foundation Models unavailable
-struct FallbackEffectRecommendation: Sendable {
-    var commandMode: String = "preset"
-    var enabledEffects: [String] = ["distortion", "reverb"]
-    var disabledEffects: [String] = []
-    var parameters: FallbackToneParameters = FallbackToneParameters()
-}
-
 // MARK: - Semantic Command Processor
 
 /// Processes natural language commands into DSP parameters using Foundation Models
@@ -992,7 +984,7 @@ final class SemanticCommandProcessor {
     // MARK: - Apply to Engine
 
     /// Apply the last recommendation to the audio engine
-    func applyToEngine(_ engine: AudioEngineManager) {
+    func applyToEngine(_ engine: any EffectsChainManaging) {
         guard lastCommandMode != "chat", let params = lastParameters else { return }
 
         // Ensure every effect the AI wants to enable actually exists in the chain.
@@ -1293,7 +1285,7 @@ final class SemanticCommandProcessor {
         }
     }
 
-    private func applyParameters(to effect: EffectNode, params: FallbackToneParameters, engine: AudioEngineManager) {
+    private func applyParameters(to effect: EffectNode, params: FallbackToneParameters, engine: any EffectsChainManaging) {
         switch effect.type {
         case .reverb:
             engine.updateEffectParameter(effect, key: "wetDryMix", value: Float(params.reverbMix))

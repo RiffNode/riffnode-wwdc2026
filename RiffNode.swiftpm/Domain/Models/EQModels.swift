@@ -1,5 +1,4 @@
-import SwiftUI
-import AVFoundation
+import Foundation
 
 // MARK: - EQ Band Model
 
@@ -38,25 +37,7 @@ struct EQBand: Identifiable, Equatable {
             }
         }
 
-        var audioUnitFilterType: AVAudioUnitEQFilterType {
-            switch self {
-            case .highPass: return .highPass
-            case .lowShelf: return .lowShelf
-            case .peak: return .parametric
-            case .highShelf: return .highShelf
-            case .lowPass: return .lowPass
-            }
-        }
 
-        var color: Color {
-            switch self {
-            case .highPass: return .red
-            case .lowShelf: return .orange
-            case .peak: return .green
-            case .highShelf: return .cyan
-            case .lowPass: return .purple
-            }
-        }
     }
 
     // 10-band frequencies: 32, 64, 125, 250, 500, 1k, 2k, 4k, 8k, 16k

@@ -161,61 +161,63 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 
 ## Architecture
 
-RiffNode follows **MVVM** inside a **Clean Architecture** layout: views render state, view models own feature logic, and services sit behind protocols.
+RiffNode follows **MVVM** inside a **Clean Architecture** layout. Dependencies point inward: Presentation and Data both depend on Domain, never on each other's concrete types.
 
 ```mermaid
 graph TD
     subgraph Presentation
         V[SwiftUI Views]
-        VM[View Models<br/>MainViewModel · RiffNotchController · SetupViewModel]
+        VM[View Models<br/>MainViewModel · PlayAlongViewModel · ToneBalanceViewModel<br/>SignalLabModel · AIChatbotController · RiffNotchController]
     end
 
     subgraph Domain
-        M[Models<br/>EffectType · EffectNode · EffectPreset · EQBand]
-        P[Protocols<br/>AudioManaging · PresetProviding]
+        M[Models<br/>EffectType · EffectNode · EQBand · SignalCapture · ToneSuggestion]
+        P[Protocols<br/>AudioEngineControlling · EffectsChainManaging · EqualizerControlling<br/>DemoRiffPlaying · SignalProbing · BackingTrackManaging · ChordDetecting …]
     end
 
     subgraph Data
         AE[AudioEngineManager]
+        BT[BackingTrackPlayer · DemoRiffPlayer · EffectUnitsContainer · DSP]
         AN[FFTAnalyzer · ChordDetector]
-        VS[VisionGestureController]
-        AI[SemanticCommandProcessor]
-        PS[PresetService]
+        AI[SemanticCommandProcessor · ToneRecipeBook]
+        SV[SystemMusicService · PresetService · VisionGestureController]
     end
 
     V --> VM
+    V --> P
     VM --> P
-    VM --> AN
-    VM --> VS
-    VM --> AI
     AE -.implements.-> P
-    PS -.implements.-> P
-    AE --> M
-    PS --> M
+    BT -.implements.-> P
+    AN -.implements.-> P
+    SV -.implements.-> P
+    AE --> BT
+    P --> M
 ```
 
 ```
 RiffNode.swiftpm/
-├── App/                    Entry point and root router (Welcome → Tour → Main)
-├── Domain/
-│   ├── Models/             Effect, preset, EQ and analysis models
-│   └── Protocols/          AudioManaging, EffectsChainManaging, PresetProviding …
+├── App/                    Composition root: creates the engine, routes Welcome → Tour → Main
+├── Domain/                 Pure Swift (Foundation only)
+│   ├── Models/             Effects, presets, EQ, signal captures, input devices, learning content
+│   └── Protocols/          One protocol per capability (engine, chain, EQ, demo riff, probe, play-along …)
 ├── Data/
-│   ├── Audio/              AudioEngineManager, DemoRiffSynthesizer, JamTrackSynthesizer, DSP/
-│   ├── Analysis/           FFTAnalyzer, ChordDetector
-│   ├── Vision/             VisionGestureController
-│   ├── AI/                 SemanticCommandProcessor
-│   └── Presets/ · Learning/
+│   ├── Audio/              AudioEngineManager (graph) · BackingTrackPlayer · DemoRiffPlayer
+│   │                       EffectUnitsContainer · synthesizers · DSP/ (custom Audio Unit)
+│   ├── Analysis/           FFTAnalyzer, ChordDetector, SignalProbe
+│   ├── AI/                 SemanticCommandProcessor, ToneRecipeBook
+│   ├── Playback/           SystemMusicService (Apple Music)
+│   ├── Vision/ · Presets/ · Learning/
 ├── Presentation/
-│   ├── ViewModels/         MainViewModel, RiffNotchController, SetupViewModel …
-│   ├── Views/              One folder per feature: Main, Notch, Pedalboard, EQ, AI, Learn …
-│   └── DesignSystem/       Spacing and color tokens, glass components, NotchShape
+│   ├── ViewModels/         Feature view models + EngineRequirements (what each screen may use)
+│   ├── Views/              One folder per feature: Main, Pedalboard, EQ, Learn, AI, Notch …
+│   └── DesignSystem/       Tokens, glass components, NotchShape, DomainColors
 └── Core/Extensions/
 ```
 
-- **Single responsibility** – each view model owns one feature (`MainViewModel`, `EffectsChainViewModel`, `BackingTrackViewModel`…).
-- **Dependency inversion** – views and view models depend on protocols such as `AudioManaging`, not on concrete engines.
-- **Isolated infrastructure** – audio, vision and AI live in their own services and communicate through observable state.
+- **Interface segregation** – the engine is exposed as small capability protocols. Each screen declares what it needs in `EngineRequirements` (for example `SignalLabEngine = AudioEngineControlling & DemoRiffPlaying & SignalProbing & EffectsChainManaging`), so a view can't reach anything else.
+- **Dependency inversion** – views and view models hold `any …` protocol types; only `ContentView`, the composition root, creates `AudioEngineManager`.
+- **A UI-free Domain** – colours live in `Presentation/DesignSystem/DomainColors.swift` and AVFoundation mappings in `Data`, so `Domain` imports only Foundation.
+- **Single responsibility** – play-along, the demo riff and the effect units are their own classes; feature rules (which mode stops what, tone-balance hysteresis) live in view models, not views.
 
 ## Getting started
 

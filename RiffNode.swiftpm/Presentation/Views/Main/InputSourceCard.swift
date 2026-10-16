@@ -6,8 +6,8 @@ import SwiftUI
 // What the pedals do to the signal is shown in the Signal Lab, next to the pedals.
 
 struct InputSourceCard: View {
-    @Bindable var engine: AudioEngineManager
-    let chordDetector: ChordDetector
+    let engine: any InputEngine
+    let chordDetector: any ChordDetecting
 
     enum Source: Hashable { case guitar, demo }
 

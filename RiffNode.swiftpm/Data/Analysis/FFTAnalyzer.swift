@@ -1,6 +1,7 @@
 import Accelerate
 import AVFoundation
-import SwiftUI
+import Foundation
+import Observation
 
 // MARK: - FFT Analyzer
 // Real-time Fast Fourier Transform for frequency spectrum analysis
@@ -8,7 +9,7 @@ import SwiftUI
 
 @Observable
 @MainActor
-final class FFTAnalyzer {
+final class FFTAnalyzer: SpectrumProviding {
 
     // MARK: - Configuration
 

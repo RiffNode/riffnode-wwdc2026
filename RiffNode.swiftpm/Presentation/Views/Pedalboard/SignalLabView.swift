@@ -7,13 +7,13 @@ import SwiftUI
 
 struct SignalLabView: View {
     @Bindable var effect: EffectNode
-    let engine: AudioEngineManager
+    let engine: any SignalLabEngine
 
     @State private var model = SignalLabModel()
     @State private var probeID = UUID()
     @State private var lens: SignalLens
 
-    init(effect: EffectNode, engine: AudioEngineManager) {
+    init(effect: EffectNode, engine: any SignalLabEngine) {
         self.effect = effect
         self.engine = engine
         _lens = State(initialValue: effect.type.primaryLens)
@@ -37,7 +37,7 @@ struct SignalLabView: View {
             engine.probe(effect.type, owner: probeID)
             model.clear()
             while !Task.isCancelled {
-                model.update(from: engine.signalProbe)
+                model.update(from: engine.probeSnapshot())
                 try? await Task.sleep(for: .milliseconds(66))
             }
         }

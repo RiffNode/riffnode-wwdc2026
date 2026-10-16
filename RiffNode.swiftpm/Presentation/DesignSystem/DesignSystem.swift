@@ -422,7 +422,6 @@ struct GlassTabBar<Tab: Hashable & CaseIterable & Sendable>: View where Tab: Raw
     }
 }
 
-
 // MARK: - Glass Status Indicator
 
 /// A minimal glass status indicator (online/offline/loading)
@@ -619,23 +618,6 @@ extension Color {
     static let timeColor = Color.blue.opacity(0.8)
 }
 
-// MARK: - Conditional Glass Modifier
-
-/// A view modifier that conditionally applies a glass effect
-struct ConditionalGlassModifier<S: Shape>: ViewModifier {
-    let isEnabled: Bool
-    let shape: S
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if isEnabled {
-            content.glassEffect(.regular, in: shape)
-        } else {
-            content
-        }
-    }
-}
-
 // MARK: - View Extensions
 
 extension View {
@@ -665,25 +647,6 @@ extension View {
 // - .buttonStyle(.borderedProminent) - Solid action button
 
 // MARK: - Segment Slider
-
-/// A Liquid Glass segmented slider using native iOS Picker
-/// In iOS 26, Picker automatically uses Liquid Glass styling with drag support
-struct GlassSegmentSlider<T: Hashable & CaseIterable, Content: View>: View where T.AllCases: RandomAccessCollection {
-    @Binding var selection: T
-    let options: T.AllCases
-    @ViewBuilder let content: (T) -> Content
-
-    var body: some View {
-        Picker("", selection: $selection) {
-            ForEach(Array(options.enumerated()), id: \.offset) { _, option in
-                content(option)
-                    .tag(option)
-            }
-        }
-        .pickerStyle(.segmented)
-    }
-}
-
 
 // MARK: - Preview
 

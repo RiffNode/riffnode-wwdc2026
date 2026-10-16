@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Welcome View
 
 struct WelcomeView: View {
-    @Bindable var engine: AudioEngineManager
+    let engine: any AudioEngineControlling
     let onStartTour: () -> Void
     let onSkipToMain: () -> Void
 

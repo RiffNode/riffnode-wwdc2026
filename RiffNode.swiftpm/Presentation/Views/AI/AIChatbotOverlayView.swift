@@ -6,7 +6,7 @@ import Observation
 struct AIChatbotOverlayView: View {
     @Bindable var controller: AIChatbotController
     let processor: SemanticCommandProcessor
-    let engine: AudioEngineManager
+    let engine: any EffectsChainManaging
     @Binding var isExpanded: Bool
 
     @State private var isMinimized = false

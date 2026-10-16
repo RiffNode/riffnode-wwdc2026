@@ -54,11 +54,11 @@ final class SetupViewModel {
 
     // MARK: - Dependencies
 
-    private let audioEngine: AudioEngineProtocol
+    private let audioEngine: AudioEngineControlling
 
     // MARK: - Initialization
 
-    init(audioEngine: AudioEngineProtocol) {
+    init(audioEngine: AudioEngineControlling) {
         self.audioEngine = audioEngine
     }
 

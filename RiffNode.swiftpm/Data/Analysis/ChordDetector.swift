@@ -1,6 +1,7 @@
 import Accelerate
 import AVFoundation
-import SwiftUI
+import Foundation
+import Observation
 
 // MARK: - Chord Detector
 // Real-time pitch detection and chord recognition using autocorrelation
@@ -8,7 +9,7 @@ import SwiftUI
 
 @Observable
 @MainActor
-final class ChordDetector {
+final class ChordDetector: ChordDetecting {
 
     // MARK: - Output
 

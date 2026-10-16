@@ -10,30 +10,21 @@ final class SignalProbeStore: @unchecked Sendable {
 
     enum Side: Int, Sendable { case before = 0, after = 1 }
 
-    struct Capture: Sendable {
-        /// The latest raw samples (mono).
-        var samples: [Float] = []
-        /// RMS of each 512-sample block – about 11 ms each, a few seconds in all.
-        var envelope: [Float] = []
-        /// Engine sample time of the last sample, used to line the two sides up.
-        var endSampleTime: Int64 = 0
-        var sampleRate: Double = 48_000
-    }
 
     static let sampleCount = 4096
     static let envelopeBlock = 512
     static let envelopeCount = 300
 
-    private let state = OSAllocatedUnfairLock(initialState: [Capture(), Capture()])
+    private let state = OSAllocatedUnfairLock(initialState: [SignalCapture(), SignalCapture()])
     /// Leftover samples that didn't fill a whole envelope block yet, per side.
     private let pending = OSAllocatedUnfairLock(initialState: [[Float](), [Float]()])
 
     func reset() {
-        state.withLock { $0 = [Capture(), Capture()] }
+        state.withLock { $0 = [SignalCapture(), SignalCapture()] }
         pending.withLock { $0 = [[], []] }
     }
 
-    func snapshot() -> (before: Capture, after: Capture) {
+    func snapshot() -> (before: SignalCapture, after: SignalCapture) {
         state.withLock { ($0[0], $0[1]) }
     }
 

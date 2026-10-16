@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Fullscreen pedalboard view for stage use with gesture control
 struct PerformanceModeView: View {
-    @Bindable var engine: AudioEngineManager
+    let engine: any PerformanceEngine
     @Bindable var gestureController: VisionGestureController
     @Bindable var controller: PerformanceModeController
     let presets: [EffectPreset]

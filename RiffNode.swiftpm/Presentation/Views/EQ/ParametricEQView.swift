@@ -5,9 +5,13 @@ import SwiftUI
 // Modern parametric equalizer with glass styling and smooth curves
 
 struct ParametricEQView: View {
-    @Bindable var engine: AudioEngineManager
+    let engine: any EqualizerControlling
+
+    private var eqBands: Binding<[EQBand]> {
+        Binding(get: { engine.parametricEQBands }, set: { engine.parametricEQBands = $0 })
+    }
     /// Live spectrum drawn behind the curve, so you can see which frequencies you are shaping.
-    var analyzer: FFTAnalyzer?
+    var analyzer: (any SpectrumProviding)?
     @State private var selectedBand: Int? = nil
     @State private var isAnalyzerActive = true
 
@@ -16,7 +20,7 @@ struct ParametricEQView: View {
             // Header with analyzer toggle and presets
             GlassEQHeader(
                 isAnalyzerActive: $isAnalyzerActive,
-                bands: $engine.parametricEQBands,
+                bands: eqBands,
                 onReset: {
                     engine.resetEQ()
                 }
@@ -49,7 +53,7 @@ struct ParametricEQView: View {
 
                     // Draggable band nodes - tap to select, drag to adjust
                     GlassEQBandNodes(
-                        bands: $engine.parametricEQBands,
+                        bands: eqBands,
                         selectedBand: $selectedBand
                     )
 
@@ -70,7 +74,7 @@ struct ParametricEQView: View {
 
             // Selected band controls - compact inline controls
             if let selected = selectedBand {
-                GlassEQBandControls(band: $engine.parametricEQBands[selected])
+                GlassEQBandControls(band: eqBands[selected])
                     .transition(.asymmetric(
                         insertion: .move(edge: .bottom).combined(with: .opacity),
                         removal: .opacity
@@ -85,7 +89,7 @@ struct ParametricEQView: View {
 // Draws the live FFT on the same log-frequency axis as the EQ curve.
 
 private struct EQSpectrumOverlay: View {
-    let analyzer: FFTAnalyzer
+    let analyzer: any SpectrumProviding
 
     var body: some View {
         Canvas { context, size in
@@ -246,50 +250,6 @@ struct GlassEQPresetPicker: View {
         }
         .frame(width: 280, height: 400)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16))
-    }
-}
-
-// MARK: - Spectrum Analyzer View
-
-struct SpectrumAnalyzerView: View {
-    @State private var levels: [CGFloat] = Array(repeating: 0, count: 32)
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 0.05)) { _ in
-            GeometryReader { geometry in
-                HStack(spacing: 2) {
-                    ForEach(0..<32, id: \.self) { index in
-                        let height = generateBarHeight(index: index)
-
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(
-                                LinearGradient(
-                                    colors: [.green.opacity(0.7), .green.opacity(0.2)],
-                                    startPoint: .bottom,
-                                    endPoint: .top
-                                )
-                            )
-                            .frame(height: height * geometry.size.height * 0.8)
-                            .frame(maxHeight: .infinity, alignment: .bottom)
-                    }
-                }
-                .padding(.horizontal, 30)
-                .padding(.bottom, 20)
-            }
-        }
-    }
-
-    private func generateBarHeight(index: Int) -> CGFloat {
-        let baseLevel = CGFloat.random(in: 0.1...0.6)
-        let frequencyWeight: CGFloat
-        if index < 8 {
-            frequencyWeight = 0.8
-        } else if index < 20 {
-            frequencyWeight = 1.0
-        } else {
-            frequencyWeight = 0.5
-        }
-        return baseLevel * frequencyWeight
     }
 }
 
@@ -622,66 +582,6 @@ struct GlassEQBandNodes: View {
     }
 }
 
-// MARK: - Glass EQ Band Strip
-
-struct GlassEQBandStrip: View {
-    @Binding var bands: [EQBand]
-    @Binding var selectedBand: Int?
-
-    var body: some View {
-        GlassEffectContainer(spacing: 4) {
-            ForEach(Array(bands.indices), id: \.self) { index in
-                let band = bands[index]
-                let isSelected = selectedBand == index
-
-                Button {
-                    withAnimation(.spring(duration: 0.2)) {
-                        selectedBand = selectedBand == index ? nil : index
-                    }
-                } label: {
-                    VStack(spacing: 2) {
-                        // Band number – selected gets a tinted glass circle
-                        ZStack {
-                            Circle()
-                                .fill(.clear)
-                                .frame(width: 20, height: 20)
-                                .glassEffect(
-                                    isSelected
-                                        ? .regular.tint(band.type.color)
-                                        : .regular.tint(band.type.color.opacity(0.2)),
-                                    in: Circle()
-                                )
-
-                            Text("\(index + 1)")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(isSelected ? .white : .primary)
-                        }
-
-                        // Frequency
-                        Text(formatFrequency(band.frequency))
-                            .font(.system(size: 8))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
-                }
-                .glassEffect(
-                    isSelected ? .regular.tint(band.type.color) : .regular,
-                    in: RoundedRectangle(cornerRadius: 8)
-                )
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private func formatFrequency(_ freq: Float) -> String {
-        if freq >= 1000 {
-            return String(format: "%.1fk", freq / 1000)
-        }
-        return "\(Int(freq))"
-    }
-}
-
 // MARK: - Glass EQ Band Controls
 
 struct GlassEQBandControls: View {
@@ -806,7 +706,6 @@ struct GlassEQBandControls: View {
         return String(format: "%.0f", freq)
     }
 }
-
 
 // MARK: - Preview
 

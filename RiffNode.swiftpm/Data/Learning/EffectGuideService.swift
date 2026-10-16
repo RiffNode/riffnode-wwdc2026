@@ -1,117 +1,4 @@
-import SwiftUI
-
-// MARK: - Effect Guide Data Layer
-// Following Clean Architecture: Separating Data from Presentation
-// Following Single Responsibility Principle: Each struct has one job
-// Following DRY Principle: Reusing EffectType educational content
-
-// MARK: - Protocols (Interface Segregation & Dependency Inversion)
-
-/// Protocol for providing effect information
-/// Following Interface Segregation: Small, focused protocol
-protocol EffectInfoProviding {
-    var name: String { get }
-    var icon: String { get }
-    var color: Color { get }
-    var function: String { get }
-    var sound: String { get }
-    var howToUse: String { get }
-    var signalChainPosition: String { get }
-    var famousUsers: String { get }
-}
-
-/// Protocol for effect categories
-/// Following Interface Segregation: Separate protocol for categories
-protocol EffectCategoryProviding {
-    var name: String { get }
-    var icon: String { get }
-    var color: Color { get }
-    var description: String { get }
-    var effects: [any EffectInfoProviding] { get }
-}
-
-/// Protocol for the effect guide service
-/// Following Dependency Inversion: Depend on abstraction, not concretion
-protocol EffectGuideServiceProtocol: Sendable {
-    var categories: [any EffectCategoryProviding] { get }
-    func category(for id: String) -> (any EffectCategoryProviding)?
-}
-
-// MARK: - Domain Models
-
-/// Effect information model
-/// Following Single Responsibility: Only holds effect data
-struct EffectInfoModel: EffectInfoProviding, Identifiable {
-    let id = UUID()
-    let name: String
-    let icon: String
-    let color: Color
-    let function: String
-    let sound: String
-    let howToUse: String
-    let signalChainPosition: String
-    let famousUsers: String
-    /// Non-nil when this effect is available in the app's pedalboard
-    let effectType: EffectType?
-
-    /// Initialize from EffectType - reusing existing educational content
-    /// Following DRY Principle
-    init(from effectType: EffectType) {
-        self.effectType = effectType
-        self.name = effectType.rawValue
-        self.icon = effectType.icon
-        self.color = effectType.color
-        self.function = effectType.effectDescription
-        self.sound = effectType.commonGenres.joined(separator: ", ")
-        self.howToUse = effectType.howToUse
-        self.signalChainPosition = effectType.signalChainPosition
-        self.famousUsers = effectType.famousExamples
-    }
-
-    /// Manual initialization for effects not in EffectType (educational-only)
-    init(name: String, icon: String, color: Color, function: String, sound: String, howToUse: String, signalChainPosition: String, famousUsers: String) {
-        self.effectType = nil
-        self.name = name
-        self.icon = icon
-        self.color = color
-        self.function = function
-        self.sound = sound
-        self.howToUse = howToUse
-        self.signalChainPosition = signalChainPosition
-        self.famousUsers = famousUsers
-    }
-}
-
-/// Effect category model
-/// Following Single Responsibility: Only holds category data
-struct EffectCategoryModel: EffectCategoryProviding, Identifiable {
-    let id: String
-    let name: String
-    let icon: String
-    let color: Color
-    let description: String
-    let effects: [any EffectInfoProviding]
-    
-    /// Initialize from EffectCategory - reusing existing data
-    init(from category: EffectCategory, effects: [any EffectInfoProviding]) {
-        self.id = category.rawValue.lowercased().replacingOccurrences(of: " ", with: "_")
-        self.name = category.rawValue
-        self.icon = category.icon
-        self.color = category.color
-        self.description = category.description
-        self.effects = effects
-    }
-    
-    /// Manual initialization
-    init(id: String, name: String, icon: String, color: Color, description: String, effects: [any EffectInfoProviding]) {
-        self.id = id
-        self.name = name
-        self.icon = icon
-        self.color = color
-        self.description = description
-        self.effects = effects
-    }
-}
+import Foundation
 
 // MARK: - Effect Guide Service
 // Following Single Responsibility: Only provides effect guide data
@@ -170,7 +57,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
         effects.append(EffectInfoModel(
             name: "Noise Gate",
             icon: "door.left.hand.closed",
-            color: .red,
+            tint: .red,
             function: "Cuts off the signal when volume drops below a threshold to eliminate hum or hiss.",
             sound: "Complete silence when you aren't playing. Tight, controlled stops.",
             howToUse: "Essential for high-gain metal tones to eliminate unwanted noise between riffs.",
@@ -181,7 +68,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
         effects.append(EffectInfoModel(
             name: "Boost",
             icon: "arrow.up.circle.fill",
-            color: .yellow,
+            tint: .yellow,
             function: "Increases volume without adding distortion (Clean Boost).",
             sound: "Louder, but clean. Can push amp into natural breakup.",
             howToUse: "Make solos stand out or push an amplifier into natural overdrive.",
@@ -192,7 +79,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
         effects.append(EffectInfoModel(
             name: "Volume Pedal",
             icon: "speaker.wave.3.fill",
-            color: .gray,
+            tint: .gray,
             function: "Controls master volume with your foot.",
             sound: "No tonal change - just volume control.",
             howToUse: "Great for 'swells' (fading in notes like a violin) or muting.",
@@ -218,7 +105,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
         effects.append(EffectInfoModel(
             name: "Wah-Wah",
             icon: "mouth.fill",
-            color: .purple,
+            tint: .purple,
             function: "A sweeping bandpass filter controlled by a foot treadle.",
             sound: "Mimics the human voice saying 'Wah.' Expressive and vocal-like.",
             howToUse: "Funk rhythms, expressive solos, or as a cocked (fixed) filter for unique tones.",
@@ -229,7 +116,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
         effects.append(EffectInfoModel(
             name: "Octave / Pitch Shifter",
             icon: "music.note",
-            color: .blue,
+            tint: .blue,
             function: "Adds a synthesized note an octave above or below what you play.",
             sound: "Makes guitar sound like a bass (octave down) or synthesizer.",
             howToUse: "Bass lines on guitar, thick synth-like tones, or harmonized leads.",
@@ -240,7 +127,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
         effects.append(EffectInfoModel(
             name: "Whammy",
             icon: "arrow.up.and.down",
-            color: .red,
+            tint: .red,
             function: "Pitch shifter controlled by treadle for dramatic pitch bends.",
             sound: "Dive-bombs, harmonized pitch shifts, crazy sound effects.",
             howToUse: "Extreme pitch bending without a tremolo bar.",
@@ -279,7 +166,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
         effects.append(EffectInfoModel(
             name: "Vibrato",
             icon: "waveform.path.ecg",
-            color: .purple,
+            tint: .purple,
             function: "Rhythmic fluctuation in PITCH (sharp-flat-sharp-flat).",
             sound: "Wobbly, seasick pitch modulation.",
             howToUse: "Adding expression, lo-fi textures, unique character.",
@@ -290,7 +177,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
         effects.append(EffectInfoModel(
             name: "Uni-Vibe",
             icon: "sun.max.fill",
-            color: .orange,
+            tint: .orange,
             function: "A vintage photo-optical vibrato/phaser effect. It uses a rotating light and photocells to create a warm, organic modulation quite different from a standard phaser.",
             sound: "Throbbing, psychedelic pulse. Warmer and more organic than a typical phaser.",
             howToUse: "Classic psychedelic tones, expressive leads. Associated with 60s/70s rock.",
@@ -319,7 +206,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
             EffectInfoModel(
                 name: "Tuner",
                 icon: "tuningfork",
-                color: .white,
+                tint: .white,
                 function: "Keeps your guitar in pitch.",
                 sound: "No sound change - mutes signal while tuning.",
                 howToUse: "Essential for staying in tune during performances.",
@@ -329,7 +216,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
             EffectInfoModel(
                 name: "Looper",
                 icon: "repeat.circle",
-                color: .green,
+                tint: .green,
                 function: "Records a phrase and plays it back endlessly.",
                 sound: "Layers of yourself playing together.",
                 howToUse: "Practice, jamming, live solo performances.",
@@ -339,7 +226,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
             EffectInfoModel(
                 name: "Buffer",
                 icon: "bolt.horizontal.fill",
-                color: .yellow,
+                tint: .yellow,
                 function: "Preserves signal strength and high frequencies.",
                 sound: "Restores clarity lost through long cables and many pedals.",
                 howToUse: "When using more than 5-6 pedals or long cable runs.",
@@ -352,7 +239,7 @@ final class EffectGuideService: EffectGuideServiceProtocol, @unchecked Sendable 
             id: "utility",
             name: "Utility",
             icon: "wrench.and.screwdriver",
-            color: .gray,
+            tint: .gray,
             description: "Essential tools that don't change the sound but are vital for function.",
             effects: effects
         )

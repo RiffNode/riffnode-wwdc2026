@@ -70,7 +70,7 @@ final class AIChatbotController {
         ))
     }
 
-    func sendMessage(_ text: String, processor: SemanticCommandProcessor, engine: AudioEngineManager) async {
+    func sendMessage(_ text: String, processor: SemanticCommandProcessor, engine: any EffectsChainManaging) async {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         messages.append(ChatMessage(role: .user, content: text))
@@ -132,7 +132,7 @@ final class AIChatbotController {
         isProcessing = false
     }
 
-    func applyEffects(from message: ChatMessage, processor: SemanticCommandProcessor, engine: AudioEngineManager) {
+    func applyEffects(from message: ChatMessage, processor: SemanticCommandProcessor, engine: any EffectsChainManaging) {
         guard message.appliedEffects != nil else { return }
         processor.applyToEngine(engine)
         if let index = messages.firstIndex(where: { $0.id == message.id }) {

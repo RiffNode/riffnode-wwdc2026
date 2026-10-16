@@ -10,33 +10,30 @@ import UniformTypeIdentifiers
 
 struct BackingTrackView: View {
 
-    @Bindable var engine: AudioEngineManager
-
-    enum Mode: String, CaseIterable, Identifiable {
-        case groove = "Groove", song = "Song", musicApp = "Music app"
-        var id: String { rawValue }
-    }
-
-    @State private var mode: Mode = .groove
-    @State private var music = SystemMusicService()
+    @State private var viewModel: PlayAlongViewModel
     @State private var isImporting = false
-    @State private var isLoading = false
-    /// Name shown while an imported file is still loading.
-    @State private var pendingTrackName: String?
     @State private var isDropTargeted = false
+
+    private var player: any BackingTrackManaging { viewModel.player }
+    private var music: any MusicAppControlling { viewModel.music }
+    private var isLoading: Bool { viewModel.isLoading }
+
+    init(player: any BackingTrackManaging, music: any MusicAppControlling = SystemMusicService()) {
+        _viewModel = State(initialValue: PlayAlongViewModel(player: player, music: music))
+    }
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
-            Picker("Play along with", selection: $mode) {
-                ForEach(Mode.allCases) { Text($0.rawValue).tag($0) }
+            Picker("Play along with", selection: $viewModel.mode) {
+                ForEach(PlayAlongViewModel.Mode.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            switch mode {
+            switch viewModel.mode {
             case .groove: grooveSection
             case .song: songSection
             case .musicApp: musicAppSection
@@ -51,16 +48,8 @@ struct BackingTrackView: View {
         ) { result in
             handleFileImport(result)
         }
-        .onChange(of: mode) { _, newMode in
-            // One thing at a time: leaving a mode stops what it was playing
-            switch newMode {
-            case .groove where !engine.isBuiltInJamTrack, .song where engine.isBuiltInJamTrack, .musicApp:
-                engine.stopBackingTrack()
-            default: break
-            }
-        }
-        .animation(.smooth(duration: 0.25), value: mode)
-        .animation(.smooth(duration: 0.25), value: engine.backingTrackName)
+        .animation(.smooth(duration: 0.25), value: viewModel.mode)
+        .animation(.smooth(duration: 0.25), value: player.backingTrackName)
     }
 
     private var header: some View {
@@ -83,31 +72,20 @@ struct BackingTrackView: View {
 
     // MARK: - Groove
 
-    private var isGroovePlaying: Bool { engine.isBuiltInJamTrack && engine.isBackingTrackPlaying }
-
-    /// The bar (0–3) the groove is on, so the matching chord lights up.
-    private var currentBar: Int? {
-        guard isGroovePlaying else { return nil }
-        let barSeconds = 240 / engine.grooveTempo
-        return Int(engine.backingTrackCurrentTime / barSeconds) % 4
-    }
-
     private var grooveSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                playButton(isPlaying: isGroovePlaying, label: "groove") {
-                    if isGroovePlaying { engine.stopBackingTrack() } else { playGroove() }
-                }
-                .disabled(!engine.canPlayDemoRiff)
+                playButton(isPlaying: viewModel.isGroovePlaying, label: "groove", action: viewModel.toggleGroove)
+                    .disabled(!player.isReady)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Menu {
-                        ForEach(JamTrackSynthesizer.keys, id: \.transpose) { key in
-                            Button(key.name) { restartGroove(transpose: key.transpose) }
+                        ForEach(viewModel.keys, id: \.transpose) { key in
+                            Button(key.name) { viewModel.setKey(transpose: key.transpose) }
                         }
                     } label: {
                         HStack(spacing: 4) {
-                            Text(JamTrackSynthesizer.keyName(transpose: engine.grooveTranspose))
+                            Text(viewModel.keyName)
                             Image(systemName: "chevron.up.chevron.down").font(.caption2)
                         }
                         .font(.subheadline.weight(.semibold))
@@ -117,7 +95,7 @@ struct BackingTrackView: View {
 
                     HStack(spacing: 6) {
                         tempoButton("minus", by: -4)
-                        Text("\(Int(engine.grooveTempo)) BPM")
+                        Text("\(Int(player.grooveTempo)) BPM")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(minWidth: 54)
@@ -129,8 +107,8 @@ struct BackingTrackView: View {
 
             // The progression – the chord you're on lights up
             HStack(spacing: 6) {
-                ForEach(Array(JamTrackSynthesizer.chords(transpose: engine.grooveTranspose).enumerated()), id: \.offset) { index, chord in
-                    let isCurrent = currentBar == index
+                ForEach(Array(viewModel.chords.enumerated()), id: \.offset) { index, chord in
+                    let isCurrent = viewModel.currentBar == index
                     Text(chord)
                         .font(.system(.callout, design: .rounded).weight(isCurrent ? .bold : .medium))
                         .frame(maxWidth: .infinity)
@@ -142,20 +120,16 @@ struct BackingTrackView: View {
                 }
             }
 
-            Label("Solo with \(JamTrackSynthesizer.scale(transpose: engine.grooveTranspose))", systemImage: "hand.point.up.left")
+            Label("Solo with \(viewModel.scale)", systemImage: "hand.point.up.left")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            if engine.isBuiltInJamTrack { volumeSlider }
+            if player.isBuiltInJamTrack { volumeSlider }
         }
     }
 
     private func tempoButton(_ symbol: String, by step: Double) -> some View {
-        Button {
-            let tempo = min(max(engine.grooveTempo + step, JamTrackSynthesizer.tempoRange.lowerBound),
-                            JamTrackSynthesizer.tempoRange.upperBound)
-            restartGroove(tempo: tempo)
-        } label: {
+        Button { viewModel.stepTempo(by: step) } label: {
             Image(systemName: symbol)
                 .font(.caption.weight(.bold))
                 .frame(width: 22, height: 22)
@@ -165,23 +139,11 @@ struct BackingTrackView: View {
         .accessibilityLabel(step > 0 ? "Faster" : "Slower")
     }
 
-    private func playGroove() {
-        guard (try? engine.loadBuiltInJamTrack()) != nil else { return }
-        engine.playBackingTrack()
-    }
-
-    /// Applies a new key or tempo; keeps playing if it was playing.
-    private func restartGroove(tempo: Double? = nil, transpose: Int? = nil) {
-        let wasPlaying = isGroovePlaying
-        guard engine.canPlayDemoRiff, (try? engine.loadBuiltInJamTrack(tempo: tempo, transpose: transpose)) != nil else { return }
-        if wasPlaying { engine.playBackingTrack() }
-    }
-
     // MARK: - Song
 
     @ViewBuilder
     private var songSection: some View {
-        if let name = (engine.isBuiltInJamTrack ? nil : engine.backingTrackName) ?? pendingTrackName {
+        if let name = viewModel.songName {
             songPlayer(trackName: name)
         } else {
             importDropZone
@@ -220,20 +182,18 @@ struct BackingTrackView: View {
         }
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }
-            importSong(from: url)
+            viewModel.importSong(from: url)
             return true
         } isTargeted: { isDropTargeted = $0 }
         .animation(.smooth(duration: 0.2), value: isDropTargeted)
-        .disabled(!engine.canPlayDemoRiff)
+        .disabled(!player.isReady)
         .accessibilityHint("Opens Files to choose a song")
     }
 
     private func songPlayer(trackName: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                playButton(isPlaying: engine.isBackingTrackPlaying, label: "song") {
-                    engine.isBackingTrackPlaying ? engine.stopBackingTrack() : engine.playBackingTrack()
-                }
+                playButton(isPlaying: player.isBackingTrackPlaying, label: "song", action: viewModel.toggleSong)
                 .disabled(isLoading)
 
                 Text(trackName)
@@ -245,7 +205,7 @@ struct BackingTrackView: View {
                 Menu {
                     Button("Import Another Song", systemImage: "square.and.arrow.down") { isImporting = true }
                     Button("Remove", systemImage: "xmark", role: .destructive) {
-                        engine.unloadBackingTrack()
+                        player.unloadBackingTrack()
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -256,19 +216,19 @@ struct BackingTrackView: View {
                 .accessibilityLabel("Song options")
             }
 
-            if engine.backingTrackDuration > 0 {
+            if player.backingTrackDuration > 0 {
                 TrackTimeline(
-                    currentTime: engine.backingTrackCurrentTime,
-                    duration: engine.backingTrackDuration,
-                    onSeek: { engine.seekBackingTrack(to: $0) }
+                    currentTime: player.backingTrackCurrentTime,
+                    duration: player.backingTrackDuration,
+                    onSeek: { player.seekBackingTrack(to: $0) }
                 )
             }
 
             volumeSlider
 
             Toggle(isOn: Binding(
-                get: { engine.backingTrackThroughEffects },
-                set: { _ in engine.toggleBackingTrackThroughEffects() }
+                get: { player.backingTrackThroughEffects },
+                set: { _ in player.toggleBackingTrackThroughEffects() }
             )) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Play through my pedals")
@@ -407,8 +367,8 @@ struct BackingTrackView: View {
                 .foregroundStyle(.secondary)
             Slider(
                 value: Binding(
-                    get: { engine.backingTrackVolume },
-                    set: { engine.setBackingTrackVolume($0) }
+                    get: { player.backingTrackVolume },
+                    set: { player.setBackingTrackVolume($0) }
                 ),
                 in: 0...1
             )
@@ -418,19 +378,7 @@ struct BackingTrackView: View {
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result, let url = urls.first else { return }
-        importSong(from: url)
-    }
-
-    private func importSong(from url: URL) {
-        isLoading = true
-        pendingTrackName = url.deletingPathExtension().lastPathComponent
-        Task { @MainActor in
-            let accessing = url.startAccessingSecurityScopedResource()
-            try? await engine.loadBackingTrack(url: url)
-            if accessing { url.stopAccessingSecurityScopedResource() }
-            isLoading = false
-            pendingTrackName = nil
-        }
+        viewModel.importSong(from: url)
     }
 }
 
@@ -514,7 +462,7 @@ struct TrackTimeline: View {
 #Preview {
     ZStack {
         AdaptiveBackground()
-        BackingTrackView(engine: AudioEngineManager())
+        BackingTrackView(player: BackingTrackPlayer())
             .padding()
             .frame(width: 400)
     }

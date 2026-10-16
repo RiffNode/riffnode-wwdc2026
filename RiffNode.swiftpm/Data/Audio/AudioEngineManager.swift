@@ -2,7 +2,6 @@ import AVFoundation
 import AudioToolbox
 import Observation
 import os
-import SwiftUI
 
 // MARK: - Audio Engine Manager
 // Following Clean Architecture: Infrastructure Layer
@@ -61,15 +60,12 @@ final class AudioEngineManager: AudioManaging {
     private(set) var currentPreset: EffectPreset?
     private(set) var presetApplyCount = 0
 
-    // MARK: - Backing Track (BackingTrackManaging)
 
-    private(set) var isBackingTrackPlaying = false
-    var backingTrackVolume: Float = 0.5
-    private(set) var backingTrackDuration: TimeInterval = 0
-    private(set) var backingTrackCurrentTime: TimeInterval = 0
-    private var backingTrackStartTime: Date?
-    private var backingTrackStartPosition: TimeInterval = 0
-    private var playbackUpdateTimer: Timer?
+    // MARK: - Play Along
+
+    /// The groove, imported songs – everything you play along with.
+    let backingTrack = BackingTrackPlayer()
+    var playAlong: any BackingTrackManaging { backingTrack }
 
     // MARK: - Private Audio Components
 
@@ -83,19 +79,10 @@ final class AudioEngineManager: AudioManaging {
     // Format conversion mixer - used to resolve incompatibility between input format and effect units
     private var formatConverterMixer: AVAudioMixerNode?
 
-    // Backing track
-    private var backingTrackPlayer: AVAudioPlayerNode?
-    private var backingTrackBuffer: AVAudioPCMBuffer?
 
     // Pre-effects mixer — both guitar and (optionally) backing track feed into this
     private var fxInputMixer: AVAudioMixerNode?
 
-    /// When true the backing track is routed through the full effects chain
-    private(set) var backingTrackThroughEffects: Bool = false
-    /// The loaded backing track is the synthesized groove rather than an imported song.
-    private(set) var isBuiltInJamTrack = false
-    /// Display name of the loaded backing track (nil when none is loaded).
-    private(set) var backingTrackName: String?
 
     // Audition – hear one effect on its own, A/B against the dry riff (Learn tab)
     private(set) var auditionEffect: EffectType?
@@ -103,15 +90,13 @@ final class AudioEngineManager: AudioManaging {
     @ObservationIgnored private var auditionSnapshot: (chain: [EffectNode], eqBands: [EQBand], startedDemo: Bool)?
 
     // Demo riff – a synthesized guitar that stands in for a real one
-    private(set) var isDemoRiffPlaying = false
-    private var demoRiffPlayer: AVAudioPlayerNode?
-    private var demoRiffBuffer: AVAudioPCMBuffer?
+    private let demoRiff = DemoRiffPlayer()
 
     // Visualization
     private var tapInstalled = false
 
     // Signal Lab – taps on both sides of one pedal
-    @ObservationIgnored let signalProbe = SignalProbeStore()
+    @ObservationIgnored private let signalProbe = SignalProbeStore()
     @ObservationIgnored private let outputLevelStore = OutputLevelStore()
     @ObservationIgnored private var probedNodes: [AVAudioNode] = []
     /// The pedal whose input and output the Signal Lab is watching.
@@ -275,11 +260,6 @@ final class AudioEngineManager: AudioManaging {
         attachAllEffects(to: engine, units: units)
         applyParametricEQ()
         
-        // Create and attach backing track player
-        let player = AVAudioPlayerNode()
-        backingTrackPlayer = player
-        engine.attach(player)
-
         // Use standard processing format to avoid format mismatch issues
         let format = AVAudioFormat(
             standardFormatWithSampleRate: inputFormat.sampleRate,
@@ -293,10 +273,13 @@ final class AudioEngineManager: AudioManaging {
         // Connect signal chain
         connectSignalChain(engine: engine, input: input, converter: converter, inputFormat: inputFormat, processingFormat: format)
         
-        // Connect backing track player to mixer
+        // Play-along player: dry into the main mixer, or through the pedals on request
         if let mixer = mainMixer {
-            engine.connect(player, to: mixer, format: format)
-            print("setupEngine: Backing track player connected")
+            backingTrack.attach(to: engine, dryOutput: mixer, effectsInput: fxMixer, format: format)
+            demoRiff.attach(to: engine, output: fxMixer, format: format)
+            backingTrack.startEngineIfNeeded = { [weak self] in
+                if self?.isRunning == false { try? self?.start() }
+            }
         }
 
         // Set bypass state based on effects chain
@@ -537,244 +520,6 @@ final class AudioEngineManager: AudioManaging {
         print("rebuildEffectsChain: Effects chain updated")
     }
 
-    // MARK: - BackingTrackManaging Implementation
-
-    func loadBackingTrack(url: URL) async throws {
-        print("loadBackingTrack: Loading \(url.lastPathComponent)")
-
-        let file = try AVAudioFile(forReading: url)
-        let fileFormat = file.processingFormat
-        let frameCount = AVAudioFrameCount(file.length)
-
-        print("loadBackingTrack: File format: \(fileFormat.sampleRate)Hz, \(fileFormat.channelCount)ch")
-
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: fileFormat, frameCapacity: frameCount) else {
-            throw AudioEngineError.bufferCreationFailed
-        }
-
-        try file.read(into: buffer)
-        // The player is wired at the engine's format and does not resample:
-        // a 44.1 kHz song on a 48 kHz device must be converted first.
-        backingTrackBuffer = try convertToProcessingFormat(buffer)
-        backingTrackName = url.deletingPathExtension().lastPathComponent
-
-        // Calculate duration
-        backingTrackDuration = Double(frameCount) / fileFormat.sampleRate
-        isBuiltInJamTrack = false
-        backingTrackCurrentTime = 0
-
-        print("loadBackingTrack: Loaded \(frameCount) frames, duration: \(backingTrackDuration)s")
-    }
-
-    /// Key (semitones from E minor) and tempo of the built-in groove.
-    private(set) var grooveTranspose = 0
-    private(set) var grooveTempo = JamTrackSynthesizer.defaultTempo
-
-    /// Loads the built-in drums-and-bass groove (see JamTrackSynthesizer).
-    func loadBuiltInJamTrack(tempo: Double? = nil, transpose: Int? = nil) throws {
-        guard let format = processingFormat else { throw AudioEngineError.engineNotSetup }
-        if let tempo { grooveTempo = tempo }
-        if let transpose { grooveTranspose = transpose }
-        let samples = JamTrackSynthesizer.render(sampleRate: format.sampleRate, tempo: grooveTempo, transpose: grooveTranspose)
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
-              let channels = buffer.floatChannelData else { throw AudioEngineError.bufferCreationFailed }
-        buffer.frameLength = AVAudioFrameCount(samples.count)
-        for channel in 0..<Int(format.channelCount) {
-            samples.withUnsafeBufferPointer { source in
-                channels[channel].update(from: source.baseAddress!, count: samples.count)
-            }
-        }
-        stopBackingTrack()
-        backingTrackBuffer = buffer
-        backingTrackDuration = Double(samples.count) / format.sampleRate
-        backingTrackCurrentTime = 0
-        isBuiltInJamTrack = true
-        backingTrackName = JamTrackSynthesizer.title
-    }
-
-    /// Stops and forgets the backing track.
-    func unloadBackingTrack() {
-        stopBackingTrack()
-        backingTrackBuffer = nil
-        backingTrackName = nil
-        backingTrackDuration = 0
-        backingTrackCurrentTime = 0
-        isBuiltInJamTrack = false
-    }
-
-    private func convertToProcessingFormat(_ buffer: AVAudioPCMBuffer) throws -> AVAudioPCMBuffer {
-        guard let target = processingFormat, buffer.format != target else { return buffer }
-        guard let converter = AVAudioConverter(from: buffer.format, to: target) else {
-            throw AudioEngineError.bufferCreationFailed
-        }
-        let ratio = target.sampleRate / buffer.format.sampleRate
-        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio) + 1024
-        guard let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else {
-            throw AudioEngineError.bufferCreationFailed
-        }
-        nonisolated(unsafe) var consumed = false
-        var conversionError: NSError?
-        converter.convert(to: output, error: &conversionError) { _, status in
-            if consumed {
-                status.pointee = .endOfStream
-                return nil
-            }
-            consumed = true
-            status.pointee = .haveData
-            return buffer
-        }
-        if let conversionError { throw conversionError }
-        return output
-    }
-
-    func playBackingTrack() {
-        guard let player = backingTrackPlayer,
-              let buffer = backingTrackBuffer else {
-            print("playBackingTrack: Player or buffer not available")
-            return
-        }
-
-        player.stop()
-
-        // Schedule from current position
-        let framePosition = AVAudioFramePosition(backingTrackCurrentTime * buffer.format.sampleRate)
-        let frameCount = AVAudioFrameCount(buffer.frameLength)
-
-        if framePosition < Int64(frameCount) {
-            // Create a segment buffer from current position
-            let remainingFrames = AVAudioFrameCount(Int64(frameCount) - framePosition)
-            if let segmentBuffer = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: remainingFrames) {
-                segmentBuffer.frameLength = remainingFrames
-
-                // Copy from offset position
-                if let srcData = buffer.floatChannelData, let dstData = segmentBuffer.floatChannelData {
-                    for channel in 0..<Int(buffer.format.channelCount) {
-                        memcpy(dstData[channel], srcData[channel].advanced(by: Int(framePosition)), Int(remainingFrames) * MemoryLayout<Float>.size)
-                    }
-                }
-
-                player.scheduleBuffer(segmentBuffer, at: nil, options: [])
-            }
-        }
-        // Then loop the whole track, so a jam never just stops
-        player.scheduleBuffer(buffer, at: nil, options: [.loops])
-
-        player.volume = backingTrackVolume
-        player.play()
-        isBackingTrackPlaying = true
-        backingTrackStartTime = Date()
-        backingTrackStartPosition = backingTrackCurrentTime
-
-        // Start playback position update timer
-        startPlaybackTimer()
-
-        print("playBackingTrack: Started playing from \(backingTrackCurrentTime)s")
-    }
-
-    func stopBackingTrack() {
-        backingTrackPlayer?.stop()
-        isBackingTrackPlaying = false
-        stopPlaybackTimer()
-
-        // Update current time based on how long we played
-        if let startTime = backingTrackStartTime {
-            backingTrackCurrentTime = backingTrackStartPosition + Date().timeIntervalSince(startTime)
-            if backingTrackCurrentTime >= backingTrackDuration {
-                backingTrackCurrentTime = 0
-            }
-        }
-        backingTrackStartTime = nil
-    }
-
-    func setBackingTrackVolume(_ volume: Float) {
-        backingTrackVolume = volume
-        backingTrackPlayer?.volume = volume
-    }
-
-    /// Toggle whether the backing track is routed through the full effects chain.
-    /// When enabled, users hear exactly how their pedals/EQ affect real music.
-    func toggleBackingTrackThroughEffects() {
-        guard let engine = audioEngine,
-              let player = backingTrackPlayer,
-              let fxMixer = fxInputMixer,
-              let mainMix = mainMixer,
-              let format = processingFormat else { return }
-
-        let wasPlaying = isBackingTrackPlaying
-        let savedPosition = backingTrackCurrentTime
-
-        if wasPlaying {
-            player.stop()
-            stopPlaybackTimer()
-        }
-
-        // Rewire player output
-        if engine.attachedNodes.contains(player) {
-            engine.disconnectNodeOutput(player)
-        }
-
-        backingTrackThroughEffects.toggle()
-
-        if backingTrackThroughEffects {
-            engine.connect(player, to: fxMixer, format: format)
-            print("backingTrack: routed THROUGH effects chain")
-        } else {
-            engine.connect(player, to: mainMix, format: format)
-            print("backingTrack: routed DRY (bypass effects)")
-        }
-
-        backingTrackCurrentTime = savedPosition
-
-        if wasPlaying {
-            playBackingTrack()
-        }
-    }
-
-    func seekBackingTrack(to time: TimeInterval) {
-        let wasPlaying = isBackingTrackPlaying
-
-        // Stop current playback
-        if wasPlaying {
-            backingTrackPlayer?.stop()
-            stopPlaybackTimer()
-        }
-
-        // Update position
-        backingTrackCurrentTime = max(0, min(time, backingTrackDuration))
-
-        // Resume if was playing
-        if wasPlaying {
-            playBackingTrack()
-        }
-    }
-
-    private func startPlaybackTimer() {
-        stopPlaybackTimer()
-        playbackUpdateTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updatePlaybackPosition()
-            }
-        }
-    }
-
-    private func stopPlaybackTimer() {
-        playbackUpdateTimer?.invalidate()
-        playbackUpdateTimer = nil
-    }
-
-    private func updatePlaybackPosition() {
-        guard isBackingTrackPlaying, let startTime = backingTrackStartTime else { return }
-
-        backingTrackCurrentTime = backingTrackStartPosition + Date().timeIntervalSince(startTime)
-
-        // Check if playback completed
-        if backingTrackCurrentTime >= backingTrackDuration {
-            backingTrackCurrentTime = 0
-            backingTrackStartPosition = 0
-            backingTrackStartTime = Date()
-        }
-    }
-
     // MARK: - Audition (Learn tab)
 
     /// Plays the demo riff through `type` alone, with settings exaggerated enough to hear
@@ -820,71 +565,29 @@ final class AudioEngineManager: AudioManaging {
 
     // MARK: - Demo Riff
 
+    var isDemoRiffPlaying: Bool { demoRiff.isPlaying }
+
     /// True once the effects chain exists, i.e. there is somewhere to send the riff.
-    var canPlayDemoRiff: Bool { fxInputMixer != nil }
+    var canPlayDemoRiff: Bool { demoRiff.isReady }
 
     func toggleDemoRiff() {
         isDemoRiffPlaying ? stopDemoRiff() : startDemoRiff()
     }
 
-    /// Loops a synthesized guitar riff into the effects chain where a real guitar would enter.
-    /// The visualizer, spectrum and chord detector follow the riff while it plays.
+    /// Loops the demo riff into the effects chain; the tuner, spectrum and chord detector follow it.
     func startDemoRiff() {
-        guard !isDemoRiffPlaying,
-              let engine = audioEngine,
-              let fxMixer = fxInputMixer,
-              let format = processingFormat else { return }
-
+        guard !isDemoRiffPlaying, demoRiff.isReady else { return }
         if !isRunning { try? start() }
         guard isRunning else { return }
-
-        let player: AVAudioPlayerNode
-        if let existing = demoRiffPlayer {
-            player = existing
-        } else {
-            player = AVAudioPlayerNode()
-            engine.attach(player)
-            engine.connect(player, to: fxMixer, format: format)
-            demoRiffPlayer = player
-        }
-
-        guard let buffer = demoRiffBuffer ?? makeDemoRiffBuffer(format: format) else { return }
-        demoRiffBuffer = buffer
-
-        // Point the analysis tap at the riff instead of the microphone
-        inputNode?.removeTap(onBus: 0)
-        player.removeTap(onBus: 0)
-        player.installTap(onBus: 0, bufferSize: 1024, format: format, block: audioTapCallback)
-
-        player.scheduleBuffer(buffer, at: nil, options: [.loops])
-        player.play()
-        isDemoRiffPlaying = true
+        inputNode?.removeTap(onBus: 0)   // the analysis tap moves from the mic to the riff
+        demoRiff.play(analysisTap: audioTapCallback)
     }
 
     func stopDemoRiff() {
-        guard isDemoRiffPlaying, let player = demoRiffPlayer else { return }
-        player.stop()
-        player.removeTap(onBus: 0)
-        isDemoRiffPlaying = false
-
+        guard isDemoRiffPlaying else { return }
+        demoRiff.stop()
         // Hand the analysis tap back to the microphone
-        if isRunning {
-            startRealAudioVisualization()
-        }
-    }
-
-    private func makeDemoRiffBuffer(format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        let samples = DemoRiffSynthesizer.render(sampleRate: format.sampleRate)
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
-              let channels = buffer.floatChannelData else { return nil }
-
-        buffer.frameLength = AVAudioFrameCount(samples.count)
-        for channel in 0..<Int(format.channelCount) {
-            samples.withUnsafeBufferPointer { source in
-                channels[channel].update(from: source.baseAddress!, count: samples.count)
-            }
-        }
-        return buffer
+        if isRunning { startRealAudioVisualization() }
     }
 
     // MARK: - Private Helpers
@@ -957,8 +660,8 @@ final class AudioEngineManager: AudioManaging {
         guard order != connectedEffectOrder else { return }
 
         let wasRunning = engine.isRunning
-        let resumeBackingTrack = isBackingTrackPlaying
-        if resumeBackingTrack { stopBackingTrack() }
+        let resumeBackingTrack = backingTrack.isBackingTrackPlaying
+        if resumeBackingTrack { backingTrack.stopBackingTrack() }
         if wasRunning { engine.stop() }
 
         // Tear down the old pedal wiring (input -> converter -> fxInputMixer stays intact)
@@ -989,12 +692,8 @@ final class AudioEngineManager: AudioManaging {
         do {
             try engine.start()
             // Stopping the engine halts player nodes; resume what was playing
-            if isDemoRiffPlaying, let player = demoRiffPlayer, let buffer = demoRiffBuffer {
-                player.stop()
-                player.scheduleBuffer(buffer, at: nil, options: [.loops])
-                player.play()
-            }
-            if resumeBackingTrack { playBackingTrack() }
+            demoRiff.resumeAfterEngineRestart()
+            if resumeBackingTrack { backingTrack.playBackingTrack() }
         } catch {
             isRunning = false
             print("rebuildAudioChain: Failed to restart engine: \(error)")
@@ -1011,6 +710,10 @@ final class AudioEngineManager: AudioManaging {
         guard type != probedEffectType else { return }
         probedEffectType = type
         installProbeTaps()
+    }
+
+    func probeSnapshot() -> (before: SignalCapture, after: SignalCapture) {
+        signalProbe.snapshot()
     }
 
     /// Stops the probe – only if `owner` is still the view that started it.
@@ -1286,171 +989,6 @@ final class AudioEngineManager: AudioManaging {
     }
 }
 
-// MARK: - Effect Units Container
-// Following Clean Architecture: Infrastructure Layer
-// Following Single Responsibility: Only manages audio unit instances
-
-private final class EffectUnitsContainer {
-    // Dynamics — real Apple Dynamics Processor AU (not a distortion simulation)
-    let compressor: AVAudioUnitEffect
-    
-    // Filter & Pitch
-    let equalizer: AVAudioUnitEQ?
-    
-    // Gain / Dirt – real waveshapers (see ModulationAudioUnit)
-    let overdrive: AVAudioUnit
-    let distortion: AVAudioUnit
-    let fuzz: AVAudioUnit
-    let overdriveKernel: ModulationKernel
-    let distortionKernel: ModulationKernel
-    let fuzzKernel: ModulationKernel
-
-    /// Mouth-controlled wah – always first in the chain, bypassed unless gesture control drives it.
-    let wah: AVAudioUnit
-    let wahKernel: ModulationKernel
-    
-    // Modulation – real LFO-driven DSP (see ModulationAudioUnit)
-    let chorus: AVAudioUnit
-    let phaser: AVAudioUnit
-    let flanger: AVAudioUnit
-    let tremolo: AVAudioUnit
-    let chorusKernel: ModulationKernel
-    let phaserKernel: ModulationKernel
-    let flangerKernel: ModulationKernel
-    let tremoloKernel: ModulationKernel
-
-    /// Modulation units are custom Audio Units, which AVFoundation instantiates asynchronously.
-    static func make() async throws -> EffectUnitsContainer {
-        let chorus = try await ModulationAudioUnit.make(.chorus)
-        let phaser = try await ModulationAudioUnit.make(.phaser)
-        let flanger = try await ModulationAudioUnit.make(.flanger)
-        let tremolo = try await ModulationAudioUnit.make(.tremolo)
-        let overdrive = try await ModulationAudioUnit.make(.overdrive)
-        let distortion = try await ModulationAudioUnit.make(.distortion)
-        let fuzz = try await ModulationAudioUnit.make(.fuzz)
-        let wah = try await ModulationAudioUnit.make(.wah)
-        return EffectUnitsContainer(chorus: chorus, phaser: phaser, flanger: flanger, tremolo: tremolo,
-                                    overdrive: overdrive, distortion: distortion, fuzz: fuzz, wah: wah)
-    }
-    
-    // Time & Ambience
-    let delay: AVAudioUnitDelay
-    let reverb: AVAudioUnitReverb
-
-    private init(
-        chorus chorusUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
-        phaser phaserUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
-        flanger flangerUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
-        tremolo tremoloUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
-        overdrive overdriveUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
-        distortion distortionUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
-        fuzz fuzzUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
-        wah wahUnit: (unit: AVAudioUnit, kernel: ModulationKernel)
-    ) {
-        // Dynamics — Apple's real Dynamics Processor (hardware compressor AU)
-        let compDesc = AudioComponentDescription(
-            componentType: kAudioUnitType_Effect,
-            componentSubType: kAudioUnitSubType_DynamicsProcessor,
-            componentManufacturer: kAudioUnitManufacturer_Apple,
-            componentFlags: 0,
-            componentFlagsMask: 0
-        )
-        compressor = AVAudioUnitEffect(audioComponentDescription: compDesc)
-        compressor.bypass = true
-        
-        // 10-band Parametric EQ
-        // Frequencies: 32, 64, 125, 250, 500, 1k, 2k, 4k, 8k, 16k Hz
-        equalizer = AVAudioUnitEQ(numberOfBands: 10)
-        if let eq = equalizer {
-            let frequencies: [Float] = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]
-            for (index, freq) in frequencies.enumerated() {
-                eq.bands[index].filterType = index == 0 ? .lowShelf : (index == 9 ? .highShelf : .parametric)
-                eq.bands[index].frequency = freq
-                eq.bands[index].bandwidth = 1.0
-                eq.bands[index].gain = 0
-                eq.bands[index].bypass = false
-            }
-        }
-        
-        // Overdrive (soft clip), distortion (hard clip), fuzz (asymmetric square-ish clip)
-        (overdrive, overdriveKernel) = overdriveUnit
-        (distortion, distortionKernel) = distortionUnit
-        (fuzz, fuzzKernel) = fuzzUnit
-
-        (chorus, chorusKernel) = chorusUnit
-        (phaser, phaserKernel) = phaserUnit
-        (flanger, flangerKernel) = flangerUnit
-        (tremolo, tremoloKernel) = tremoloUnit
-        (wah, wahKernel) = wahUnit
-        for unit in [chorus, phaser, flanger, tremolo, overdrive, distortion, fuzz, wah] {
-            unit.auAudioUnit.shouldBypassEffect = true
-        }
-
-        // Delay
-        delay = AVAudioUnitDelay()
-        delay.delayTime = 0.3
-        delay.feedback = 40
-        delay.wetDryMix = 30
-        delay.bypass = true
-
-        // Reverb
-        reverb = AVAudioUnitReverb()
-        reverb.loadFactoryPreset(.mediumHall)
-        reverb.wetDryMix = 40
-        reverb.bypass = true
-    }
-
-    /// Every unit, so wiring code can disconnect them all without listing them again.
-    var allUnits: [AVAudioUnit] {
-        EffectType.allCases.compactMap { audioUnit(for: $0) } + [wah]
-    }
-
-    func audioUnit(for type: EffectType) -> AVAudioUnit? {
-        switch type {
-        case .compressor: return compressor
-        case .equalizer: return equalizer
-        case .overdrive: return overdrive
-        case .distortion: return distortion
-        case .fuzz: return fuzz
-        case .chorus: return chorus
-        case .phaser: return phaser
-        case .flanger: return flanger
-        case .tremolo: return tremolo
-        case .delay: return delay
-        case .reverb: return reverb
-        }
-    }
-    
-    /// Set bypass state for a specific effect type
-    /// AVAudioUnit base class doesn't have bypass, so we access concrete types directly
-    func setBypass(for type: EffectType, bypassed: Bool) {
-        switch type {
-        case .compressor:
-            compressor.bypass = bypassed
-        case .equalizer:
-            equalizer?.bypass = bypassed
-        case .overdrive:
-            overdrive.auAudioUnit.shouldBypassEffect = bypassed
-        case .distortion:
-            distortion.auAudioUnit.shouldBypassEffect = bypassed
-        case .fuzz:
-            fuzz.auAudioUnit.shouldBypassEffect = bypassed
-        case .chorus:
-            chorus.auAudioUnit.shouldBypassEffect = bypassed
-        case .phaser:
-            phaser.auAudioUnit.shouldBypassEffect = bypassed
-        case .flanger:
-            flanger.auAudioUnit.shouldBypassEffect = bypassed
-        case .tremolo:
-            tremolo.auAudioUnit.shouldBypassEffect = bypassed
-        case .delay:
-            delay.bypass = bypassed
-        case .reverb:
-            reverb.bypass = bypassed
-        }
-    }
-}
-
 // MARK: - Audio Input Device Detection Extension
 
 extension AudioEngineManager {
@@ -1614,173 +1152,5 @@ extension AudioEngineManager {
     /// Refresh input device list
     func refreshInputDevices() {
         detectAudioInputDevices()
-    }
-}
-
-// MARK: - Audio Input Device Model
-
-struct AudioInputDevice: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let type: AudioInputDeviceType
-}
-
-// MARK: - Audio Input Device Type
-
-enum AudioInputDeviceType: String {
-    case none = "No Input"
-    case builtInMicrophone = "Built-in Mic"
-    case usbAudioInterface = "USB Interface"
-    case headset = "Headset"
-    case bluetooth = "Bluetooth"
-    case external = "External"
-
-    var icon: String {
-        switch self {
-        case .none: return "mic.slash"
-        case .builtInMicrophone: return "laptopcomputer"
-        case .usbAudioInterface: return "cable.connector"
-        case .headset: return "headphones"
-        case .bluetooth: return "wave.3.right"
-        case .external: return "mic"
-        }
-    }
-
-    var color: SwiftUI.Color {
-        switch self {
-        case .none: return .gray
-        case .builtInMicrophone: return .blue
-        case .usbAudioInterface: return .green
-        case .headset: return .orange
-        case .bluetooth: return .purple
-        case .external: return .cyan
-        }
-    }
-}
-
-// MARK: - Audio Tap Callback (Nonisolated - Critical for Swift 6 Concurrency)
-// This function MUST be a global/free function, NOT a method or closure.
-// When passed to installTap, it has NO actor isolation, preventing MainActor crashes.
-
-private func audioTapCallback(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
-    // ✅ SAFE: This is a nonisolated global function.
-    // It runs on the audio thread with no MainActor association.
-
-    guard let channelData = buffer.floatChannelData else { return }
-    let frameLength = Int(buffer.frameLength)
-    guard frameLength > 0 else { return }
-
-    let channelCount = Int(buffer.format.channelCount)
-
-    // Get FULL samples for FFT analysis (no downsampling)
-    var fullSamples = [Float](repeating: 0, count: frameLength)
-
-    for i in 0..<frameLength {
-        var maxSample: Float = 0
-        // Check all channels and take the maximum (handles mono/stereo and different input configs)
-        for ch in 0..<channelCount {
-            let sample = channelData[ch][i]
-            if abs(sample) > abs(maxSample) {
-                maxSample = sample
-            }
-        }
-        fullSamples[i] = maxSample
-    }
-
-    // Use free functions to avoid any MainActor association
-    let rms = audioCalculateRMS(fullSamples)
-    let waveform = audioDownsampleForDisplay(fullSamples, targetCount: 128)
-
-    // DEBUG: Print RMS every ~1 second (every ~43 callbacks at 44100Hz/1024 buffer)
-    audioTapDebugCounter += 1
-    if audioTapDebugCounter % 43 == 0 {
-        print("🎸 Audio tap: channels=\(channelCount), frames=\(frameLength), rms=\(rms), maxSample=\(fullSamples.max() ?? 0)")
-    }
-
-    // Write to thread-safe buffer (no MainActor dependency)
-    // Full samples will be accumulated in the buffer for FFT analysis
-    AudioSampleBuffer.shared.write(samples: fullSamples, waveform: waveform, rms: rms)
-}
-
-// Debug counter for tap callback (nonisolated(unsafe) required for Swift 6 strict concurrency)
-nonisolated(unsafe) private var audioTapDebugCounter: Int = 0
-
-// MARK: - Free Functions for Audio Processing (Thread-Safe)
-// These are NOT associated with any actor - safe to call from any thread
-
-func audioDownsampleForDisplay(_ samples: [Float], targetCount: Int) -> [Float] {
-    guard samples.count > 0 else { return Array(repeating: 0, count: targetCount) }
-
-    var result = [Float](repeating: 0, count: targetCount)
-    let chunkSize = max(1, samples.count / targetCount)
-
-    for i in 0..<targetCount {
-        let start = i * chunkSize
-        let end = min(start + chunkSize, samples.count)
-        var maxVal: Float = 0
-        for j in start..<end {
-            maxVal = max(maxVal, abs(samples[j]))
-        }
-        result[i] = maxVal
-    }
-    return result
-}
-
-func audioCalculateRMS(_ samples: [Float]) -> Float {
-    guard samples.count > 0 else { return 0 }
-    var sum: Float = 0
-    for sample in samples {
-        sum += sample * sample
-    }
-    return sqrt(sum / Float(samples.count))
-}
-
-// MARK: - Thread-Safe Audio Sample Buffer
-// Allows audio thread to write samples without MainActor dependency
-// Main thread polls this buffer to update UI
-
-final class AudioSampleBuffer: @unchecked Sendable {
-    static let shared = AudioSampleBuffer()
-
-    // OSAllocatedUnfairLock is ~2-4x faster than NSLock for uncontended cases
-    // Better for real-time audio where low latency is critical
-    private let lock = OSAllocatedUnfairLock<AudioBufferState>(initialState: AudioBufferState())
-
-    // Target buffer size for FFT analysis (needs 2048+ samples)
-    private let analysisBufferSize = 4096
-
-    private struct AudioBufferState {
-        var samples: [Float] = []
-        var waveform: [Float] = Array(repeating: 0, count: 128)
-        var rms: Float = 0
-        // Accumulating buffer for FFT analysis
-        var analysisBuffer: [Float] = []
-    }
-
-    private init() {}
-
-    /// Write audio data from audio thread (thread-safe, lock-free optimized)
-    func write(samples: [Float], waveform: [Float], rms: Float) {
-        lock.withLock { state in
-            state.samples = samples
-            state.waveform = waveform
-            state.rms = rms
-
-            // Accumulate samples for FFT analysis
-            state.analysisBuffer.append(contentsOf: samples)
-
-            // Keep buffer at target size (sliding window)
-            if state.analysisBuffer.count > analysisBufferSize {
-                state.analysisBuffer.removeFirst(state.analysisBuffer.count - analysisBufferSize)
-            }
-        }
-    }
-
-    /// Read audio data from main thread (thread-safe, lock-free optimized)
-    func read() -> AudioData {
-        lock.withLock { state in
-            // Return the accumulated analysis buffer for FFT
-            AudioData(samples: state.analysisBuffer, waveform: state.waveform, rms: state.rms)
-        }
     }
 }

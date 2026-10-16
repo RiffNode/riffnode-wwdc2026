@@ -1,6 +1,7 @@
 import Vision
 import AVFoundation
-import SwiftUI
+import Foundation
+import Observation
 import Observation
 
 // MARK: - Extracted Face Data (Sendable for cross-isolation transfer)
