@@ -19,6 +19,7 @@
 </p>
 
 <p align="center">
+  <a href="#swift-student-challenge-2026"><img src="https://img.shields.io/badge/Swift%20Student%20Challenge-2026%20Winner-F05138?logo=apple&logoColor=white" alt="Swift Student Challenge 2026 Winner"></a>
   <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" alt="Swift 6">
   <img src="https://img.shields.io/badge/SwiftUI-Liquid%20Glass-0A84FF" alt="SwiftUI Liquid Glass">
   <img src="https://img.shields.io/badge/iPadOS%20%7C%20macOS-26-111827" alt="iPadOS and macOS 26">
@@ -27,7 +28,8 @@
 </p>
 
 <p align="center">
-  <img src="screenshots/screenshot_5.jpg" width="900" alt="RiffNode on Mac: the pedalboard with compressor, overdrive, distortion, chorus, delay and reverb pedals">
+  <img src="screenshots/ipad_pedalboard_signal_lab.jpg" width="440" alt="RiffNode on iPad: the pedalboard with the Signal Lab showing distortion flattening the waveform">
+  <img src="screenshots/ipad_dark_signal_lab.jpg" width="440" alt="RiffNode on iPad in dark mode with the Signal Lab, tuner and Play Along groove">
 </p>
 
 Guitar effects are usually explained with jargon and sold as expensive boxes. RiffNode turns them into something you can **see, touch and hear** in a few minutes: drag pedals into a signal chain, watch the waveform and spectrum change as you play, ask the on-device AI for a tone in plain English, and switch presets with a nod of your head while both hands stay on the guitar.
@@ -122,20 +124,16 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 
 <table>
   <tr>
-    <td width="50%"><img src="screenshots/ipad_dark_demo_riff.jpg" alt="RiffNode on iPad in dark mode playing the demo riff"><br><sub><b>Dark mode on iPad</b> – the demo riff driving the visualizer and chord detector</sub></td>
-    <td width="50%"><img src="screenshots/screenshot_1.jpg" alt="Tone Assistant chat applying reverb and delay"><br><sub><b>Tone Assistant</b> – describe a sound, get a pedalboard</sub></td>
+    <td width="50%"><img src="screenshots/ipad_tone_assistant.jpg" alt="Tone Assistant chat adding a delay pedal"><br><sub><b>Tone Assistant</b> – describe a sound, get a pedalboard; it says which engine answered</sub></td>
+    <td width="50%"><img src="screenshots/ipad_eq_tone.jpg" alt="EQ and Tone tab: tone balance card with a one-tap Boost 1 kHz suggestion above the parametric EQ"><br><sub><b>EQ &amp; Tone</b> – where your sound sits, and the EQ move to fix it in one tap</sub></td>
   </tr>
   <tr>
-    <td><img src="screenshots/screenshot_4.jpg" alt="Parametric EQ with ten draggable bands"><br><sub><b>Parametric EQ</b> – ten draggable bands over a live analyzer</sub></td>
-    <td><img src="screenshots/screenshot_2.jpg" alt="AI Tools tab with spectrum analyzer and chord detection"><br><sub><b>Audio analysis</b> – spectrum and chord detection</sub></td>
+    <td><img src="screenshots/ipad_learn_live_lab.jpg" alt="Learn tab auditioning Overdrive with the live Signal Lab"><br><sub><b>Learn</b> – hear a pedal on its own and watch what it does to the wave</sub></td>
+    <td><img src="screenshots/ipad_play_along_music.jpg" alt="Play Along card in Music app mode with Apple Music and Spotify"><br><sub><b>Play Along</b> – the groove, your songs, or Apple Music and Spotify alongside</sub></td>
   </tr>
   <tr>
     <td><img src="screenshots/screenshot_8.jpg" alt="Performance mode with large pedals and quick preset bar"><br><sub><b>Stage Mode</b> – big footswitches and a quick preset bar</sub></td>
     <td><img src="screenshots/screenshot_6.jpg" alt="Guided tour explaining the signal chain"><br><sub><b>Guided tour</b> – how sound flows through a chain</sub></td>
-  </tr>
-  <tr>
-    <td><img src="screenshots/screenshot_7.jpg" alt="Sound science lesson showing a clipped distortion waveform"><br><sub><b>Sound science</b> – see why distortion sounds the way it does</sub></td>
-    <td><img src="screenshots/screenshot_3.jpg" alt="Effect guide entry for distortion with famous users"><br><sub><b>Effect guide</b> – what it does, where it goes, who used it</sub></td>
   </tr>
 </table>
 
@@ -238,13 +236,41 @@ Open `RiffNode.swiftpm` in Swift Playgrounds or Xcode and run it on iPad or **My
 
 ## Swift Student Challenge 2026
 
-RiffNode was built for the **Apple Swift Student Challenge 2026** as an App Playground. It is designed for the challenge's format:
+RiffNode was selected by Apple as a **2026 Swift Student Challenge Winner** – one of 350 winners worldwide and one of eight from Taiwan this year.
+
+<p align="center">
+  <img src="screenshots/wwdc26-keynote-winners-wall.jpg" width="860" alt="The winners wall shown on stage at WWDC26, with the name Yu-Jia, Taiwan highlighted">
+  <br><sub>On stage at WWDC26 – <b>Yu-Jia, Taiwan</b> on the winners wall</sub>
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="screenshots/ssc-2026-winner-certificate.jpg" alt="Swift Student Challenge 2026 Winner certificate from Apple, awarded to Yu-Jia Liang"><br><sub>The certificate from Apple</sub></td>
+    <td width="50%"><img src="screenshots/ssc-2026-winner-notice.jpg" alt="Apple Developer page: Congratulations, you've been selected as a Swift Student Challenge 2026 winner"><br><sub>The winner notice on Apple Developer</sub></td>
+  </tr>
+</table>
+
+It was built as an App Playground for the challenge's format:
 
 - Runs **fully offline** – no network calls, no downloaded models or assets.
 - Delivers the core experience in **under three minutes**, with or without a guitar.
 - Ships as a single `.swiftpm` with no third-party dependencies.
 
-It brings low-level signal processing, computer vision and on-device AI together to make music technology something you can explore, not just read about.
+It brings low-level signal processing, computer vision and on-device AI together to make music technology something you can explore, not just read about. Development has continued since the challenge – the Signal Lab, Play Along and the hybrid Tone Assistant came after it.
+
+### In the news
+
+| Date | Outlet | Article |
+|---|---|---|
+| 2026-05-08 | 中央社 CNA | [海大梁祐嘉開發吉他效果器APP 獲蘋果WWDC學生挑戰賽獎](https://www.cna.com.tw/postwrite/chi/432895) |
+| 2026-05-08 | 聯合報 United Daily News | [蘋果WWDC26學生挑戰賽 海大梁祐嘉吉他APP獲獎](https://udn.com/news/story/6928/9489917) |
+| 2026-05-08 | yam 蕃薯藤 | [海大梁祐嘉開發吉他效果器APP 奪蘋果WWDC26學生大獎](https://n.yam.com/Article/20260508583843) |
+| 2026-05-11 | 1111 人力銀行 | [海大生開發AI吉他效果器APP 獲蘋果 WWDC學生挑戰賽](https://www.1111.com.tw/news/165780/amp/) |
+| 2026-04-20 | 數位時代 BusinessNext | [蘋果Swift Student Challenge揭曉，台灣8人得獎！](https://www.bnext.com.tw/article/90716/swift-student-challenge) |
+| 2026-04-15 | NOWnews 今日新聞 | [蘋果WWDC學生賽8台生獲獎！](https://www.nownews.com/news/6807253) |
+| 2026-04-14 | T客邦 TechBang | [蘋果 WWDC26 學生挑戰賽：台灣 8 位學生獲獎](https://www.techbang.com/posts/128826-apple-wwdc26-taiwan-students-ai-ar-winners) |
+| 2026-04-14 | 聯合新聞網 udn Tech | [蘋果WWDC 2026 Swift學生挑戰賽：台灣8名學子入圍創紀錄](https://tech.udn.com/tech/story/123153/9439619) |
+| 2026-04-13 | 科技新報 TechNews | [歷年來最多！2026 WWDC Swift Student Challenge 獲獎學生達 8 位](https://technews.tw/2026/04/13/2026-wwdc-swift-student-challenge-taiwan/) |
 
 ## Acknowledgements
 
