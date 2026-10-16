@@ -118,6 +118,16 @@
 - **和弦 → 音色建議** —— 穩定按住一個和弦時，RiffNode 會建議相配的音色，一鍵即可套用。
 - **調音器與 Tone balance** —— Input 卡片內有精準到 cent 的調音器與和弦偵測；EQ 分頁上方的 Tone balance 卡片會告訴你聲音主要落在哪個頻段（bass、body、mids、bite、air）、用白話解釋，並一鍵套用對應的 EQ 調整。背後是 FFT（Accelerate / vDSP）與自相關音高偵測；同一份即時頻譜也畫在 Parametric EQ 曲線後方。
 
+### 練習、分享與現場控制
+
+- **低延遲** —— 約 5 ms 的 I/O 緩衝區，設定頁顯示實測的「弦到耳朵」延遲；使用藍牙耳機（多 100–200 ms）時會提醒。
+- **Looper** —— 一顆踩踏開關：錄音、播放、疊錄、undo。錄的是音箱輸出，所以只會疊上你的吉他。
+- **節拍器** —— 第一拍重音，可一鍵對齊 groove 的速度。
+- **Neural Amp Modeler** —— 載入真實音箱的 `.nam` 擷取檔。以 Accelerate BLAS 移植原版 WaveNet，逐樣本與 NeuralAmpModelerCore 比對（訊雜比 130 dB，即時速度的 27 倍）。
+- **分享音色** —— 把踏板、音箱與 EQ 匯出成小小的 JSON 檔，或匯入別人的。
+- **MIDI 踏板** —— USB 或藍牙 MIDI 踏板：Program Change 切換 preset；CC 80/81 下一個／上一個、CC 82 looper、CC 83 靜音。
+- **iOS / macOS 27** —— 匯入的歌曲用 Music Understanding framework 在裝置上分析（調性、速度、段落、solo 音階）；Tone Assistant 也能透過 Foundation Models 的圖片輸入，從照片建議音色。
+
 ### 鍵盤快捷鍵（Mac 與 iPad）
 
 | 快捷鍵 | 動作 |
@@ -310,6 +320,7 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
 ## 致謝
 
 - Lakr Aream 的 [NotchDrop](https://github.com/Lakr233/NotchDrop)（MIT）—— 瀏海形狀、狀態與彈簧動畫的靈感來源。
+- Steven Atkinson 的 [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore)（MIT）—— RiffNode 的 WaveNet 移植所依循、並用來比對驗證的參考實作。
 - 效果器的歷史與訊號鏈知識取材自常見的吉他器材知識，為本專案重新撰寫。
 
 ## 授權

@@ -116,6 +116,16 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
 - **Chord → tone suggestions** – when a chord is held steadily, RiffNode suggests a matching tone you can apply in one tap.
 - **Tuner & Tone balance** – a cents-accurate tuner and chord detection in the Input card; on the EQ tab, a tone-balance card that shows which range your sound sits in (bass, body, mids, bite, air), explains it in plain words and applies the matching EQ move in one tap. FFT (Accelerate / vDSP) and autocorrelation pitch detection power it all; the same live spectrum is drawn behind the Parametric EQ curve.
 
+### Practice, sharing and live control
+
+- **Low latency** – a ~5 ms I/O buffer, the measured string-to-ear latency in Settings, and a warning when Bluetooth headphones would add 100–200 ms.
+- **Looper** – one footswitch: record, play, overdub, undo. It records the amp's output, so only your guitar is layered.
+- **Metronome** – an accented click that can match the groove's tempo.
+- **Neural Amp Modeler** – load a `.nam` capture of a real amp. A Swift port of the original WaveNet using Accelerate BLAS, verified sample by sample against NeuralAmpModelerCore (130 dB SNR, 27× real time).
+- **Share a tone** – export pedals, amp and EQ as a small JSON file, or import one.
+- **MIDI footswitch** – USB or Bluetooth MIDI pedals: Program Change selects a preset; CC 80/81 next/previous, CC 82 looper, CC 83 mute.
+- **iOS / macOS 27** – imported songs are analysed on device with the Music Understanding framework (key, tempo, sections, solo scale), and the Tone Assistant can suggest a sound from a photo through Foundation Models image prompts.
+
 ### Keyboard shortcuts (Mac and iPad)
 
 | Shortcut | Action |
@@ -308,6 +318,7 @@ It brings low-level signal processing, computer vision and on-device AI together
 ## Acknowledgements
 
 - [NotchDrop](https://github.com/Lakr233/NotchDrop) by Lakr Aream (MIT) – inspiration for the notch shape, its states and its spring animation.
+- [NeuralAmpModelerCore](https://github.com/sdatkinson/NeuralAmpModelerCore) by Steven Atkinson (MIT) – the reference implementation RiffNode's WaveNet port follows and is tested against.
 - Effect history and signal-chain guidance draw on common guitar-gear knowledge, written for this project.
 
 ## License
