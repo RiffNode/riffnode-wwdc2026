@@ -250,11 +250,28 @@ RiffNode was selected by Apple as a **2026 Swift Student Challenge Winner** – 
   </tr>
 </table>
 
-It was built as an App Playground for the challenge's format:
+### The prize
 
-- Runs **fully offline** – no network calls, no downloaded models or assets.
-- Delivers the core experience in **under three minutes**, with or without a guitar.
-- Ships as a single `.swiftpm` with no third-party dependencies.
+<img src="screenshots/ssc-2026-prize-airpods-max.jpg" width="320" align="right" alt="AirPods Max in their opened box, the winner's prize">
+
+Every 2026 winner received:
+
+- A **personalised certificate** from Apple
+- **One year** of individual membership in the **Apple Developer Program**
+- **AirPods Max 2**
+- An invitation to apply for the **special event at Apple Park** that kicked off WWDC26 on June 8 – I was there
+
+<br clear="right">
+
+### The rules, and how RiffNode meets them
+
+| Rule | RiffNode |
+| --- | --- |
+| An individual **App Playground** (`.swiftpm`) in a ZIP of **25 MB or less** | One `.swiftpm`, no bundled audio or models – the riff, groove and drums are synthesized |
+| Runs **fully offline** (network access is disabled during judging) | No network calls; Apple Intelligence runs on device, with an offline fallback |
+| An experience of **three minutes or less** | Demo riff, Signal Lab and Tone Assistant all reachable from the first screen |
+| Built with **Swift Playgrounds 4.6+ or Xcode 26+** | Swift 6, SwiftUI, iPadOS / macOS 26 |
+| App text and written responses in **English** | All in-app text is English |
 
 It brings low-level signal processing, computer vision and on-device AI together to make music technology something you can explore, not just read about. Development has continued since the challenge – the Signal Lab, Play Along and the hybrid Tone Assistant came after it.
 

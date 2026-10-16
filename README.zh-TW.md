@@ -252,11 +252,28 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
   </tr>
 </table>
 
-作品依照比賽規定，以 App Playground 形式製作：
+### 獎品
 
-- **完全離線** —— 沒有網路請求，不下載任何模型或素材。
-- **三分鐘內**就能體驗核心功能，有沒有吉他都可以。
-- 單一 `.swiftpm`，沒有任何第三方套件。
+<img src="screenshots/ssc-2026-prize-airpods-max.jpg" width="320" align="right" alt="開箱的 AirPods Max，得獎獎品">
+
+2026 年的每位得主都獲得：
+
+- Apple 的**個人化得獎證書**
+- **一年** Apple Developer Program 個人會員
+- **AirPods Max 2**
+- 受邀申請參加 6 月 8 日揭開 WWDC26 序幕的 **Apple Park 特別活動** —— 我也到了現場
+
+<br clear="right">
+
+### 比賽規則與 RiffNode 的對應
+
+| 規則 | RiffNode |
+| --- | --- |
+| 個人作品，**App Playground**（`.swiftpm`）壓縮後 **25 MB 以內** | 單一 `.swiftpm`，不打包音檔或模型 —— riff、伴奏、鼓聲都是即時合成 |
+| **完全離線**（評審時網路關閉） | 沒有網路請求；Apple Intelligence 在裝置上執行，並有離線備援 |
+| **三分鐘內**可以體驗完 | 第一個畫面就能使用 demo riff、Signal Lab 與 Tone Assistant |
+| 使用 **Swift Playgrounds 4.6+ 或 Xcode 26+** 製作 | Swift 6、SwiftUI、iPadOS / macOS 26 |
+| App 內文字與書面回答使用**英文** | App 內所有文字皆為英文 |
 
 它把底層訊號處理、電腦視覺與裝置端 AI 結合起來，讓音樂科技成為可以親手探索的東西，而不只是讀到的知識。比賽之後仍持續開發 —— Signal Lab、Play Along 與混合式 Tone Assistant 都是賽後加入的。
 
