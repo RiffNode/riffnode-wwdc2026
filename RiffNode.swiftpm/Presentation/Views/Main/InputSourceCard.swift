@@ -98,10 +98,24 @@ struct InputSourceCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 CentsBar(cents: hasNote ? Double(chordDetector.centsDeviation) : 0, isActive: hasNote, color: tuneColor)
                     .frame(height: 18)
-                Text(tunerCaption)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(hasNote ? tuneColor : .secondary)
-                    .contentTransition(.opacity)
+                HStack(spacing: 8) {
+                    Text(tunerCaption)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(hasNote ? tuneColor : .secondary)
+                        .contentTransition(.opacity)
+                    Spacer(minLength: 0)
+                    // Like a tuner pedal: silence the amp while you tune
+                    Button {
+                        engine.isTunerMuted.toggle()
+                    } label: {
+                        Label(engine.isTunerMuted ? "Muted" : "Mute", systemImage: engine.isTunerMuted ? "speaker.slash.fill" : "speaker.wave.2")
+                            .font(.caption2.weight(.semibold))
+                            .labelStyle(.titleAndIcon)
+                            .foregroundStyle(engine.isTunerMuted ? Color.orange : Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Silences the output while you tune; the tuner keeps listening")
+                }
             }
         }
         .accessibilityElement(children: .combine)

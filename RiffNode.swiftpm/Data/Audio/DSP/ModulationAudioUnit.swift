@@ -124,6 +124,8 @@ final class ModulationKernel: @unchecked Sendable {
         case overdrive, distortion, fuzz
         case wah
         case amp
+        case input
+        case analogDelay
     }
 
     /// Set once, before the unit starts rendering.
@@ -131,6 +133,8 @@ final class ModulationKernel: @unchecked Sendable {
 
     /// The amp and cabinet (mode .amp only).
     let amp = AmpProcessor()
+    /// Pickup + cable, volume pedal and noise gate (mode .input only).
+    let input = InputProcessor()
 
     // MARK: Parameters (written on the main thread, read on the audio thread)
 
@@ -198,6 +202,12 @@ final class ModulationKernel: @unchecked Sendable {
     private let lowPassState = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
     private let dcBlockIn = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
     private let dcBlockOut = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    private let oversamplePrevious = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    /// Analog delay: up to ~2.7 s at 96 kHz per channel, allocated in prepare() (not on the audio thread).
+    private static let longDelayLength = 1 << 18
+    private var longDelay: UnsafeMutablePointer<Float>?
+    private let delayFilterState = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    private var longWriteIndex = 0
     /// Wah: state-variable filter states and the smoothed pedal position.
     private let wahLow = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
     private let wahBand = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
@@ -216,6 +226,9 @@ final class ModulationKernel: @unchecked Sendable {
         lowPassState.deallocate()
         dcBlockIn.deallocate()
         dcBlockOut.deallocate()
+        oversamplePrevious.deallocate()
+        delayFilterState.deallocate()
+        longDelay?.deallocate()
         wahLow.deallocate()
         wahBand.deallocate()
     }
@@ -224,6 +237,10 @@ final class ModulationKernel: @unchecked Sendable {
         self.sampleRate = max(sampleRate, 8_000)
         self.channelCount = min(max(channelCount, 1), Self.maxChannels)
         amp.prepare(sampleRate: self.sampleRate)
+        input.prepare(sampleRate: self.sampleRate)
+        if mode == .analogDelay && longDelay == nil {
+            longDelay = UnsafeMutablePointer<Float>.allocate(capacity: Self.maxChannels * Self.longDelayLength)
+        }
         reset()
     }
 
@@ -236,6 +253,10 @@ final class ModulationKernel: @unchecked Sendable {
         lowPassState.initialize(repeating: 0, count: Self.maxChannels)
         dcBlockIn.initialize(repeating: 0, count: Self.maxChannels)
         dcBlockOut.initialize(repeating: 0, count: Self.maxChannels)
+        oversamplePrevious.initialize(repeating: 0, count: Self.maxChannels)
+        delayFilterState.initialize(repeating: 0, count: Self.maxChannels)
+        longDelay?.update(repeating: 0, count: Self.maxChannels * Self.longDelayLength)
+        longWriteIndex = 0
         wahLow.initialize(repeating: 0, count: Self.maxChannels)
         wahBand.initialize(repeating: 0, count: Self.maxChannels)
         writeIndex = 0
@@ -266,6 +287,22 @@ final class ModulationKernel: @unchecked Sendable {
         }
         if mode == .wah {
             processWah(input: input, output: output, frameCount: frameCount, channels: channels)
+            return
+        }
+        if mode == .input {
+            guard let left = output[0].mData?.assumingMemoryBound(to: Float.self) else { return }
+            for channel in 0..<channels {
+                guard let source = input[channel].mData?.assumingMemoryBound(to: Float.self),
+                      let destination = output[channel].mData?.assumingMemoryBound(to: Float.self),
+                      source != destination else { continue }
+                destination.update(from: source, count: frameCount)
+            }
+            let right = channels > 1 ? output[1].mData?.assumingMemoryBound(to: Float.self) : nil
+            self.input.process(left, right, frames: frameCount)
+            return
+        }
+        if mode == .analogDelay {
+            processAnalogDelay(input: input, output: output, frameCount: frameCount, channels: channels)
             return
         }
         if mode == .amp {
@@ -329,7 +366,7 @@ final class ModulationKernel: @unchecked Sendable {
                     phaserFeedbackSample[channel] = signal
                     destination[frame] = 0.5 * (dry + signal)
 
-                case .overdrive, .distortion, .fuzz, .wah, .amp:
+                case .overdrive, .distortion, .fuzz, .wah, .amp, .input, .analogDelay:
                     continue  // handled by processDrive / processWah
                 }
             }
@@ -390,19 +427,36 @@ final class ModulationKernel: @unchecked Sendable {
                 lowState = (1 - splitCoefficient) * dry + splitCoefficient * lowState
                 let x = (dry - lowState) * gain
 
+                // 4× oversampling: clipping creates harmonics above Nyquist that would fold back
+                // as harsh, unmusical "aliasing". Clip four interpolated points per sample and
+                // average them (a simple anti-alias decimation).
+                let previous = oversamplePrevious[channel]
+                var clipped: Float = 0
+                for step in 1...4 {
+                    let xi = previous + (x - previous) * Float(step) * 0.25
+                    switch mode {
+                    case .overdrive:
+                        // Diodes in the feedback loop limit the clipped part to about ±0.5
+                        clipped += 0.5 * tanh(xi / 0.5)
+                    case .distortion:
+                        clipped += min(max(xi, -0.6), 0.6) / 0.6        // diodes to ground: flat tops
+                    default:
+                        // Different headroom on each half; tanh turns hard as the gain rises
+                        clipped += xi >= 0 ? 0.6 * tanh(xi / 0.6) : tanh(xi)
+                    }
+                }
+                oversamplePrevious[channel] = x
+                clipped *= 0.25
+
                 var shaped: Float
                 switch mode {
                 case .overdrive:
-                    // Diodes in the feedback loop limit the clipped part to about ±0.5;
-                    // the clean signal passes straight through alongside it
-                    shaped = dry + 0.5 * tanh(x / 0.5)
+                    shaped = dry + clipped     // the clean signal passes straight through alongside it
                 case .distortion:
-                    shaped = min(max(x, -0.6), 0.6) / 0.6      // diodes to ground: flat tops
+                    shaped = clipped
                 default:
-                    // Different headroom on each half; tanh turns hard as the gain rises
-                    shaped = x >= 0 ? 0.6 * tanh(x / 0.6) : 1.0 * tanh(x / 1.0)
-                    let blocked = shaped - dcIn + dcCoefficient * dcOut
-                    dcIn = shaped
+                    let blocked = clipped - dcIn + dcCoefficient * dcOut
+                    dcIn = clipped
                     dcOut = blocked
                     shaped = blocked * 1.3
                 }
@@ -414,6 +468,48 @@ final class ModulationKernel: @unchecked Sendable {
             lowPassState[channel] = toneState
             dcBlockIn[channel] = dcIn
             dcBlockOut[channel] = dcOut
+        }
+    }
+
+    // MARK: Analog Delay
+
+    /// A bucket-brigade / tape style echo: each repeat runs through a low-pass and a soft
+    /// saturator, so echoes get darker and warmer as they fade, and a slow "wow" LFO wobbles
+    /// the delay time like a tape transport. `rate` = delay time (s), `feedback`, `mix`.
+    private func processAnalogDelay(input source: UnsafeMutableAudioBufferListPointer,
+                                    output: UnsafeMutableAudioBufferListPointer,
+                                    frameCount: Int, channels: Int) {
+        guard let line = longDelay else { return }
+        let time = min(max(rate, 0.02), 2.5)
+        let feedback = self.feedback, mix = self.mix
+        let mask = Self.longDelayLength - 1
+        let darken = 1 - exp(-2 * Float.pi * 2_400 / sampleRate)   // 2.4 kHz per pass
+        let wowIncrement: Float = 0.55 / sampleRate
+        let wowDepth = 0.0009 * sampleRate
+
+        for frame in 0..<frameCount {
+            let wow = sin(2 * Float.pi * lfoPhase) * wowDepth
+            let delaySamples = min(Float(mask - 2), max(1, time * sampleRate + wow))
+            for channel in 0..<channels {
+                guard let src = source[channel].mData?.assumingMemoryBound(to: Float.self),
+                      let dst = output[channel].mData?.assumingMemoryBound(to: Float.self) else { continue }
+                let base = line + channel * Self.longDelayLength
+                let position = Float(longWriteIndex) - delaySamples
+                let i0 = Int(position.rounded(.down))
+                let fraction = position - Float(i0)
+                let a = base[i0 & mask], b = base[(i0 + 1) & mask]
+                let echo = a + (b - a) * fraction
+
+                // Darken, then saturate gently – what the repeats go through on each lap
+                delayFilterState[channel] += (echo - delayFilterState[channel]) * darken
+                let warm = delayFilterState[channel]
+                let dry = src[frame]
+                base[longWriteIndex] = dry + tanh(warm * feedback * 1.1) / 1.1
+                dst[frame] = dry + warm * mix
+            }
+            longWriteIndex = (longWriteIndex + 1) & mask
+            lfoPhase += wowIncrement
+            if lfoPhase >= 1 { lfoPhase -= 1 }
         }
     }
 

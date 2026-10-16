@@ -48,6 +48,8 @@ enum CabinetType: String, CaseIterable, Identifiable, Sendable {
     case twoByTwelve = "2×12"
     /// Closed 4×12: big thump, rolled-off top
     case fourByTwelve = "4×12"
+    /// A measured impulse response loaded from a file – a real speaker and microphone
+    case impulse = "IR"
 
     var id: String { rawValue }
 
@@ -57,7 +59,40 @@ enum CabinetType: String, CaseIterable, Identifiable, Sendable {
         case .oneByTwelve: "Open-back combo: airy, light lows."
         case .twoByTwelve: "Balanced, the classic combo amp."
         case .fourByTwelve: "Closed stack: deep thump, smooth top."
+        case .impulse: "Your own impulse response: a real cabinet, measured with a microphone."
         }
+    }
+}
+
+// MARK: - Input Stage
+// What happens before the first pedal: the guitar's pickup and the cable form a filter,
+// a buffer can protect the highs, a volume pedal swells, and a noise gate cuts hiss.
+
+struct InputSettings: Equatable, Sendable {
+    /// Total cable length from guitar to amp, in feet.
+    var cableFeet: Float = 18
+    /// A buffer at the start of the board drives the long cables, so only the guitar cable loads the pickup.
+    var isBuffered = false
+    /// Volume pedal position, 0…1.
+    var volume: Float = 1
+    var isGateOn = false
+    /// Gate threshold in dBFS.
+    var gateThresholdDB: Float = -54
+
+    /// Cable capacitance per foot, picofarads (typical instrument cable)
+    static let picofaradsPerFoot: Float = 30
+    /// A buffer sits after the guitar cable; everything after it no longer loads the pickup.
+    static let guitarCableFeet: Float = 10
+
+    /// The cable the pickup actually "sees".
+    var loadingFeet: Float { isBuffered ? min(cableFeet, Self.guitarCableFeet) : cableFeet }
+
+    /// Resonant frequency of a single-coil pickup (≈2.5 H, 100 pF) with this cable, in Hz:
+    /// f = 1 / (2π √(L·C)). Above it, highs roll off.
+    var pickupResonanceHz: Float {
+        let inductance: Float = 2.5
+        let capacitance = (100 + loadingFeet * Self.picofaradsPerFoot) * 1e-12
+        return 1 / (2 * Float.pi * (inductance * capacitance).squareRoot())
     }
 }
 

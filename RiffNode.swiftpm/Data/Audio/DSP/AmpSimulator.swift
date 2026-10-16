@@ -1,3 +1,4 @@
+import Accelerate
 import Foundation
 import Synchronization
 
@@ -124,8 +125,8 @@ enum AmpDesign {
         stages.append(Stage(kind: .highShelf, frequency: 3_200, q: 0.7, gainDB: (s.treble - 0.5) * 24))
 
         switch s.cabinet {
-        case .direct:
-            break
+        case .direct, .impulse:
+            break   // no speaker model (an IR, when loaded, is convolved separately)
         case .oneByTwelve:
             stages.append(Stage(kind: .highPass, frequency: 95, q: 0.7, gainDB: 0))
             stages.append(Stage(kind: .peak, frequency: 140, q: 1.2, gainDB: 2))
@@ -160,81 +161,140 @@ enum AmpDesign {
 
 // MARK: - Amp Processor (audio thread)
 
+/// Everything the audio thread needs, computed on the main thread and handed over through
+/// two pre-allocated banks and an atomic index – the audio thread never allocates or locks.
 final class AmpProcessor: @unchecked Sendable {
 
-    // Settings packed into atomics: knobs as Float bits, model and cabinet as indices
-    private let gainBits = Atomic<UInt32>(Float(0.35).bitPattern)
-    private let bassBits = Atomic<UInt32>(Float(0.5).bitPattern)
-    private let midBits = Atomic<UInt32>(Float(0.5).bitPattern)
-    private let trebleBits = Atomic<UInt32>(Float(0.55).bitPattern)
-    private let masterBits = Atomic<UInt32>(Float(0.5).bitPattern)
-    private let modelIndex = Atomic<Int>(0)
-    private let cabinetIndex = Atomic<Int>(2)
-    private let generation = Atomic<Int>(1)
+    static let maxStages = 9
+    static let maxIRLength = 2048
+    // Bank layout: [stageCount, preGain, tightCoefficient, masterDrive, postGain, useIR, b0 b1 b2 a1 a2 × maxStages]
+    private static let header = 6
+    private static let bankSize = header + maxStages * 5
 
-    /// Called on the main thread.
+    private let banks = UnsafeMutablePointer<Float>.allocate(capacity: 2 * bankSize)
+    private let activeBank = Atomic<Int>(0)
+    private let generation = Atomic<Int>(0)
+
+    // Impulse response: two banks of taps (stored reversed for convolution), atomic switch
+    private let irBanks = UnsafeMutablePointer<Float>.allocate(capacity: 2 * maxIRLength)
+    private let irActive = Atomic<Int>(0)
+    private let irLength = Atomic<Int>(0)
+    private var irWriteBank = 1
+
+    private var sampleRate: Float = 48_000
+
+    init() {
+        banks.initialize(repeating: 0, count: 2 * Self.bankSize)
+        irBanks.initialize(repeating: 0, count: 2 * Self.maxIRLength)
+        history.initialize(repeating: 0, count: 2 * Self.historyLength)
+        scratch.initialize(repeating: 0, count: 4096)
+        apply(AmpSettings())
+    }
+
+    deinit {
+        banks.deallocate()
+        irBanks.deallocate()
+        history.deallocate()
+        scratch.deallocate()
+    }
+
+    // MARK: Main thread
+
+    /// The engine's sample rate, so coefficients are designed for it.
+    func setSampleRate(_ rate: Float) { sampleRate = rate }
+
     func apply(_ s: AmpSettings) {
-        gainBits.store(s.gain.bitPattern, ordering: .relaxed)
-        bassBits.store(s.bass.bitPattern, ordering: .relaxed)
-        midBits.store(s.mid.bitPattern, ordering: .relaxed)
-        trebleBits.store(s.treble.bitPattern, ordering: .relaxed)
-        masterBits.store(s.master.bitPattern, ordering: .relaxed)
-        modelIndex.store(AmpModel.allCases.firstIndex(of: s.model) ?? 0, ordering: .relaxed)
-        cabinetIndex.store(CabinetType.allCases.firstIndex(of: s.cabinet) ?? 0, ordering: .relaxed)
+        let bank = 1 - activeBank.load(ordering: .acquiring)
+        let base = banks + bank * Self.bankSize
+        let useIR = s.cabinet == .impulse && irLength.load(ordering: .relaxed) > 0
+        var designed = s
+        if s.cabinet == .impulse { designed.cabinet = .direct }   // the IR replaces the filter model
+        let stages = AmpDesign.stages(for: designed).prefix(Self.maxStages)
+
+        base[0] = Float(stages.count)
+        base[1] = pow(10, AmpDesign.preampGainDB(model: s.model, gain: s.gain) / 20)
+        // High-gain amps cut lows before the tubes so palm mutes stay tight
+        let tightHz: Float = s.model == .lead ? 160 : (s.model == .crunch ? 100 : 40)
+        base[2] = exp(-2 * Float.pi * tightHz / sampleRate)
+        base[3] = 0.6 + s.master * 2.4
+        // Keep loudness roughly steady across gain settings
+        base[4] = (0.25 + s.master * 0.5) / max(0.6, min(1.6, 0.9 + s.gain * 0.4))
+        base[5] = useIR ? 1 : 0
+        for (i, stage) in stages.enumerated() {
+            let c = Biquad.coefficients(stage.kind, frequency: stage.frequency, q: stage.q, gainDB: stage.gainDB, sampleRate: sampleRate)
+            let o = Self.header + i * 5
+            (base[o], base[o + 1], base[o + 2], base[o + 3], base[o + 4]) = c
+        }
+        activeBank.store(bank, ordering: .releasing)
         generation.add(1, ordering: .releasing)
     }
 
-    // Render state – touched only on the audio thread
-    private static let maxStages = 9
+    /// Scales an impulse response so its loudest frequency (40 Hz – 8 kHz) has unity gain,
+    /// so swapping cabinets never makes the amp jump in level or clip. Main thread.
+    static func normalizedIR(_ taps: [Float], sampleRate: Float) -> [Float] {
+        var peak: Double = 0
+        for step in 0..<48 {
+            let f = 40 * pow(200.0, Double(step) / 47)   // 40 Hz … 8 kHz
+            let w = 2 * Double.pi * f / Double(sampleRate)
+            var re = 0.0, im = 0.0
+            for (n, h) in taps.enumerated() { re += Double(h) * cos(w * Double(n)); im -= Double(h) * sin(w * Double(n)) }
+            peak = max(peak, (re * re + im * im).squareRoot())
+        }
+        guard peak > 0 else { return taps }
+        return taps.map { $0 / Float(peak) }
+    }
+
+    /// Installs an impulse response (already at the engine's sample rate, normalised).
+    func loadIR(_ taps: [Float]) {
+        let count = min(taps.count, Self.maxIRLength)
+        let base = irBanks + irWriteBank * Self.maxIRLength
+        // Stored reversed so a forward correlation computes the convolution
+        for i in 0..<count { base[i] = taps[count - 1 - i] }
+        irLength.store(count, ordering: .relaxed)
+        irActive.store(irWriteBank, ordering: .releasing)
+        irWriteBank = 1 - irWriteBank
+    }
+
+    // MARK: Audio thread
+
     private var filters = [Biquad](repeating: Biquad(), count: maxStages)
     private var stageCount = 0
-    private var seenGeneration = 0
-    private var sampleRate: Float = 48_000
-    private var preGain: Float = 1
-    private var postGain: Float = 1
-    private var masterDrive: Float = 1
+    private var seenGeneration = -1
+    private var preGain: Float = 1, tightCoefficient: Float = 0, masterDrive: Float = 1, postGain: Float = 1
+    private var useIR = false
     private var inputHighPass: (Float, Float) = (0, 0)
-    private var tightCoefficient: Float = 0
+
+    /// Per-channel input history for the convolution: the last (maxIRLength − 1) samples, then the block.
+    private static let historyLength = maxIRLength - 1 + 4096
+    private let history = UnsafeMutablePointer<Float>.allocate(capacity: 2 * historyLength)
+    private let scratch = UnsafeMutablePointer<Float>.allocate(capacity: 4096)
 
     func prepare(sampleRate: Float) {
         self.sampleRate = sampleRate
-        filters = [Biquad](repeating: Biquad(), count: Self.maxStages)
         inputHighPass = (0, 0)
-        seenGeneration = 0
+        history.update(repeating: 0, count: 2 * Self.historyLength)
+        seenGeneration = -1
     }
 
     private func refreshIfNeeded() {
         let current = generation.load(ordering: .acquiring)
         guard current != seenGeneration else { return }
         seenGeneration = current
-
-        let settings = AmpSettings(
-            isEnabled: true,
-            model: AmpModel.allCases[modelIndex.load(ordering: .relaxed)],
-            cabinet: CabinetType.allCases[cabinetIndex.load(ordering: .relaxed)],
-            gain: Float(bitPattern: gainBits.load(ordering: .relaxed)),
-            bass: Float(bitPattern: bassBits.load(ordering: .relaxed)),
-            mid: Float(bitPattern: midBits.load(ordering: .relaxed)),
-            treble: Float(bitPattern: trebleBits.load(ordering: .relaxed)),
-            master: Float(bitPattern: masterBits.load(ordering: .relaxed)))
-
-        let stages = AmpDesign.stages(for: settings)
-        stageCount = min(stages.count, Self.maxStages)
+        let base = banks + activeBank.load(ordering: .acquiring) * Self.bankSize
+        stageCount = min(Int(base[0]), Self.maxStages)
+        preGain = base[1]; tightCoefficient = base[2]; masterDrive = base[3]; postGain = base[4]
+        useIR = base[5] > 0.5
         for i in 0..<stageCount {
-            let s = stages[i]
-            filters[i].set(s.kind, frequency: s.frequency, q: s.q, gainDB: s.gainDB, sampleRate: sampleRate)
+            let o = Self.header + i * 5
+            // Coefficients change; the filter's memory stays, so knob turns don't click
+            filters[i].b0 = base[o]; filters[i].b1 = base[o + 1]; filters[i].b2 = base[o + 2]
+            filters[i].a1 = base[o + 3]; filters[i].a2 = base[o + 4]
         }
-        preGain = pow(10, AmpDesign.preampGainDB(model: settings.model, gain: settings.gain) / 20)
-        // High-gain amps cut lows before the tubes so palm mutes stay tight
-        let tightHz: Float = settings.model == .lead ? 160 : (settings.model == .crunch ? 100 : 40)
-        tightCoefficient = exp(-2 * Float.pi * tightHz / sampleRate)
-        masterDrive = 0.6 + settings.master * 2.4
-        // Keep loudness roughly steady across gain settings
-        postGain = (0.25 + settings.master * 0.5) / max(0.6, min(1.6, 0.9 + settings.gain * 0.4))
     }
 
     func process(_ data: UnsafeMutablePointer<Float>, frames: Int, channel: Int) {
         if channel == 0 { refreshIfNeeded() }
+        let frames = min(frames, 4096)
         var low = channel == 0 ? inputHighPass.0 : inputHighPass.1
         for i in 0..<frames {
             let x = data[i]
@@ -242,7 +302,7 @@ final class AmpProcessor: @unchecked Sendable {
             // Preamp: asymmetric tube-style soft clip (the negative half saturates later)
             let driven = (x - low) * preGain
             let pre = driven >= 0 ? tanh(driven) : tanh(driven * 0.8) / 0.8
-            // Tone stack + cabinet
+            // Tone stack (+ cabinet model when no IR)
             var y = pre
             for s in 0..<stageCount { y = filters[s].process(y, channel: channel) }
             // Power amp: soft saturation as the master goes up
@@ -250,5 +310,24 @@ final class AmpProcessor: @unchecked Sendable {
             data[i] = y * postGain
         }
         if channel == 0 { inputHighPass.0 = low } else { inputHighPass.1 = low }
+
+        if useIR { convolve(data, frames: frames, channel: channel) }
+    }
+
+    /// Direct-form FIR with the loaded impulse response (a real speaker + microphone).
+    private func convolve(_ data: UnsafeMutablePointer<Float>, frames: Int, channel: Int) {
+        let taps = irLength.load(ordering: .relaxed)
+        guard taps > 0 else { return }
+        let ir = irBanks + irActive.load(ordering: .acquiring) * Self.maxIRLength
+        let h = history + channel * Self.historyLength
+        let keep = Self.maxIRLength - 1
+        // history = [last keep samples][this block]
+        (h + keep).update(from: data, count: frames)
+        // y[n] = Σ x[n + keep − (taps−1) + k] · ir_reversed[k] – vectorised by Accelerate
+        let start = h + keep - (taps - 1)
+        vDSP_conv(start, 1, ir, 1, scratch, 1, vDSP_Length(frames), vDSP_Length(taps))
+        data.update(from: scratch, count: frames)
+        // Slide: the newest `keep` samples become the history for the next block
+        h.update(from: h + frames, count: keep)
     }
 }

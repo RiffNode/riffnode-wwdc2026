@@ -27,6 +27,10 @@ final class EffectUnitsContainer {
     /// Amp and speaker cabinet – always last, like the amp a real pedalboard plugs into.
     let amp: AVAudioUnit
     let ampKernel: ModulationKernel
+
+    /// Pickup + cable, volume pedal and noise gate – always first, before the wah.
+    let input: AVAudioUnit
+    let inputKernel: ModulationKernel
     
     // Modulation – real LFO-driven DSP (see ModulationAudioUnit)
     let chorus: AVAudioUnit
@@ -49,12 +53,15 @@ final class EffectUnitsContainer {
         let fuzz = try await ModulationAudioUnit.make(.fuzz)
         let wah = try await ModulationAudioUnit.make(.wah)
         let amp = try await ModulationAudioUnit.make(.amp)
+        let input = try await ModulationAudioUnit.make(.input)
+        let delay = try await ModulationAudioUnit.make(.analogDelay)
         return EffectUnitsContainer(chorus: chorus, phaser: phaser, flanger: flanger, tremolo: tremolo,
-                                    overdrive: overdrive, distortion: distortion, fuzz: fuzz, wah: wah, amp: amp)
+                                    overdrive: overdrive, distortion: distortion, fuzz: fuzz, wah: wah, amp: amp, input: input, delay: delay)
     }
     
     // Time & Ambience
-    let delay: AVAudioUnitDelay
+    let delay: AVAudioUnit
+    let delayKernel: ModulationKernel
     let reverb: AVAudioUnitReverb
 
     private init(
@@ -66,7 +73,9 @@ final class EffectUnitsContainer {
         distortion distortionUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
         fuzz fuzzUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
         wah wahUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
-        amp ampUnit: (unit: AVAudioUnit, kernel: ModulationKernel)
+        amp ampUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
+        input inputUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
+        delay delayUnit: (unit: AVAudioUnit, kernel: ModulationKernel)
     ) {
         // Dynamics — Apple's real Dynamics Processor (hardware compressor AU)
         let compDesc = AudioComponentDescription(
@@ -104,16 +113,16 @@ final class EffectUnitsContainer {
         (tremolo, tremoloKernel) = tremoloUnit
         (wah, wahKernel) = wahUnit
         (amp, ampKernel) = ampUnit
-        for unit in [chorus, phaser, flanger, tremolo, overdrive, distortion, fuzz, wah] {
+        (input, inputKernel) = inputUnit
+        (delay, delayKernel) = delayUnit
+        for unit in [chorus, phaser, flanger, tremolo, overdrive, distortion, fuzz, wah, delay] {
             unit.auAudioUnit.shouldBypassEffect = true
         }
 
-        // Delay
-        delay = AVAudioUnitDelay()
-        delay.delayTime = 0.3
-        delay.feedback = 40
-        delay.wetDryMix = 30
-        delay.bypass = true
+        // Delay – analog-style echo in the custom Audio Unit (see ModulationAudioUnit)
+        delayKernel.rate = 0.3
+        delayKernel.feedback = 0.4
+        delayKernel.mix = 0.3
 
         // Reverb
         reverb = AVAudioUnitReverb()
@@ -124,7 +133,7 @@ final class EffectUnitsContainer {
 
     /// Every unit, so wiring code can disconnect them all without listing them again.
     var allUnits: [AVAudioUnit] {
-        EffectType.allCases.compactMap { audioUnit(for: $0) } + [wah, amp]
+        EffectType.allCases.compactMap { audioUnit(for: $0) } + [wah, amp, input]
     }
 
     func audioUnit(for type: EffectType) -> AVAudioUnit? {
@@ -166,7 +175,7 @@ final class EffectUnitsContainer {
         case .tremolo:
             tremolo.auAudioUnit.shouldBypassEffect = bypassed
         case .delay:
-            delay.bypass = bypassed
+            delay.auAudioUnit.shouldBypassEffect = bypassed
         case .reverb:
             reverb.bypass = bypassed
         }

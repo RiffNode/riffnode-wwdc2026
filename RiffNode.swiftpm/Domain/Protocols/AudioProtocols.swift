@@ -65,6 +65,20 @@ protocol AmpControlling: AnyObject {
     var ampSettings: AmpSettings { get set }
     /// Tone stack + cabinet response, dB at each frequency.
     func ampResponse(at frequencies: [Float]) -> [Float]
+    /// Name of the loaded cabinet impulse response, if any.
+    var cabinetIRName: String? { get }
+    /// Loads a cabinet impulse response (.wav/.aiff) and switches the cabinet to it.
+    func loadCabinetIR(from url: URL) async throws
+}
+
+/// Before the first pedal: pickup and cable, buffer, volume pedal, noise gate, tuner mute.
+@MainActor
+protocol InputStageControlling: AnyObject {
+    var inputSettings: InputSettings { get set }
+    /// Pickup + cable response, dB at each frequency.
+    func inputResponse(at frequencies: [Float]) -> [Float]
+    /// Silences the output while tuning, like a tuner pedal's mute.
+    var isTunerMuted: Bool { get set }
 }
 
 /// The 10-band parametric EQ.
@@ -193,7 +207,7 @@ protocol PresetProviding {
 /// Everything the audio engine offers, for the few places that coordinate it all
 /// (MainViewModel, ContentView). Views take only the pieces they need.
 @MainActor
-protocol AudioManaging: AudioEngineControlling, AudioLevelProviding, AudioAnalysisSource, EffectsChainManaging, AmpControlling,
+protocol AudioManaging: AudioEngineControlling, AudioLevelProviding, AudioAnalysisSource, EffectsChainManaging, AmpControlling, InputStageControlling,
     EqualizerControlling, DemoRiffPlaying, EffectAuditioning, SignalProbing, ExpressionControlling {
     /// The groove and imported songs.
     var playAlong: any BackingTrackManaging { get }

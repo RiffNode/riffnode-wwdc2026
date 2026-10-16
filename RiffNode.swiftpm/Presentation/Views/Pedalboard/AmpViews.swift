@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Amp Head (end of the chain)
 // A real pedalboard ends in an amplifier. This tile is it: tap to dial in the amp.
@@ -71,6 +72,9 @@ struct AmpPanelView: View {
     let engine: any AmpControlling
     var isWide: Bool
 
+    @State private var isImportingIR = false
+    @State private var irError: String?
+
     private var settings: AmpSettings { engine.ampSettings }
 
     var body: some View {
@@ -108,11 +112,37 @@ struct AmpPanelView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Cabinet").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Picker("Cabinet", selection: binding(\.cabinet)) {
+                    Picker("Cabinet", selection: Binding(
+                        get: { engine.ampSettings.cabinet },
+                        set: { cabinet in
+                            // An IR needs a file first
+                            if cabinet == .impulse && engine.cabinetIRName == nil {
+                                isImportingIR = true
+                            } else {
+                                engine.ampSettings.cabinet = cabinet
+                            }
+                        }
+                    )) {
                         ForEach(CabinetType.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     Text(settings.cabinet.summary).font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Button(engine.cabinetIRName == nil ? "Load an IR…" : "Change IR…", systemImage: "waveform.badge.plus") {
+                            isImportingIR = true
+                        }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                        if let name = engine.cabinetIRName {
+                            Text(name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        } else {
+                            Text("A .wav impulse response of a real speaker cabinet")
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }
+                    if let irError {
+                        Text(irError).font(.caption).foregroundStyle(.orange)
+                    }
                 }
 
                 // Five knobs, 0–10 like a real amp panel
@@ -127,6 +157,17 @@ struct AmpPanelView: View {
             }
             .disabled(!settings.isEnabled)
             .opacity(settings.isEnabled ? 1 : 0.6)
+        }
+        .fileImporter(isPresented: $isImportingIR, allowedContentTypes: [.wav, .aiff, .audio]) { result in
+            guard case .success(let url) = result else { return }
+            Task {
+                do {
+                    try await engine.loadCabinetIR(from: url)
+                    irError = nil
+                } catch {
+                    irError = "Couldn't read that impulse response."
+                }
+            }
         }
     }
 
