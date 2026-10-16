@@ -85,8 +85,9 @@ final class MainViewModel {
         gestureController.onGestureDetected = { [weak self] gesture in
             self?.handleGesture(gesture)
         }
+        // Your mouth is the wah pedal: closed = heel down (dark), open = toe down (bright)
         gestureController.onMouthOpenValueChanged = { [engine] value in
-            engine.setExpressionValue(value, for: .equalizer)
+            engine.setWah(value)
         }
         engine.onAudioSamplesAvailable = { [engine, fftAnalyzer, chordDetector] samples in
             if samples.count >= 2048 {
@@ -107,10 +108,11 @@ final class MainViewModel {
             gestureControlEnabled = gestureController.isRunning
             if gestureController.isRunning {
                 notch.announce(icon: "eye.fill", title: "Gesture Control On",
-                               detail: "Nod to switch presets", tint: .purple, priority: .engine)
+                               detail: "Nod to switch presets · open your mouth to wah", tint: .purple, priority: .engine)
             }
         } else {
             gestureController.stop()
+            engine.setWah(nil)
         }
     }
 
@@ -150,9 +152,7 @@ final class MainViewModel {
         case .headTiltRight:
             engine.effectsChain.filter { !$0.isEnabled }.forEach { engine.toggleEffect($0) }
         case .mouthOpen:
-            if let gainEffect = engine.effectsChain.first(where: {
-                [.overdrive, .distortion, .fuzz].contains($0.type)
-            }) { engine.toggleEffect(gainEffect) }
+            break  // the mouth drives the wah continuously; opening it shouldn't also flip a pedal
         case .eyebrowRaise:
             if let comp = engine.effectsChain.first(where: { $0.type == .compressor }) {
                 engine.toggleEffect(comp)

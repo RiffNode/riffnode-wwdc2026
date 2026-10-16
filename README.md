@@ -34,10 +34,10 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 
 ## Why RiffNode
 
-- **No guitar? Still playable.** A built-in demo riff is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
+- **No guitar? Still playable.** A built-in demo riff – an original J-pop / city-pop funk cutting part – is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
 - **Always something to jam with.** A built-in drums-and-bass groove (Em · C · G · D, 112 BPM) is also synthesized on device – or import your own song and send it through your pedals.
 - **See the physics.** The Signal Lab draws each pedal's input against its output, live – distortion flattening the peaks, a compressor squeezing the volume, a flanger's comb of notches – with measurements that put numbers on the change.
-- **Hands-free control.** Vision face tracking turns head nods, tilts and an open mouth into preset changes, bypass and a wah-style expression pedal.
+- **Hands-free control.** Vision face tracking turns head nods and tilts into preset changes and bypass, and your mouth into a wah pedal – a resonant band-pass that sweeps from 350 Hz to 2.2 kHz as you open it.
 - **Describe the tone, get the tone.** Foundation Models translates "warm jazz clean" or "heavy metal riff" into real effect parameters, entirely on device – and shows each step live as it picks pedals and dials in settings.
 - **Learn by listening.** Every effect in the guide has a **Hear it** button: the demo riff plays through that pedal alone, with an A/B switch against the dry sound.
 - **Private and offline.** No account, no network, no analytics. Audio, camera frames and AI prompts never leave the device.
@@ -95,7 +95,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 | --- | --- |
 | Nod down / up | Next / previous preset |
 | Tilt left / right | Bypass all / enable all |
-| Open mouth | Wah-style expression control |
+| Open mouth | Wah – closed is heel down (dark), open is toe down (bright) |
 | Raise eyebrows | Toggle compressor |
 
 ### On-device AI
@@ -155,7 +155,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 
 - **Swift 6 audio taps** – tap blocks are global, non-isolated functions writing into a lock-protected buffer, so no `@MainActor` closure ever runs on the audio thread.
 - **Responsive start-up** – `AVAudioSession` activation runs off the main thread.
-- **Demo riff and groove** – Karplus–Strong plucked strings, plus synthesized kick, snare, hi-hat and bass, render on device with seeded generators – no bundled audio files. Imported songs are converted to the engine's sample rate with `AVAudioConverter`.
+- **Demo riff and groove** – Karplus–Strong plucked strings (all-pass tuned, with filtered pick noise and ghost-note mutes), plus synthesized kick, snare, hi-hat and bass, render on device with seeded generators – no bundled audio files. Imported songs are converted to the engine's sample rate with `AVAudioConverter`.
 - **Real-time modulation DSP** – a custom `AUAudioUnit` processes in place on the audio thread with no allocation or locks; parameters cross threads through `Synchronization.Atomic`.
 - **Fast on-device AI** – a compact `@Generable` schema (up to five pedals, three settings each) and a fresh, prewarmed session per request keep responses to a few seconds and never overflow the 4K context window.
 

@@ -434,6 +434,22 @@ final class AudioEngineManager: AudioManaging {
         return min(max(bandwidth, 0.05), 5)
     }
 
+    // MARK: - Wah
+
+    /// Mouth wah: nil turns it off; 0…1 is the pedal position (heel → toe).
+    func setWah(_ position: Float?) {
+        guard let units = effectUnits else { return }
+        if let position {
+            units.wahKernel.depth = position
+            if units.wah.auAudioUnit.shouldBypassEffect { units.wah.auAudioUnit.shouldBypassEffect = false }
+        } else {
+            units.wah.auAudioUnit.shouldBypassEffect = true
+        }
+        isWahActive = position != nil
+    }
+
+    private(set) var isWahActive = false
+
     // MARK: - Expression/CV Control
 
     /// Set expression value for CV-controlled parameters (e.g., Wah via mouth openness)
@@ -891,6 +907,7 @@ final class AudioEngineManager: AudioManaging {
         engine.attach(units.overdrive)
         engine.attach(units.distortion)
         engine.attach(units.fuzz)
+        engine.attach(units.wah)
         
         // Modulation
         engine.attach(units.chorus)
@@ -942,7 +959,9 @@ final class AudioEngineManager: AudioManaging {
             engine.disconnectNodeOutput(unit)
         }
 
-        var currentNode: AVAudioNode = fxMixer
+        // The mouth-controlled wah sits first, like a wah pedal at the front of a real board
+        engine.connect(fxMixer, to: units.wah, format: format)
+        var currentNode: AVAudioNode = units.wah
         for type in order {
             guard let unit = units.audioUnit(for: type) else { continue }
             engine.connect(currentNode, to: unit, format: format)
@@ -997,7 +1016,7 @@ final class AudioEngineManager: AudioManaging {
               let index = order.firstIndex(of: type),
               let after = units.audioUnit(for: type) else { return }
         let before: AVAudioNode = index == 0
-            ? fxMixer
+            ? units.wah
             : units.audioUnit(for: order[index - 1]) ?? fxMixer
 
         before.installTap(onBus: 0, bufferSize: 1024, format: nil,
@@ -1264,6 +1283,10 @@ private final class EffectUnitsContainer {
     let overdriveKernel: ModulationKernel
     let distortionKernel: ModulationKernel
     let fuzzKernel: ModulationKernel
+
+    /// Mouth-controlled wah – always first in the chain, bypassed unless gesture control drives it.
+    let wah: AVAudioUnit
+    let wahKernel: ModulationKernel
     
     // Modulation – real LFO-driven DSP (see ModulationAudioUnit)
     let chorus: AVAudioUnit
@@ -1284,8 +1307,9 @@ private final class EffectUnitsContainer {
         let overdrive = try await ModulationAudioUnit.make(.overdrive)
         let distortion = try await ModulationAudioUnit.make(.distortion)
         let fuzz = try await ModulationAudioUnit.make(.fuzz)
+        let wah = try await ModulationAudioUnit.make(.wah)
         return EffectUnitsContainer(chorus: chorus, phaser: phaser, flanger: flanger, tremolo: tremolo,
-                                    overdrive: overdrive, distortion: distortion, fuzz: fuzz)
+                                    overdrive: overdrive, distortion: distortion, fuzz: fuzz, wah: wah)
     }
     
     // Time & Ambience
@@ -1299,7 +1323,8 @@ private final class EffectUnitsContainer {
         tremolo tremoloUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
         overdrive overdriveUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
         distortion distortionUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
-        fuzz fuzzUnit: (unit: AVAudioUnit, kernel: ModulationKernel)
+        fuzz fuzzUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
+        wah wahUnit: (unit: AVAudioUnit, kernel: ModulationKernel)
     ) {
         // Dynamics — Apple's real Dynamics Processor (hardware compressor AU)
         let compDesc = AudioComponentDescription(
@@ -1335,7 +1360,8 @@ private final class EffectUnitsContainer {
         (phaser, phaserKernel) = phaserUnit
         (flanger, flangerKernel) = flangerUnit
         (tremolo, tremoloKernel) = tremoloUnit
-        for unit in [chorus, phaser, flanger, tremolo, overdrive, distortion, fuzz] {
+        (wah, wahKernel) = wahUnit
+        for unit in [chorus, phaser, flanger, tremolo, overdrive, distortion, fuzz, wah] {
             unit.auAudioUnit.shouldBypassEffect = true
         }
 
@@ -1355,7 +1381,7 @@ private final class EffectUnitsContainer {
 
     /// Every unit, so wiring code can disconnect them all without listing them again.
     var allUnits: [AVAudioUnit] {
-        EffectType.allCases.compactMap { audioUnit(for: $0) }
+        EffectType.allCases.compactMap { audioUnit(for: $0) } + [wah]
     }
 
     func audioUnit(for type: EffectType) -> AVAudioUnit? {

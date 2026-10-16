@@ -16,9 +16,11 @@ import CoreAudio  // UnsafeMutableAudioBufferListPointer lives here on Mac Catal
 //
 // and the three gain pedals, as waveshapers you can watch in the Signal Lab:
 //
-//  • Overdrive  – tanh soft clipping after a bass cut: the peaks bend over smoothly
+//  • Overdrive  – soft clipping of the mids and highs, mixed with the clean signal
 //  • Distortion – hard clipping at a ceiling: flat tops, strong odd harmonics
 //  • Fuzz       – huge gain into asymmetric clipping: close to a square wave
+//
+// and a wah – a resonant band-pass swept by the player's mouth (gesture control).
 //
 // Drive sets the gain before the clipper, Tone a low-pass after it, Level the output.
 //
@@ -120,6 +122,7 @@ final class ModulationKernel: @unchecked Sendable {
     enum Mode {
         case tremolo, chorus, flanger, phaser
         case overdrive, distortion, fuzz
+        case wah
     }
 
     /// Set once, before the unit starts rendering.
@@ -189,6 +192,12 @@ final class ModulationKernel: @unchecked Sendable {
     /// Gain pedals: one-pole filter states (bass cut before, tone after the clipper).
     private let highPassState = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
     private let lowPassState = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    private let dcBlockIn = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    private let dcBlockOut = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    /// Wah: state-variable filter states and the smoothed pedal position.
+    private let wahLow = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    private let wahBand = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    private var wahPosition: Float = 0.5
 
     init() {
         reset()
@@ -201,6 +210,10 @@ final class ModulationKernel: @unchecked Sendable {
         phaserFeedbackSample.deallocate()
         highPassState.deallocate()
         lowPassState.deallocate()
+        dcBlockIn.deallocate()
+        dcBlockOut.deallocate()
+        wahLow.deallocate()
+        wahBand.deallocate()
     }
 
     func prepare(sampleRate: Float, channelCount: Int) {
@@ -216,6 +229,10 @@ final class ModulationKernel: @unchecked Sendable {
         phaserFeedbackSample.initialize(repeating: 0, count: Self.maxChannels)
         highPassState.initialize(repeating: 0, count: Self.maxChannels)
         lowPassState.initialize(repeating: 0, count: Self.maxChannels)
+        dcBlockIn.initialize(repeating: 0, count: Self.maxChannels)
+        dcBlockOut.initialize(repeating: 0, count: Self.maxChannels)
+        wahLow.initialize(repeating: 0, count: Self.maxChannels)
+        wahBand.initialize(repeating: 0, count: Self.maxChannels)
         writeIndex = 0
         lfoPhase = 0
     }
@@ -240,6 +257,10 @@ final class ModulationKernel: @unchecked Sendable {
 
         if mode == .overdrive || mode == .distortion || mode == .fuzz {
             processDrive(input: input, output: output, frameCount: frameCount, channels: channels)
+            return
+        }
+        if mode == .wah {
+            processWah(input: input, output: output, frameCount: frameCount, channels: channels)
             return
         }
 
@@ -294,8 +315,8 @@ final class ModulationKernel: @unchecked Sendable {
                     phaserFeedbackSample[channel] = signal
                     destination[frame] = 0.5 * (dry + signal)
 
-                case .overdrive, .distortion, .fuzz:
-                    continue  // handled by processDrive
+                case .overdrive, .distortion, .fuzz, .wah:
+                    continue  // handled by processDrive / processWah
                 }
             }
 
@@ -308,57 +329,109 @@ final class ModulationKernel: @unchecked Sendable {
     }
 
     // MARK: Gain pedals
+    // Modelled on how the classic circuits work (not component-level emulations):
+    //  • Overdrive – Tube Screamer: an op-amp stage with diodes in its feedback loop, 21.5–41.5 dB
+    //    of gain applied only above ~720 Hz. The output is the clean signal plus the soft-clipped
+    //    part, so the bass stays clean and the mids push forward.
+    //  • Distortion – ProCo RAT: up to ~60 dB of op-amp gain, then diodes to ground clip the
+    //    wave flat at a fixed ceiling (hard clipping), then a low-pass "filter" control.
+    //  • Fuzz – Fuzz Face: two transistors with huge gain and different headroom on each half of
+    //    the wave – soft, asymmetric clipping that turns hard as the fuzz goes up.
 
     private func processDrive(input: UnsafeMutableAudioBufferListPointer,
                               output: UnsafeMutableAudioBufferListPointer,
                               frameCount: Int, channels: Int) {
         let drive = depth, tone = self.tone, level = self.level
 
-        // Gain before the clipper, in dB: overdrive up to +30, distortion +44, fuzz +52
-        let maxGainDB: Float = switch mode {
-        case .overdrive: 30
-        case .distortion: 44
-        default: 52
+        let gainDB: Float = switch mode {
+        case .overdrive: 21.5 + drive * 20     // TS808: ×12 … ×118
+        case .distortion: 6 + drive * 54       // RAT: up to ~60 dB
+        default: 20 + drive * 34               // Fuzz Face
         }
-        let gain = pow(10, (6 + drive * (maxGainDB - 6)) / 20)
+        let gain = pow(10, gainDB / 20)
 
-        // Bass cut before clipping keeps chords from turning to mud (not on fuzz – fuzz is fat)
-        let highPassHz: Float = mode == .fuzz ? 20 : (mode == .overdrive ? 180 : 100)
-        let highPassCoefficient = exp(-2 * Float.pi * highPassHz / sampleRate)
+        // Overdrive clips only what's above 720 Hz; the RAT trims rumble; the fuzz keeps it all
+        let splitHz: Float = switch mode {
+        case .overdrive: 720
+        case .distortion: 60
+        default: 20
+        }
+        let splitCoefficient = exp(-2 * Float.pi * splitHz / sampleRate)
         // Tone: low-pass from 1.2 kHz (dark) to 9 kHz (bright), exponential
         let lowPassHz = 1_200 * pow(7.5, tone)
         let lowPassCoefficient = exp(-2 * Float.pi * lowPassHz / sampleRate)
-        // Level: clipped signals sit near full scale, so 0.5 lands near unity loudness
-        let outputGain = level * level * 0.8
+        // DC blocker after the asymmetric fuzz (the output capacitor's job in the real pedal)
+        let dcCoefficient: Float = 0.995
+        let outputGain = level * level * 1.6
 
         for channel in 0..<channels {
             guard let source = input[channel].mData?.assumingMemoryBound(to: Float.self),
                   let destination = output[channel].mData?.assumingMemoryBound(to: Float.self) else { continue }
-            var lowState = highPassState[channel]   // tracks the bass removed
+            var lowState = highPassState[channel]   // the part below the split frequency
             var toneState = lowPassState[channel]
+            var dcIn = dcBlockIn[channel], dcOut = dcBlockOut[channel]
 
             for frame in 0..<frameCount {
                 let dry = source[frame]
-                lowState = (1 - highPassCoefficient) * dry + highPassCoefficient * lowState
+                lowState = (1 - splitCoefficient) * dry + splitCoefficient * lowState
                 let x = (dry - lowState) * gain
 
-                let clipped: Float
+                var shaped: Float
                 switch mode {
                 case .overdrive:
-                    clipped = tanh(x)                          // smooth, rounded peaks
+                    // Diodes in the feedback loop limit the clipped part to about ±0.5;
+                    // the clean signal passes straight through alongside it
+                    shaped = dry + 0.5 * tanh(x / 0.5)
                 case .distortion:
-                    clipped = min(max(x, -0.7), 0.7) / 0.7     // flat tops
+                    shaped = min(max(x, -0.6), 0.6) / 0.6      // diodes to ground: flat tops
                 default:
-                    // Fuzz: offset bias makes the halves clip differently – a gated, square buzz
-                    let biased = x + 0.25
-                    clipped = min(max(biased, -0.55), 0.35) / 0.45 - 0.22
+                    // Different headroom on each half; tanh turns hard as the gain rises
+                    shaped = x >= 0 ? 0.6 * tanh(x / 0.6) : 1.0 * tanh(x / 1.0)
+                    let blocked = shaped - dcIn + dcCoefficient * dcOut
+                    dcIn = shaped
+                    dcOut = blocked
+                    shaped = blocked * 1.3
                 }
 
-                toneState = (1 - lowPassCoefficient) * clipped + lowPassCoefficient * toneState
+                toneState = (1 - lowPassCoefficient) * shaped + lowPassCoefficient * toneState
                 destination[frame] = toneState * outputGain
             }
             highPassState[channel] = lowState
             lowPassState[channel] = toneState
+            dcBlockIn[channel] = dcIn
+            dcBlockOut[channel] = dcOut
+        }
+    }
+
+    // MARK: Wah
+
+    /// A Cry Baby–style wah: a resonant band-pass (Q ≈ 4) whose centre sweeps from 350 Hz
+    /// (heel down) to 2.2 kHz (toe down). `depth` is the pedal position – here, how far the
+    /// player's mouth is open. The position is smoothed per sample so the sweep never zips.
+    private func processWah(input: UnsafeMutableAudioBufferListPointer,
+                            output: UnsafeMutableAudioBufferListPointer,
+                            frameCount: Int, channels: Int) {
+        let target = depth
+        let damping: Float = 1 / 4          // 1/Q
+        let smoothing: Float = 1 - exp(-1 / (0.02 * sampleRate))   // ~20 ms glide
+
+        for frame in 0..<frameCount {
+            wahPosition += (target - wahPosition) * smoothing
+            let centre = 350 * pow(2_200 / 350, wahPosition)
+            let f = 2 * sin(Float.pi * min(centre, sampleRate * 0.2) / sampleRate)
+
+            for channel in 0..<channels {
+                guard let source = input[channel].mData?.assumingMemoryBound(to: Float.self),
+                      let destination = output[channel].mData?.assumingMemoryBound(to: Float.self) else { continue }
+                // Chamberlin state-variable filter
+                let dry = source[frame]
+                let low = wahLow[channel] + f * wahBand[channel]
+                let high = dry - low - damping * wahBand[channel]
+                let band = wahBand[channel] + f * high
+                wahLow[channel] = low
+                wahBand[channel] = band
+                destination[frame] = band * 0.6 + dry * 0.1
+            }
         }
     }
 

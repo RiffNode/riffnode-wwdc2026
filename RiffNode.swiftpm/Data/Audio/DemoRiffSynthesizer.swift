@@ -1,75 +1,85 @@
 import Foundation
 
 // MARK: - Demo Riff Synthesizer
-// Renders a short, original power-chord riff with Karplus–Strong plucked-string synthesis.
-// It lets anyone hear the pedalboard without a guitar or audio interface:
-// the riff is generated on device (no bundled audio, works offline) and is
-// fed into the effects chain exactly where a real guitar would be.
+// Renders a short, original funk "cutting" guitar part – the bright, 16th-note chord stabs of
+// J-pop and city pop – with Karplus–Strong plucked-string synthesis. It lets anyone hear the
+// pedalboard without a guitar or audio interface: the riff is generated on device (no bundled
+// audio, works offline) and is fed into the effects chain exactly where a real guitar would be.
+//
+// Four bars – Em9 · Cmaj7 · Gmaj7 · Dadd9 – over the same chords and tempo as the built-in
+// groove (Em · C · G · D, 112 BPM), so the two lock together.
 
 enum DemoRiffSynthesizer {
 
-    /// One power chord hit, positioned on an eighth-note grid.
-    private struct Hit {
-        let slot: Int        // eighth-note index from the start of the loop
-        let root: Int        // MIDI note number of the root
-        let length: Int      // in eighth notes
-        let palmMuted: Bool
-    }
-
     static let tempo: Double = 112
 
-    /// Two bars in E minor that loop seamlessly (E5 · G5 · A5 · C5 · B5 · D5).
-    private static let riff: [Hit] = [
-        Hit(slot: 0,  root: 40, length: 1, palmMuted: true),
-        Hit(slot: 1,  root: 40, length: 1, palmMuted: true),
-        Hit(slot: 2,  root: 43, length: 2, palmMuted: false),
-        Hit(slot: 4,  root: 40, length: 1, palmMuted: true),
-        Hit(slot: 5,  root: 40, length: 1, palmMuted: true),
-        Hit(slot: 6,  root: 45, length: 2, palmMuted: false),
-        Hit(slot: 8,  root: 40, length: 1, palmMuted: true),
-        Hit(slot: 9,  root: 40, length: 1, palmMuted: true),
-        Hit(slot: 10, root: 48, length: 1, palmMuted: false),
-        Hit(slot: 11, root: 47, length: 1, palmMuted: false),
-        Hit(slot: 12, root: 45, length: 4, palmMuted: false),
+    /// What happens on one 16th note.
+    private enum Stroke {
+        case down, up       // a chord stab, strummed low→high or high→low
+        case ghost          // a muted "chk" – fretting hand resting on the strings
+        case note(Int)      // a single note (MIDI)
+        case rest
 
-        Hit(slot: 16, root: 40, length: 1, palmMuted: true),
-        Hit(slot: 17, root: 40, length: 1, palmMuted: true),
-        Hit(slot: 18, root: 43, length: 2, palmMuted: false),
-        Hit(slot: 20, root: 40, length: 1, palmMuted: true),
-        Hit(slot: 21, root: 40, length: 1, palmMuted: true),
-        Hit(slot: 22, root: 45, length: 2, palmMuted: false),
-        Hit(slot: 24, root: 50, length: 2, palmMuted: false),
-        Hit(slot: 26, root: 48, length: 2, palmMuted: false),
-        Hit(slot: 28, root: 47, length: 4, palmMuted: false),
+        var isUp: Bool { if case .up = self { true } else { false } }
+    }
+
+    /// Chord voicings in the middle of the neck, low string to high (MIDI).
+    private static let voicings: [[Int]] = [
+        [52, 55, 62, 66],   // Em9   x-7-5-7-7-x
+        [48, 55, 59, 64],   // Cmaj7 x-3-5-4-5-x
+        [55, 62, 66, 71],   // Gmaj7 x-x-5-7-7-7
+        [50, 57, 64, 66],   // Dadd9 x-5-7-9-7-x
     ]
 
-    private static let loopLengthInEighths = 32
+    /// One bar of cutting: stabs on the accents, ghost strums in between.
+    ///                         1    e      &      a     2      e     &      a
+    private static let groove: [Stroke] = [.down, .ghost, .up, .down, .ghost, .up, .ghost, .up,
+    ///                         3    e      &      a     4      e     &      a
+                                           .down, .ghost, .ghost, .up, .ghost, .up, .down, .rest]
 
-    /// Renders one loop of the riff as mono samples, normalised to a guitar-like level.
+    /// The last bar ends on a little E minor pentatonic run instead.
+    private static let fill: [Stroke] = [.down, .ghost, .up, .down, .ghost, .up, .ghost, .rest,
+                                         .note(62), .note(64), .note(67), .note(64),
+                                         .note(69), .rest, .note(71), .rest]
+
+    /// Renders one four-bar loop as mono samples, normalised to a guitar-like level.
     static func render(sampleRate: Double) -> [Float] {
-        let eighth = 60 / tempo / 2
-        let totalFrames = Int(Double(loopLengthInEighths) * eighth * sampleRate)
-        var output = [Float](repeating: 0, count: totalFrames)
-        var random = SeededRandom(seed: 0x5249_4646)  // "RIFF" – same riff every time
+        let sixteenth = 60 / tempo / 4
+        let barFrames = Int(16 * sixteenth * sampleRate)
+        var output = [Float](repeating: 0, count: barFrames * voicings.count)
+        var random = SeededRandom(seed: 0x4355_5421)  // "CUT!" – same riff every time
 
-        for hit in riff {
-            let start = Int(Double(hit.slot) * eighth * sampleRate)
-            let frames = Int(Double(hit.length) * eighth * sampleRate)
-            // Power chord: root, fifth, octave – strummed a few ms apart
-            for (stringIndex, interval) in [0, 7, 12].enumerated() {
-                let frequency = 440 * pow(2, Double(hit.root + interval - 69) / 12)
-                let strumOffset = Int(Double(stringIndex) * 0.006 * sampleRate)
-                pluck(
-                    into: &output,
-                    frequency: frequency,
-                    start: start + strumOffset,
-                    frames: frames - strumOffset,
-                    palmMuted: hit.palmMuted,
-                    sampleRate: sampleRate,
-                    random: &random
-                )
+        for (bar, voicing) in voicings.enumerated() {
+            let strokes = bar == voicings.count - 1 ? fill : groove
+            for (step, stroke) in strokes.enumerated() {
+                let start = bar * barFrames + Int(Double(step) * sixteenth * sampleRate)
+                let stab = Int(sixteenth * 1.6 * sampleRate)   // staccato, but rings past its 16th
+                switch stroke {
+                case .down, .up:
+                    let strings = stroke.isUp ? Array(voicing.reversed()) : voicing
+                    for (index, note) in strings.enumerated() {
+                        pluck(into: &output, note: note, start: start + index * Int(0.007 * sampleRate),
+                              frames: stab, brightness: stroke.isUp ? 0.55 : 0.7,
+                              gain: stroke.isUp ? 0.7 : 1, muted: false, sampleRate: sampleRate, random: &random)
+                    }
+                case .ghost:
+                    for (index, note) in voicing.enumerated() {
+                        pluck(into: &output, note: note, start: start + index * Int(0.004 * sampleRate),
+                              frames: Int(0.045 * sampleRate), brightness: 0.9,
+                              gain: 0.35, muted: true, sampleRate: sampleRate, random: &random)
+                    }
+                case .note(let note):
+                    pluck(into: &output, note: note, start: start, frames: Int(sixteenth * 1.8 * sampleRate),
+                          brightness: 0.6, gain: 1.1, muted: false, sampleRate: sampleRate, random: &random)
+                case .rest:
+                    break
+                }
             }
         }
+
+        // Body: take off rumble below ~90 Hz and fizz above ~7 kHz, like a guitar through a DI
+        highPass(&output, cutoff: 90, sampleRate: sampleRate)
+        lowPass(&output, cutoff: 7_000, sampleRate: sampleRate)
 
         let peak = output.reduce(0) { max($0, abs($1)) }
         if peak > 0 {
@@ -79,34 +89,75 @@ enum DemoRiffSynthesizer {
         return output
     }
 
-    /// Karplus–Strong: a burst of noise circulating through a damped delay line.
+    // MARK: - Karplus–Strong
+
+    /// A burst of filtered noise circulating through a tuned, damped delay line.
+    /// The fractional part of the period is handled by a first-order all-pass, so notes are
+    /// in tune (plain Karplus–Strong rounds the period and drifts flat by up to ~30 cents).
     private static func pluck(
-        into output: inout [Float],
-        frequency: Double,
-        start: Int,
-        frames: Int,
-        palmMuted: Bool,
-        sampleRate: Double,
-        random: inout SeededRandom
+        into output: inout [Float], note: Int, start: Int, frames: Int,
+        brightness: Float, gain: Float, muted: Bool, sampleRate: Double, random: inout SeededRandom
     ) {
-        let period = max(2, Int(sampleRate / frequency))
-        var delayLine = (0..<period).map { _ in random.nextSignedUnit() }
-        let damping: Float = palmMuted ? 0.965 : 0.996
-        let releaseFrames = Int(0.01 * sampleRate)
+        let frequency = 440 * pow(2, Double(note - 69) / 12)
+        // The averaging loss filter adds half a sample of delay
+        let exactPeriod = sampleRate / frequency - 0.5
+        let period = max(2, Int(exactPeriod))
+        let fraction = Float(exactPeriod - Double(period))
+        let allpass = (1 - fraction) / (1 + fraction)
+
+        // Pick: noise smoothed by a one-pole low-pass – a softer pick sounds rounder
+        var delayLine = [Float](repeating: 0, count: period)
+        var smoothed: Float = 0
+        for i in 0..<period {
+            smoothed += brightness * (random.nextSignedUnit() - smoothed)
+            delayLine[i] = smoothed
+        }
+        let mean = delayLine.reduce(0, +) / Float(period)
+        for i in 0..<period { delayLine[i] -= mean }
+
+        let decay: Float = muted ? 0.93 : 0.997
+        let releaseFrames = Int((muted ? 0.012 : 0.03) * sampleRate)
         let end = min(output.count, start + frames)
-        guard start < end else { return }
+        guard start >= 0, start < end else { return }
 
         var index = 0
+        var allpassIn: Float = 0, allpassOut: Float = 0
         for frame in start..<end {
             let current = delayLine[index]
             let next = delayLine[(index + 1) % period]
-            delayLine[index] = damping * 0.5 * (current + next)
+            let averaged = decay * 0.5 * (current + next)
+            let tuned = allpass * averaged + allpassIn - allpass * allpassOut
+            allpassIn = averaged
+            allpassOut = tuned
+            delayLine[index] = tuned
             index = (index + 1) % period
 
-            // Short fade at the end of each note so hits don't click
+            // The fretting hand lifts at the end of the note: a quick fade, no click
             let remaining = end - frame
             let release = remaining < releaseFrames ? Float(remaining) / Float(releaseFrames) : 1
-            output[frame] += current * release
+            output[frame] += current * release * gain
+        }
+    }
+
+    // MARK: - Filters
+
+    private static func highPass(_ x: inout [Float], cutoff: Double, sampleRate: Double) {
+        let r = Float(exp(-2 * Double.pi * cutoff / sampleRate))
+        var previousIn: Float = 0, previousOut: Float = 0
+        for i in x.indices {
+            let out = r * (previousOut + x[i] - previousIn)
+            previousIn = x[i]
+            previousOut = out
+            x[i] = out
+        }
+    }
+
+    private static func lowPass(_ x: inout [Float], cutoff: Double, sampleRate: Double) {
+        let a = Float(1 - exp(-2 * Double.pi * cutoff / sampleRate))
+        var state: Float = 0
+        for i in x.indices {
+            state += a * (x[i] - state)
+            x[i] = state
         }
     }
 }
