@@ -109,6 +109,13 @@ final class AudioEngineManager: AudioManaging {
 
     // Visualization
     private var tapInstalled = false
+
+    // Signal Lab – taps on both sides of one pedal
+    @ObservationIgnored let signalProbe = SignalProbeStore()
+    @ObservationIgnored private let outputLevelStore = OutputLevelStore()
+    @ObservationIgnored private var probedNodes: [AVAudioNode] = []
+    /// The pedal whose input and output the Signal Lab is watching.
+    private(set) var probedEffectType: EffectType?
     
     // Store processing format for rebuilding audio chain
     private var processingFormat: AVAudioFormat?
@@ -294,6 +301,11 @@ final class AudioEngineManager: AudioManaging {
 
         // Set bypass state based on effects chain
         syncBypassStates()
+
+        // Measure what actually comes out, for the OUT meter
+        mainMixer?.removeTap(onBus: 0)
+        mainMixer?.installTap(onBus: 0, bufferSize: 1024, format: nil,
+                              block: OutputLevelStore.tapBlock(for: outputLevelStore))
 
         print("setupEngine: DONE - audio chain ready")
     }
@@ -530,10 +542,16 @@ final class AudioEngineManager: AudioManaging {
         print("loadBackingTrack: Loaded \(frameCount) frames, duration: \(backingTrackDuration)s")
     }
 
+    /// Key (semitones from E minor) and tempo of the built-in groove.
+    private(set) var grooveTranspose = 0
+    private(set) var grooveTempo = JamTrackSynthesizer.defaultTempo
+
     /// Loads the built-in drums-and-bass groove (see JamTrackSynthesizer).
-    func loadBuiltInJamTrack() throws {
+    func loadBuiltInJamTrack(tempo: Double? = nil, transpose: Int? = nil) throws {
         guard let format = processingFormat else { throw AudioEngineError.engineNotSetup }
-        let samples = JamTrackSynthesizer.render(sampleRate: format.sampleRate)
+        if let tempo { grooveTempo = tempo }
+        if let transpose { grooveTranspose = transpose }
+        let samples = JamTrackSynthesizer.render(sampleRate: format.sampleRate, tempo: grooveTempo, transpose: grooveTranspose)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)),
               let channels = buffer.floatChannelData else { throw AudioEngineError.bufferCreationFailed }
         buffer.frameLength = AVAudioFrameCount(samples.count)
@@ -932,6 +950,7 @@ final class AudioEngineManager: AudioManaging {
         }
         engine.connect(currentNode, to: mixer, format: format)
         connectedEffectOrder = order
+        installProbeTaps()
 
         // Newly added pedals (AI, presets, Add Pedal) start from their own settings
         for effect in effectsChain { applyEffectParameters(effect) }
@@ -955,6 +974,39 @@ final class AudioEngineManager: AudioManaging {
         }
     }
 
+    // MARK: - Signal Probe
+
+    /// Starts watching the signal just before and just after one pedal (nil stops).
+    func probe(_ type: EffectType?) {
+        guard type != probedEffectType else { return }
+        probedEffectType = type
+        installProbeTaps()
+    }
+
+    /// Taps the node that feeds the probed pedal ("before") and the pedal itself ("after").
+    /// Re-run after every rewire, since the node in front of a pedal can change.
+    private func installProbeTaps() {
+        for node in probedNodes { node.removeTap(onBus: 0) }
+        probedNodes = []
+        signalProbe.reset()
+
+        guard let type = probedEffectType,
+              let units = effectUnits,
+              let fxMixer = fxInputMixer,
+              let order = connectedEffectOrder,
+              let index = order.firstIndex(of: type),
+              let after = units.audioUnit(for: type) else { return }
+        let before: AVAudioNode = index == 0
+            ? fxMixer
+            : units.audioUnit(for: order[index - 1]) ?? fxMixer
+
+        before.installTap(onBus: 0, bufferSize: 1024, format: nil,
+                          block: SignalProbeStore.tapBlock(for: signalProbe, side: .before))
+        after.installTap(onBus: 0, bufferSize: 1024, format: nil,
+                         block: SignalProbeStore.tapBlock(for: signalProbe, side: .after))
+        probedNodes = [before, after]
+    }
+
     /// Coalesces several edits in one turn of the run loop (e.g. append + sort) into one rewire.
     private func scheduleAudioChainRebuild() {
         guard !isChainRebuildScheduled else { return }
@@ -964,6 +1016,13 @@ final class AudioEngineManager: AudioManaging {
             self.isChainRebuildScheduled = false
             self.rebuildAudioChain()
         }
+    }
+
+    /// Gain pedals: Drive, Tone and Level knobs (0–100) straight onto the waveshaper.
+    private func setDrive(_ kernel: ModulationKernel, _ effect: EffectNode, driveKey: String) {
+        kernel.depth = (effect.parameters[driveKey] ?? 50) / 100
+        kernel.tone = (effect.parameters["tone"] ?? 50) / 100
+        kernel.level = (effect.parameters["level"] ?? 50) / 100
     }
 
     private func applyEffectParameters(_ effect: EffectNode) {
@@ -1001,20 +1060,13 @@ final class AudioEngineManager: AudioManaging {
             parametricEQBands = bands
 
         case .overdrive:
-            // drive * level/100 → wetDryMix (drive sets saturation amount, level scales output)
-            let drive = effect.parameters["drive"] ?? 30
-            let level = effect.parameters["level"] ?? 50
-            units.overdrive.wetDryMix = max(0, min(100, drive * (level / 100.0)))
+            setDrive(units.overdriveKernel, effect, driveKey: "drive")
 
         case .distortion:
-            let drive = effect.parameters["drive"] ?? 50
-            let level = effect.parameters["level"] ?? 50
-            units.distortion.wetDryMix = max(0, min(100, drive * (level / 100.0)))
+            setDrive(units.distortionKernel, effect, driveKey: "drive")
 
         case .fuzz:
-            let fuzzAmt = effect.parameters["fuzz"] ?? 70
-            let level = effect.parameters["level"] ?? 50
-            units.fuzz.wetDryMix = max(0, min(100, fuzzAmt * (level / 100.0)))
+            setDrive(units.fuzzKernel, effect, driveKey: "fuzz")
 
         case .chorus:
             let kernel = units.chorusKernel
@@ -1084,9 +1136,9 @@ final class AudioEngineManager: AudioManaging {
         
         // Set bypass for all effect units
         units.compressor.bypass = !enabledTypes.contains(.compressor)
-        units.overdrive.bypass = !enabledTypes.contains(.overdrive)
-        units.distortion.bypass = !enabledTypes.contains(.distortion)
-        units.fuzz.bypass = !enabledTypes.contains(.fuzz)
+        units.overdrive.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.overdrive)
+        units.distortion.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.distortion)
+        units.fuzz.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.fuzz)
         for type in [EffectType.chorus, .phaser, .flanger, .tremolo] {
             units.setBypass(for: type, bypassed: !enabledTypes.contains(type))
         }
@@ -1160,7 +1212,7 @@ final class AudioEngineManager: AudioManaging {
             let data = AudioSampleBuffer.shared.read()
 
             inputLevel = min(1.0, data.rms * 5)
-            outputLevel = inputLevel * 0.9
+            outputLevel = min(1.0, outputLevelStore.rms * 5)
             waveformSamples = data.waveform
 
             // Feed audio samples to FFT/chord every 3rd frame (~10 Hz at 30fps base rate)
@@ -1205,10 +1257,13 @@ private final class EffectUnitsContainer {
     // Filter & Pitch
     let equalizer: AVAudioUnitEQ?
     
-    // Gain / Dirt (using different distortion presets)
-    let overdrive: AVAudioUnitDistortion
-    let distortion: AVAudioUnitDistortion
-    let fuzz: AVAudioUnitDistortion
+    // Gain / Dirt – real waveshapers (see ModulationAudioUnit)
+    let overdrive: AVAudioUnit
+    let distortion: AVAudioUnit
+    let fuzz: AVAudioUnit
+    let overdriveKernel: ModulationKernel
+    let distortionKernel: ModulationKernel
+    let fuzzKernel: ModulationKernel
     
     // Modulation – real LFO-driven DSP (see ModulationAudioUnit)
     let chorus: AVAudioUnit
@@ -1226,7 +1281,11 @@ private final class EffectUnitsContainer {
         let phaser = try await ModulationAudioUnit.make(.phaser)
         let flanger = try await ModulationAudioUnit.make(.flanger)
         let tremolo = try await ModulationAudioUnit.make(.tremolo)
-        return EffectUnitsContainer(chorus: chorus, phaser: phaser, flanger: flanger, tremolo: tremolo)
+        let overdrive = try await ModulationAudioUnit.make(.overdrive)
+        let distortion = try await ModulationAudioUnit.make(.distortion)
+        let fuzz = try await ModulationAudioUnit.make(.fuzz)
+        return EffectUnitsContainer(chorus: chorus, phaser: phaser, flanger: flanger, tremolo: tremolo,
+                                    overdrive: overdrive, distortion: distortion, fuzz: fuzz)
     }
     
     // Time & Ambience
@@ -1237,7 +1296,10 @@ private final class EffectUnitsContainer {
         chorus chorusUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
         phaser phaserUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
         flanger flangerUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
-        tremolo tremoloUnit: (unit: AVAudioUnit, kernel: ModulationKernel)
+        tremolo tremoloUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
+        overdrive overdriveUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
+        distortion distortionUnit: (unit: AVAudioUnit, kernel: ModulationKernel),
+        fuzz fuzzUnit: (unit: AVAudioUnit, kernel: ModulationKernel)
     ) {
         // Dynamics — Apple's real Dynamics Processor (hardware compressor AU)
         let compDesc = AudioComponentDescription(
@@ -1264,29 +1326,16 @@ private final class EffectUnitsContainer {
             }
         }
         
-        // Overdrive - soft clipping
-        overdrive = AVAudioUnitDistortion()
-        overdrive.loadFactoryPreset(.drumsLoFi)
-        overdrive.wetDryMix = 30
-        overdrive.bypass = true
-        
-        // Distortion - hard clipping
-        distortion = AVAudioUnitDistortion()
-        distortion.loadFactoryPreset(.drumsBitBrush)
-        distortion.wetDryMix = 50
-        distortion.bypass = true
-        
-        // Fuzz - heavy saturation
-        fuzz = AVAudioUnitDistortion()
-        fuzz.loadFactoryPreset(.multiDistortedFunk)
-        fuzz.wetDryMix = 70
-        fuzz.bypass = true
-        
+        // Overdrive (soft clip), distortion (hard clip), fuzz (asymmetric square-ish clip)
+        (overdrive, overdriveKernel) = overdriveUnit
+        (distortion, distortionKernel) = distortionUnit
+        (fuzz, fuzzKernel) = fuzzUnit
+
         (chorus, chorusKernel) = chorusUnit
         (phaser, phaserKernel) = phaserUnit
         (flanger, flangerKernel) = flangerUnit
         (tremolo, tremoloKernel) = tremoloUnit
-        for unit in [chorus, phaser, flanger, tremolo] {
+        for unit in [chorus, phaser, flanger, tremolo, overdrive, distortion, fuzz] {
             unit.auAudioUnit.shouldBypassEffect = true
         }
 
@@ -1334,11 +1383,11 @@ private final class EffectUnitsContainer {
         case .equalizer:
             equalizer?.bypass = bypassed
         case .overdrive:
-            overdrive.bypass = bypassed
+            overdrive.auAudioUnit.shouldBypassEffect = bypassed
         case .distortion:
-            distortion.bypass = bypassed
+            distortion.auAudioUnit.shouldBypassEffect = bypassed
         case .fuzz:
-            fuzz.bypass = bypassed
+            fuzz.auAudioUnit.shouldBypassEffect = bypassed
         case .chorus:
             chorus.auAudioUnit.shouldBypassEffect = bypassed
         case .phaser:

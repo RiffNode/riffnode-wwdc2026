@@ -1,7 +1,7 @@
 import SwiftUI
 
 // MARK: - Analyze View
-// "What am I playing?" – a tuner, the chord you're holding, and where your sound sits
+// "What am I playing?" – the chord you're holding and where your sound sits
 // in the frequency range, with a plain-language takeaway that leads into the EQ.
 
 struct AnalyzeView: View {
@@ -30,16 +30,8 @@ struct AnalyzeView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: Spacing.md) {
-                            TunerCard(detector: chordDetector, isHearingSound: isHearingSound)
-                            ChordCard(detector: chordDetector, isHearingSound: isHearingSound)
-                        }
-                        VStack(spacing: Spacing.md) {
-                            TunerCard(detector: chordDetector, isHearingSound: isHearingSound)
-                            ChordCard(detector: chordDetector, isHearingSound: isHearingSound)
-                        }
-                    }
+                    // The tuner lives in the Input card, always in view
+                    ChordCard(detector: chordDetector, isHearingSound: isHearingSound)
 
                     FrequencyMapCard(analyzer: fftAnalyzer, isHearingSound: isHearingSound, dominant: stableRegion)
 
@@ -100,100 +92,6 @@ private struct AnalyzeCard<Content: View>: View {
         .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular.tint(tint.opacity(0.06)), in: RoundedRectangle(cornerRadius: CornerRadius.xl))
-    }
-}
-
-// MARK: - Tuner
-
-private struct TunerCard: View {
-    let detector: ChordDetector
-    let isHearingSound: Bool
-
-    private var hasNote: Bool { isHearingSound && detector.detectedNote != "—" }
-    private var cents: Double { Double(max(-50, min(50, detector.centsDeviation))) }
-    private var status: (text: String, color: Color) {
-        guard hasNote else { return ("Play a single note", .secondary) }
-        if detector.isInTune { return ("In tune", .green) }
-        return cents < 0 ? ("Flat – tune up", .orange) : ("Sharp – tune down", .orange)
-    }
-
-    var body: some View {
-        AnalyzeCard(title: "Tuner", icon: "tuningfork", tint: status.color) {
-            VStack(spacing: 10) {
-                TunerGauge(cents: hasNote ? cents : 0, isActive: hasNote, color: status.color)
-                    .frame(height: 96)
-                    .overlay(alignment: .bottom) {
-                        HStack(alignment: .firstTextBaseline, spacing: 2) {
-                            Text(hasNote ? detector.detectedNote : "–")
-                                .font(.system(size: 44, weight: .bold, design: .rounded))
-                                .contentTransition(.numericText())
-                            if hasNote {
-                                Text("\(detector.detectedOctave)")
-                                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .offset(y: 18)
-                    }
-
-                HStack {
-                    Text(status.text)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(status.color)
-                    Spacer()
-                    if hasNote {
-                        Text(String(format: "%.1f Hz · %+.0f¢", detector.detectedPitch, cents))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.top, 18)
-            }
-            .animation(.snappy, value: detector.detectedNote)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(hasNote ? "Tuner: \(detector.detectedNote), \(status.text)" : "Tuner: no note")
-    }
-}
-
-/// A half-circle cents gauge: the green wedge is "in tune" (±5 cents).
-private struct TunerGauge: View {
-    let cents: Double
-    let isActive: Bool
-    let color: Color
-
-    var body: some View {
-        Canvas { context, size in
-            let center = CGPoint(x: size.width / 2, y: size.height)
-            let radius = min(size.width / 2, size.height) - 6
-
-            func point(_ c: Double, _ r: CGFloat) -> CGPoint {
-                let angle = Angle.degrees(180 + (c + 50) / 100 * 180).radians
-                return CGPoint(x: center.x + cos(angle) * r, y: center.y + sin(angle) * r)
-            }
-
-            // In-tune zone
-            var zone = Path()
-            zone.addArc(center: center, radius: radius,
-                        startAngle: .degrees(180 + 45 / 100 * 180), endAngle: .degrees(180 + 55 / 100 * 180), clockwise: false)
-            context.stroke(zone, with: .color(.green.opacity(0.35)), style: StrokeStyle(lineWidth: 10, lineCap: .round))
-
-            // Ticks every 10 cents
-            for tick in stride(from: -50.0, through: 50, by: 10) {
-                var path = Path()
-                path.move(to: point(tick, radius - (tick == 0 ? 14 : 8)))
-                path.addLine(to: point(tick, radius))
-                context.stroke(path, with: .color(.secondary.opacity(tick == 0 ? 0.8 : 0.4)), lineWidth: tick == 0 ? 2 : 1)
-            }
-
-            // Needle
-            var needle = Path()
-            needle.move(to: point(cents, 0))
-            needle.addLine(to: point(cents, radius - 2))
-            context.stroke(needle, with: .color(isActive ? color : .secondary.opacity(0.3)),
-                           style: StrokeStyle(lineWidth: 3, lineCap: .round))
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: cents)
     }
 }
 

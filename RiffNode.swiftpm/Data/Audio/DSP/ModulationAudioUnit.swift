@@ -14,6 +14,14 @@ import CoreAudio  // UnsafeMutableAudioBufferListPointer lives here on Mac Catal
 //  • Flanger – a 1–5 ms swept delay with feedback, the "jet plane" comb filter
 //  • Phaser  – six all-pass stages swept between 300 Hz and 3 kHz, carving moving notches
 //
+// and the three gain pedals, as waveshapers you can watch in the Signal Lab:
+//
+//  • Overdrive  – tanh soft clipping after a bass cut: the peaks bend over smoothly
+//  • Distortion – hard clipping at a ceiling: flat tops, strong odd harmonics
+//  • Fuzz       – huge gain into asymmetric clipping: close to a square wave
+//
+// Drive sets the gain before the clipper, Tone a low-pass after it, Level the output.
+//
 // The render block runs on the real-time audio thread: no allocation, no locks.
 // Parameters cross threads through atomics; everything else is touched only while rendering.
 
@@ -111,6 +119,7 @@ final class ModulationKernel: @unchecked Sendable {
 
     enum Mode {
         case tremolo, chorus, flanger, phaser
+        case overdrive, distortion, fuzz
     }
 
     /// Set once, before the unit starts rendering.
@@ -122,6 +131,8 @@ final class ModulationKernel: @unchecked Sendable {
     private let depthBits = Atomic<UInt32>(Float(0.5).bitPattern)
     private let mixBits = Atomic<UInt32>(Float(0.5).bitPattern)
     private let feedbackBits = Atomic<UInt32>(Float(0.3).bitPattern)
+    private let toneBits = Atomic<UInt32>(Float(0.5).bitPattern)
+    private let levelBits = Atomic<UInt32>(Float(0.5).bitPattern)
     private let bypassFlag = Atomic<Bool>(false)
 
     /// LFO speed in Hz.
@@ -144,6 +155,16 @@ final class ModulationKernel: @unchecked Sendable {
         get { Float(bitPattern: feedbackBits.load(ordering: .relaxed)) }
         set { feedbackBits.store(min(max(newValue, 0), 0.95).bitPattern, ordering: .relaxed) }
     }
+    /// Gain pedals: 0 dark … 1 bright.
+    var tone: Float {
+        get { Float(bitPattern: toneBits.load(ordering: .relaxed)) }
+        set { toneBits.store(min(max(newValue, 0), 1).bitPattern, ordering: .relaxed) }
+    }
+    /// Gain pedals: output volume, 0…1.
+    var level: Float {
+        get { Float(bitPattern: levelBits.load(ordering: .relaxed)) }
+        set { levelBits.store(min(max(newValue, 0), 1).bitPattern, ordering: .relaxed) }
+    }
     var isBypassed: Bool {
         get { bypassFlag.load(ordering: .relaxed) }
         set { bypassFlag.store(newValue, ordering: .relaxed) }
@@ -165,6 +186,9 @@ final class ModulationKernel: @unchecked Sendable {
     private let allpassInput = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels * phaserStages)
     private let allpassOutput = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels * phaserStages)
     private let phaserFeedbackSample = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    /// Gain pedals: one-pole filter states (bass cut before, tone after the clipper).
+    private let highPassState = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    private let lowPassState = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
 
     init() {
         reset()
@@ -175,6 +199,8 @@ final class ModulationKernel: @unchecked Sendable {
         allpassInput.deallocate()
         allpassOutput.deallocate()
         phaserFeedbackSample.deallocate()
+        highPassState.deallocate()
+        lowPassState.deallocate()
     }
 
     func prepare(sampleRate: Float, channelCount: Int) {
@@ -188,6 +214,8 @@ final class ModulationKernel: @unchecked Sendable {
         allpassInput.initialize(repeating: 0, count: Self.maxChannels * Self.phaserStages)
         allpassOutput.initialize(repeating: 0, count: Self.maxChannels * Self.phaserStages)
         phaserFeedbackSample.initialize(repeating: 0, count: Self.maxChannels)
+        highPassState.initialize(repeating: 0, count: Self.maxChannels)
+        lowPassState.initialize(repeating: 0, count: Self.maxChannels)
         writeIndex = 0
         lfoPhase = 0
     }
@@ -207,6 +235,11 @@ final class ModulationKernel: @unchecked Sendable {
                       source != destination else { continue }
                 destination.update(from: source, count: frameCount)
             }
+            return
+        }
+
+        if mode == .overdrive || mode == .distortion || mode == .fuzz {
+            processDrive(input: input, output: output, frameCount: frameCount, channels: channels)
             return
         }
 
@@ -260,6 +293,9 @@ final class ModulationKernel: @unchecked Sendable {
                     }
                     phaserFeedbackSample[channel] = signal
                     destination[frame] = 0.5 * (dry + signal)
+
+                case .overdrive, .distortion, .fuzz:
+                    continue  // handled by processDrive
                 }
             }
 
@@ -268,6 +304,61 @@ final class ModulationKernel: @unchecked Sendable {
             }
             lfoPhase += phaseIncrement
             if lfoPhase >= 1 { lfoPhase -= 1 }
+        }
+    }
+
+    // MARK: Gain pedals
+
+    private func processDrive(input: UnsafeMutableAudioBufferListPointer,
+                              output: UnsafeMutableAudioBufferListPointer,
+                              frameCount: Int, channels: Int) {
+        let drive = depth, tone = self.tone, level = self.level
+
+        // Gain before the clipper, in dB: overdrive up to +30, distortion +44, fuzz +52
+        let maxGainDB: Float = switch mode {
+        case .overdrive: 30
+        case .distortion: 44
+        default: 52
+        }
+        let gain = pow(10, (6 + drive * (maxGainDB - 6)) / 20)
+
+        // Bass cut before clipping keeps chords from turning to mud (not on fuzz – fuzz is fat)
+        let highPassHz: Float = mode == .fuzz ? 20 : (mode == .overdrive ? 180 : 100)
+        let highPassCoefficient = exp(-2 * Float.pi * highPassHz / sampleRate)
+        // Tone: low-pass from 1.2 kHz (dark) to 9 kHz (bright), exponential
+        let lowPassHz = 1_200 * pow(7.5, tone)
+        let lowPassCoefficient = exp(-2 * Float.pi * lowPassHz / sampleRate)
+        // Level: clipped signals sit near full scale, so 0.5 lands near unity loudness
+        let outputGain = level * level * 0.8
+
+        for channel in 0..<channels {
+            guard let source = input[channel].mData?.assumingMemoryBound(to: Float.self),
+                  let destination = output[channel].mData?.assumingMemoryBound(to: Float.self) else { continue }
+            var lowState = highPassState[channel]   // tracks the bass removed
+            var toneState = lowPassState[channel]
+
+            for frame in 0..<frameCount {
+                let dry = source[frame]
+                lowState = (1 - highPassCoefficient) * dry + highPassCoefficient * lowState
+                let x = (dry - lowState) * gain
+
+                let clipped: Float
+                switch mode {
+                case .overdrive:
+                    clipped = tanh(x)                          // smooth, rounded peaks
+                case .distortion:
+                    clipped = min(max(x, -0.7), 0.7) / 0.7     // flat tops
+                default:
+                    // Fuzz: offset bias makes the halves clip differently – a gated, square buzz
+                    let biased = x + 0.25
+                    clipped = min(max(biased, -0.55), 0.35) / 0.45 - 0.22
+                }
+
+                toneState = (1 - lowPassCoefficient) * clipped + lowPassCoefficient * toneState
+                destination[frame] = toneState * outputGain
+            }
+            highPassState[channel] = lowState
+            lowPassState[channel] = toneState
         }
     }
 

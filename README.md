@@ -36,7 +36,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 
 - **No guitar? Still playable.** A built-in demo riff is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
 - **Always something to jam with.** A built-in drums-and-bass groove (Em · C · G · D, 112 BPM) is also synthesized on device – or import your own song and send it through your pedals.
-- **See the sound.** A live waveform, IN/OUT meters, a tuner, chord detection and a frequency map react to every note – and explain in plain words what they mean for your tone.
+- **See the physics.** The Signal Lab draws each pedal's input against its output, live – distortion flattening the peaks, a compressor squeezing the volume, a flanger's comb of notches – with measurements that put numbers on the change.
 - **Hands-free control.** Vision face tracking turns head nods, tilts and an open mouth into preset changes, bypass and a wah-style expression pedal.
 - **Describe the tone, get the tone.** Foundation Models translates "warm jazz clean" or "heavy metal riff" into real effect parameters, entirely on device – and shows each step live as it picks pedals and dials in settings.
 - **Learn by listening.** Every effect in the guide has a **Hear it** button: the demo riff plays through that pedal alone, with an A/B switch against the dry sound.
@@ -51,7 +51,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 | 3 | Tap **No guitar? Try the Demo Riff** (`⌘D`) | A riff plays through your pedals; the visualizer, spectrum and chord detector come alive |
 | 4 | Tap a pedal, or double-tap to bypass it | The sound and the spectrum change instantly; the notch announces the change |
 | 5 | Open the **Tone Assistant** (`⌘J`) and tap *Ambient pad* | Watch it pick pedals and settings step by step, then rebuild the chain |
-| 6 | Tap **Built-in groove** in Jam Track | Drums and bass in the same key and tempo as the riff |
+| 6 | Press play on **Groove** in Play Along | Drums and bass in any minor key; the current chord lights up |
 | 7 | Turn on **Gesture Control** and nod | Presets switch hands-free, with feedback in the notch |
 
 > [!TIP]
@@ -77,7 +77,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 
 ### Real-time effects
 
-11 effect types, built on `AVAudioEngine`. Every pedal stays wired in chain order, so switching one on or off is an instant bypass. AVFoundation has no modulation effects, so Chorus, Flanger, Phaser and Tremolo run in a custom in-process **Audio Unit** with real LFO-driven DSP.
+11 effect types, built on `AVAudioEngine`. Every pedal stays wired in chain order, so switching one on or off is an instant bypass. Chorus, Flanger, Phaser and Tremolo, and the Overdrive (soft clip), Distortion (hard clip) and Fuzz waveshapers, run in a custom in-process **Audio Unit** with real DSP – every knob changes the signal.
 
 | Category | Effects |
 | --- | --- |
@@ -100,10 +100,12 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 
 ### On-device AI
 
-- **Tone Assistant** – chat in plain English; Foundation Models returns structured settings with `@Generable` and applies them to the pedalboard. Output is streamed, so the chat shows what the model is doing ("Picking pedals: Distortion · Reverb", "Setting reverb decay → 5").
+- **Tone Assistant** – chat in plain English. Commands that name a pedal ("more reverb") run instantly and exactly on device; described sounds ("Comfortably Numb solo") go to Foundation Models, which sketches the sound with `@Generable` (style, gain, space, signature pedals) while a recipe book sets the knobs – the model recognises music well but picks poor raw numbers. Output is streamed, so the chat shows what the model is doing.
+- **Signal Lab** – taps on both sides of the selected pedal show its waveform, volume envelope and spectrum before and after, plus peakiness, loudness range, brightness and gap measurements.
+- **Play Along** – a built-in groove in any minor key and tempo with chord highlighting and the scale to solo with, your own songs, or Apple Music (controlled in-app on iPad) and Spotify playing alongside.
 - **Honest fallback** – RiffNode checks `SystemLanguageModel.availability`. Without Apple Intelligence an offline tone matcher answers instead, and every reply is labelled with which one responded.
 - **Chord → tone suggestions** – when a chord is held steadily, RiffNode suggests a matching tone you can apply in one tap.
-- **Analyze** – a cents-accurate tuner, chord detection, and a frequency map split into the ranges guitarists talk about (bass, body, mids, bite, air), with a plain-language takeaway that jumps straight into the EQ. FFT (Accelerate / vDSP) and autocorrelation pitch detection power it all; the same live spectrum is drawn behind the Parametric EQ curve.
+- **Tuner & Analyze** – a cents-accurate tuner always in the Input card; chord detection and a frequency map split into the ranges guitarists talk about (bass, body, mids, bite, air), with a plain-language takeaway that jumps straight into the EQ. FFT (Accelerate / vDSP) and autocorrelation pitch detection power it all; the same live spectrum is drawn behind the Parametric EQ curve.
 
 ### Keyboard shortcuts (Mac and iPad)
 

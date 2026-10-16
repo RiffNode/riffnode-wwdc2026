@@ -8,6 +8,7 @@ struct EffectsChainView: View {
     /// Selection is kept by ID and resolved against the live chain: presets and the AI
     /// replace every node, and editing a stale node would change nothing you can hear.
     @State private var selectedEffectID: UUID?
+    @State private var width: CGFloat = 800
 
     private var selectedEffect: EffectNode? {
         engine.effectsChain.first { $0.id == selectedEffectID }
@@ -100,18 +101,26 @@ struct EffectsChainView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
 
-                // Parameter controls for the selected pedal
+                // The selected pedal: its knobs, and what it does to the signal
                 if let effect = selectedEffect {
-                    GlassPedalControlsView(effect: effect, engine: engine)
-                        .id(effect.id)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .bottom).combined(with: .opacity),
-                            removal: .opacity
-                        ))
+                    let layout = width > 980
+                        ? AnyLayout(HStackLayout(alignment: .top, spacing: Spacing.md))
+                        : AnyLayout(VStackLayout(spacing: Spacing.md))
+                    layout {
+                        GlassPedalControlsView(effect: effect, engine: engine, isCompact: width > 980)
+                            .frame(maxWidth: width > 980 ? 320 : .infinity)
+                        SignalLabView(effect: effect, engine: engine)
+                    }
+                    .id(effect.id)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .opacity
+                    ))
                 }
             }
         }
         .padding()
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         }
         .animation(.spring(duration: 0.3), value: selectedEffectID)
         .onAppear(perform: ensureSelection)
@@ -326,6 +335,8 @@ struct PedalboardCable: View {
 struct GlassPedalControlsView: View {
     @Bindable var effect: EffectNode
     let engine: AudioEngineManager
+    /// Narrow column next to the Signal Lab: knobs wrap onto more rows.
+    var isCompact = false
     @State private var showingInfo = false
 
     var body: some View {
@@ -378,7 +389,7 @@ struct GlassPedalControlsView: View {
                 }
 
                 // Knobs based on effect type
-                GlassEffectKnobsView(effect: effect, binding: binding)
+                GlassEffectKnobsView(effect: effect, binding: binding, spacing: isCompact ? 12 : 24)
             }
         }
         .animation(.spring(duration: 0.3), value: showingInfo)
@@ -542,9 +553,10 @@ struct FlowLayout: Layout {
 struct GlassEffectKnobsView: View {
     let effect: EffectNode
     let binding: (String) -> Binding<Float>
+    var spacing: CGFloat = 24
 
     var body: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: spacing) {
             switch effect.type {
             // Dynamics
             case .compressor:

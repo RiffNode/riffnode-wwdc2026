@@ -7,58 +7,43 @@ import FoundationModels
 
 // MARK: - Generable Output Types
 
-/// Structured output for the on-device model. The schema is kept deliberately small:
-/// only the pedals a request touches, with at most three settings each. The earlier
-/// design asked for all 32 parameters on every request, which took ~15 s to generate.
+/// What the on-device model fills in for a described sound. It only names the sound –
+/// style, gain, space, signature pedals – and ToneRecipeBook turns that into knob values.
+/// Tested on the iOS 27 / macOS 27 model: it recognises styles and songs well (~2 s) but
+/// picks poor raw numbers ("more reverb" → mix 5), so it is never asked for numbers.
 #if canImport(FoundationModels)
 @available(iOS 26, macOS 26, *)
 @Generable
-enum ToneCommandMode {
-    /// Replace the whole tone ("heavy metal", "jazz clean")
-    case preset
-    /// Change only the pedals mentioned ("add reverb", "more bass")
-    case additive
-    /// Turn pedals off ("remove delay")
-    case remove
-    /// Not a tone request – a greeting, thanks, or a question. Reply only; change nothing.
-    case chat
+enum SketchStyle {
+    case clean, jazz, blues, classicRock, hardRock, metal, punk, grunge, funk, country
+    case surf, eighties, ambient, shoegaze, psychedelic, lofi, ballad
 }
 
 @available(iOS 26, macOS 26, *)
 @Generable
-enum ToneEffect {
-    case compressor, overdrive, distortion, fuzz, chorus, phaser, flanger, tremolo, delay, reverb, equalizer
+enum SketchGain { case clean, light, crunchy, heavy }
+
+@available(iOS 26, macOS 26, *)
+@Generable
+enum SketchSpace { case dry, room, hall, huge }
+
+@available(iOS 26, macOS 26, *)
+@Generable
+enum SketchPedal {
+    case compressor, overdrive, distortion, fuzz, chorus, phaser, flanger, tremolo, delay, reverb
 }
 
 @available(iOS 26, macOS 26, *)
 @Generable
-struct ToneSetting {
-    @Guide(description: "A parameter of this pedal", .anyOf([
-        "drive", "tone", "level", "rate", "depth", "mix", "feedback", "time", "decay",
-        "threshold", "ratio", "attack", "release", "bass", "mid", "treble"
-    ]))
-    var name: String
-    var value: Double
-}
-
-@available(iOS 26, macOS 26, *)
-@Generable
-struct PedalSetting {
-    var effect: ToneEffect
-    @Guide(description: "Only the settings that define this sound", .maximumCount(3))
-    var settings: [ToneSetting]
-}
-
-@available(iOS 26, macOS 26, *)
-@Generable
-struct EffectRecommendation {
-    var mode: ToneCommandMode
-    @Guide(description: "Pedals to turn on, with their settings", .maximumCount(5))
-    var pedals: [PedalSetting]
-    @Guide(description: "Pedals to turn off; only for additive or remove", .maximumCount(5))
-    var pedalsToTurnOff: [ToneEffect]
-    @Guide(description: "One short, musical sentence about the tone")
-    var explanation: String
+struct ToneSketch {
+    @Guide(description: "The closest style")
+    var style: SketchStyle
+    var gain: SketchGain
+    var space: SketchSpace
+    @Guide(description: "Extra pedals this sound is known for, beyond drive and reverb", .maximumCount(3))
+    var signaturePedals: [SketchPedal]
+    @Guide(description: "Why this suits the request, in under 15 words, no exclamation marks")
+    var reason: String
 }
 #endif
 
@@ -231,43 +216,9 @@ final class SemanticCommandProcessor {
             // Set instructions once at session creation — the model caches this context
             // so each respond() call only processes the short user message, not the full prompt
             let instructions = """
-            You are RiffNode's guitar tone expert. Turn the player's request into pedal settings.
-
-            Mode – pick one:
-            preset: a whole style or genre ("heavy metal", "jazz clean", "for this Em riff"). Replaces the tone.
-            additive: change only the pedals mentioned ("add reverb", "more bass", "faster tremolo"). Use the current pedalboard you are given.
-            remove: turn pedals off ("remove delay", "no distortion").
-            chat: anything that is not asking for a sound – greetings ("hi"), thanks, or questions ("what does a phaser do?"). Leave pedals empty and answer in the explanation.
-            Only change the tone when the player asks for one. Never invent a request.
-
-            Pedal settings (ranges):
-            compressor threshold -40…0, ratio 1…20, attack 0.1…100, release 10…500
-            overdrive / distortion / fuzz: drive 0…100, tone 0…100, level 0…100
-            chorus rate 0.1…10 Hz, depth 0…100, mix 0…100
-            phaser rate 0.1…5 Hz, depth 0…100, feedback 0…100
-            flanger rate 0.1…2 Hz, depth 0…100, feedback 0…100
-            tremolo rate 0.5…15 Hz, depth 0…100
-            delay time 0.05…2 s, feedback 0…90, mix 0…100
-            reverb mix 0…100, decay 0.1…10 s
-            equalizer bass/mid/treble -12…12 dB
-
-            Recipes:
-            heavy metal: distortion drive 90 tone 35, equalizer bass 5 mid -4 treble 3
-            jazz clean: compressor threshold -18 ratio 3, reverb mix 25 decay 1.2, equalizer treble -3
-            blues: overdrive drive 50 tone 65, reverb mix 30
-            classic rock: overdrive drive 60, reverb mix 25, equalizer mid 3
-            80s clean: chorus rate 0.8 depth 70 mix 65, delay time 0.35 mix 45, reverb mix 35
-            ambient: reverb mix 85 decay 6, delay time 0.55 feedback 55 mix 55, chorus depth 40
-            shoegaze: distortion drive 65 tone 30, chorus depth 80, reverb mix 85 decay 5
-            surf: reverb mix 90 decay 3.5, tremolo rate 4.5 depth 75
-            funk: compressor threshold -22 ratio 6, equalizer treble 3
-            psychedelic: fuzz drive 75, phaser rate 0.6 depth 70 feedback 60, reverb mix 55
-            If the player names a chord: minor suits warm overdrive, major suits clean sparkle, power chords suit distortion.
-
-            Use at most 5 pedals and only the settings that matter.
-
-            Explanation: one or two calm, specific sentences in your own words about this request:
-            which pedals you chose and why they fit it. No hype, no exclamation marks.
+            You are a guitar tone expert. Describe the sound the player asks for: its style, how much gain, \
+            how much space, and any pedals it is known for (for example a solo with long echoes needs delay; \
+            a wobbling sound needs tremolo or chorus).
             """
             self.instructions = instructions
             refreshAvailability()
@@ -319,18 +270,22 @@ final class SemanticCommandProcessor {
 
     // MARK: - Process Command
 
-    /// Process a natural language command and return effect recommendations
-    /// - Parameter pedalboard: a short description of the current chain, so the model
-    ///   can make relative changes ("more reverb") without needing chat history.
+    /// Handles one message from the player.
+    /// - Greetings and thanks get a local reply; nothing changes.
+    /// - Questions are answered in words (Apple Intelligence, or the effect guide offline).
+    /// - Commands that name a pedal ("more reverb", "remove delay") run instantly and exactly
+    ///   through the local parser – the small model is unreliable at these.
+    /// - Described sounds ("Comfortably Numb solo", "dreamy and spacey") go to Apple
+    ///   Intelligence, which sketches the sound; ToneRecipeBook sets the knobs.
+    /// - Parameter pedalboard: kept for callers; described sounds replace the whole tone.
     func processCommand(_ command: String, pedalboard: String? = nil) async -> Bool {
         isProcessing = true
+        defer { isProcessing = false }
         lastCommand = command
         errorMessage = nil
+        lastDeletedEffects = []
         thinkingSteps = [ThinkingStep(id: "context", text: "Reading your request", isDone: true)]
 
-        // Only real tone requests may change the pedalboard. Greetings and questions are
-        // recognised here, before the model – the small on-device model tends to answer
-        // everything with a tone otherwise.
         switch Self.classify(command) {
         case .smallTalk:
             finishChat(Self.smallTalkReply(for: command), by: .offlineMatcher)
@@ -338,11 +293,13 @@ final class SemanticCommandProcessor {
         case .question:
             await answerQuestion(command)
             return true
+        case .command:
+            setStep("local", "Adjusting the pedals you named", done: true)
+            lastResponder = .offlineMatcher
+            return processCommandFallback(command)
         case .tone:
             break
         }
-
-        defer { isProcessing = false }
 
         #if canImport(FoundationModels)
         refreshAvailability()
@@ -351,54 +308,67 @@ final class SemanticCommandProcessor {
             preparedSession = nil
             defer { prepareNextSession() }
             do {
-                let prompt = pedalboard.map { "Current pedalboard: \($0)\nRequest: \(command)" } ?? command
-                setStep("model", "Asking Apple Intelligence", done: false)
-                let stream = session.streamResponse(to: prompt, generating: EffectRecommendation.self)
+                setStep("model", "Apple Intelligence is listening to your description", done: false)
+                let stream = session.streamResponse(to: command, generating: ToneSketch.self)
                 for try await snapshot in stream {
                     updateThinkingSteps(from: snapshot.content)
                 }
-                let result = try await stream.collect().content
+                let sketch = try await stream.collect().content
+
+                // Pedals the player named themselves always make it in
+                let named = Self.mentionedPedals(in: command)
+                let values = ToneSketchValues(
+                    style: ToneStyle(rawValue: String(describing: sketch.style)) ?? .clean,
+                    gain: ToneGain(rawValue: String(describing: sketch.gain)) ?? .light,
+                    space: ToneSpace(rawValue: String(describing: sketch.space)) ?? .room,
+                    signaturePedals: (sketch.signaturePedals.map { String(describing: $0) } + named).removingDuplicates(),
+                    reason: sketch.reason
+                )
+                let (effects, parameters) = ToneRecipeBook.build(values)
+                setStep("recipe", "Setting the knobs from the \(values.style.title) recipe", done: true)
                 markAllStepsDone()
 
-                lastCommandMode = String(describing: result.mode)
-                lastEnabledEffects = result.pedals
-                    .map { String(describing: $0.effect) }
-                    .removingDuplicates()
-                lastDisabledEffects = result.pedalsToTurnOff
-                    .map { String(describing: $0) }
-                    .removingDuplicates()
+                let reason = values.reason.trimmingCharacters(in: .whitespacesAndNewlines)
+                let explanation = "\(values.style.title), \(values.gain.rawValue) gain, \(values.space.rawValue) space. "
+                    + (reason.prefix(1).uppercased() + reason.dropFirst())
+                    + (reason.hasSuffix(".") ? "" : ".")
+                var finalParameters = parameters
+                finalParameters.explanation = explanation
 
-                // Start from sensible defaults; overwrite only what the model chose
-                var parameters = FallbackToneParameters()
-                for pedal in result.pedals {
-                    for setting in pedal.settings {
-                        parameters.set(setting.name, to: setting.value, for: String(describing: pedal.effect))
-                    }
-                }
-                let explanation = result.explanation.prefix(1).uppercased() + result.explanation.dropFirst()
-                parameters.explanation = explanation
-                lastParameters = parameters
+                lastCommandMode = "preset"
+                lastEnabledEffects = effects
+                lastDisabledEffects = []
+                lastParameters = finalParameters
                 lastExplanation = explanation
                 lastResponder = .appleIntelligence
                 return true
             } catch {
                 errorMessage = "Apple Intelligence couldn't answer: \(error.localizedDescription)"
                 setStep("fallback", "Apple Intelligence couldn't answer – using the offline matcher", done: true)
-                // Fall through to the offline matcher
             }
         } else {
             setStep("fallback", "Matching your words to a tone (offline)", done: true)
         }
         #endif
 
-        // Fallback: instant keyword matching
         lastResponder = .offlineMatcher
         return processCommandFallback(command)
     }
 
+    /// Pedal names that appear in the text, in the model's vocabulary.
+    private static func mentionedPedals(in text: String) -> [String] {
+        let lower = text.lowercased()
+        let names: [(String, [String])] = [
+            ("delay", ["delay", "echo"]), ("reverb", ["reverb"]), ("chorus", ["chorus"]),
+            ("phaser", ["phaser"]), ("flanger", ["flanger"]), ("tremolo", ["tremolo"]),
+            ("fuzz", ["fuzz"]), ("compressor", ["compressor", "compression"]),
+        ]
+        return names.filter { _, words in words.contains { lower.contains($0) } }.map(\.0)
+    }
+
     // MARK: - Request Classification
 
-    enum RequestKind { case smallTalk, question, tone }
+    enum RequestKind { case smallTalk, question, command, tone }
 
     private static let smallTalkWords: Set<String> = [
         "hi", "hello", "hey", "yo", "hiya", "thanks", "thank", "you", "thx", "ty", "ok", "okay",
@@ -425,8 +395,27 @@ final class SemanticCommandProcessor {
             || questionWords.contains(words[0])
         let requestsChange = toneVerbs.contains { lower.contains($0) }
         if asksSomething && !requestsChange { return .question }
+
+        // A command names a pedal or knob and says what to do with it ("more reverb",
+        // "turn off the delay", "less gain, brighter", "set delay time 0.4").
+        let namesKnob = knobWords.contains { lower.contains($0) }
+        let startsWithVerb = commandVerbs.contains { words[0] == $0 || lower.hasPrefix($0 + " ") }
+        if namesKnob && (startsWithVerb || words.count <= 2) { return .command }
+        if commandVerbs.contains(words[0]) && ["brighter", "darker", "louder", "quieter", "warmer"].contains(where: lower.contains) {
+            return .command
+        }
         return .tone
     }
+
+    private static let knobWords = [
+        "reverb", "delay", "echo", "chorus", "phaser", "flanger", "tremolo", "distortion", "overdrive",
+        "drive", "fuzz", "compressor", "eq", "equalizer", "bass", "treble", "mid", "gain", "brighter", "darker"
+    ]
+    private static let commandVerbs = [
+        "add", "more", "less", "remove", "delete", "turn", "set", "increase", "decrease", "boost", "cut",
+        "enable", "disable", "bypass", "no", "without", "lower", "raise", "reduce", "crank", "put", "change",
+        "make", "kill", "drop", "get"
+    ]
 
     private static func smallTalkReply(for text: String) -> String {
         let lower = text.lowercased()
@@ -491,38 +480,22 @@ final class SemanticCommandProcessor {
     }
 
     #if canImport(FoundationModels)
-    /// Turns the partially generated answer into readable steps. Fields arrive in schema
-    /// order (mode → pedals → settings → explanation), so each step completes as the next begins.
+    /// Turns the partially generated sketch into readable steps. Fields arrive in schema
+    /// order (style → gain → space → pedals → reason), so each step completes as the next begins.
     @available(iOS 26, macOS 26, *)
-    private func updateThinkingSteps(from partial: EffectRecommendation.PartiallyGenerated) {
-        setStep("model", "Asking Apple Intelligence", done: true)
-
-        if let mode = partial.mode {
-            let label: String
-            switch mode {
-            case .preset: label = "Building a whole new tone"
-            case .additive: label = "Adjusting only what you asked for"
-            case .remove: label = "Turning pedals off"
-            case .chat: label = "Answering you"
-            }
-            setStep("mode", label, done: true)
+    private func updateThinkingSteps(from partial: ToneSketch.PartiallyGenerated) {
+        setStep("model", "Apple Intelligence is listening to your description", done: true)
+        if let style = partial.style {
+            let title = ToneStyle(rawValue: String(describing: style))?.title ?? String(describing: style)
+            setStep("style", "Sounds like: \(title)", done: true)
         }
-
-        let pedals = partial.pedals ?? []
-        let names = pedals.compactMap { $0.effect.map { String(describing: $0).capitalized } }
-        let movedOn = partial.pedalsToTurnOff != nil || partial.explanation != nil
-        if !names.isEmpty {
-            setStep("pedals", "Picking pedals: " + names.joined(separator: " · "), done: movedOn)
+        if let gain = partial.gain {
+            let space = partial.space.map { ", \(String(describing: $0)) space" } ?? ""
+            setStep("feel", "\(String(describing: gain).capitalized) gain\(space)", done: partial.space != nil)
         }
-
-        if let last = pedals.last, let effect = last.effect,
-           let setting = last.settings?.last, let name = setting.name {
-            let value = setting.value.map { $0.formatted(.number.precision(.fractionLength(0...2))) } ?? "…"
-            setStep("settings", "Setting \(String(describing: effect)) \(name) → \(value)", done: movedOn)
-        }
-
-        if let explanation = partial.explanation, !explanation.isEmpty {
-            setStep("explain", "Writing a note about the tone", done: false)
+        if let pedals = partial.signaturePedals, !pedals.isEmpty {
+            let names = pedals.map { String(describing: $0).capitalized }.joined(separator: " · ")
+            setStep("pedals", "Known for: \(names)", done: partial.reason != nil)
         }
     }
     #endif
@@ -1397,7 +1370,7 @@ final class SemanticCommandProcessor {
 
 // MARK: - Array Helper
 
-private extension Array where Element: Equatable {
+extension Array where Element: Equatable {
     func removingDuplicates() -> [Element] {
         var seen: [Element] = []
         for element in self {

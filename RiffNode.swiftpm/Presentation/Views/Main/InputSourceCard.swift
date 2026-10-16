@@ -1,32 +1,13 @@
 import SwiftUI
 
 // MARK: - Input Source Card
-// One card for everything about the sound going in: where it comes from (your guitar or
-// the built-in demo riff), what it looks like, and which note or chord is being played.
-// Replaces the separate demo button, visualizer, mini spectrum and chord badge.
+// Everything about the sound going in: where it comes from (your guitar or the built-in demo
+// riff), whether it's in tune, which chord you're holding, and how loud it is in and out.
+// What the pedals do to the signal is shown in the Signal Lab, next to the pedals.
 
 struct InputSourceCard: View {
     @Bindable var engine: AudioEngineManager
     let chordDetector: ChordDetector
-
-    @State private var mode: VisualizerMode = .waveform
-
-    enum VisualizerMode: CaseIterable {
-        case waveform, bars, circular
-
-        var icon: String {
-            switch self {
-            case .waveform: "waveform"
-            case .bars: "chart.bar.fill"
-            case .circular: "circle.hexagongrid.fill"
-            }
-        }
-
-        var next: VisualizerMode {
-            let all = Self.allCases
-            return all[(all.firstIndex(of: self)! + 1) % all.count]
-        }
-    }
 
     enum Source: Hashable { case guitar, demo }
 
@@ -42,40 +23,34 @@ struct InputSourceCard: View {
     private var isSilent: Bool { engine.inputLevel < 0.01 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             // Header: title + source switch
             HStack {
                 Label("Input", systemImage: "cable.connector")
                     .font(.headline)
                 Spacer()
                 Picker("Source", selection: source) {
-                    Label("Guitar", systemImage: "guitars").tag(Source.guitar)
-                    Label("Demo riff", systemImage: "play.circle").tag(Source.demo)
+                    Text("Guitar").tag(Source.guitar)
+                    Text("Demo riff").tag(Source.demo)
                 }
                 .pickerStyle(.segmented)
-                .labelStyle(.titleOnly)
                 .fixedSize()
                 .disabled(!engine.canPlayDemoRiff)
                 .help("⌘D toggles the demo riff")
             }
 
-            // Visualizer with IN / OUT meters
-            HStack(spacing: 10) {
-                LevelMeterView(level: engine.inputLevel, label: "IN")
-                visualizer
-                LevelMeterView(level: engine.outputLevel, label: "OUT")
-            }
-            .frame(height: 120)
+            tuner
 
-            // What's being played
-            HStack(spacing: 10) {
-                noteBadge
+            // Chord and where the sound comes from
+            HStack(spacing: 8) {
+                Image(systemName: "pianokeys")
+                    .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(chordText)
+                    Text(hasChord ? chordDetector.detectedChord : "No chord yet")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(hasChord ? .primary : .secondary)
                         .lineLimit(1)
-                        .contentTransition(.opacity)
+                        .contentTransition(.interpolate)
                     Label(sourceDetail, systemImage: engine.isDemoRiffPlaying ? "music.note" : engine.currentInputDeviceType.icon)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -83,61 +58,19 @@ struct InputSourceCard: View {
                 }
                 Spacer(minLength: 0)
             }
-            .animation(.smooth(duration: 0.2), value: chordText)
+            .animation(.smooth(duration: 0.2), value: chordDetector.detectedChord)
+
+            // Real levels: what comes in, and what leaves after the pedals
+            VStack(spacing: 6) {
+                LevelBar(label: "IN", level: engine.inputLevel)
+                LevelBar(label: "OUT", level: engine.outputLevel)
+            }
         }
         .padding(Spacing.md)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: CornerRadius.xl))
     }
 
-    // MARK: - Visualizer
-
-    private var visualizer: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.black.opacity(0.12))
-
-            Group {
-                switch mode {
-                case .waveform: WaveformView(samples: engine.waveformSamples).padding(8)
-                case .bars: BarVisualizationView(samples: engine.waveformSamples)
-                case .circular: CircularVisualizationView(samples: engine.waveformSamples)
-                }
-            }
-            .opacity(isSilent ? 0.3 : 1)
-
-            if isSilent {
-                VStack(spacing: 4) {
-                    Image(systemName: engine.isRunning ? "waveform.badge.mic" : "play.circle")
-                        .font(.system(size: 20))
-                    Text(engine.isRunning ? "Play a note, or try the demo riff" : "Start the engine to listen")
-                        .font(.caption.weight(.medium))
-                        .multilineTextAlignment(.center)
-                }
-                .foregroundStyle(.secondary)
-                .padding(8)
-                .transition(.opacity)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(alignment: .topTrailing) {
-            // Tap to cycle the visual style
-            Button {
-                withAnimation(.smooth(duration: 0.2)) { mode = mode.next }
-            } label: {
-                Image(systemName: mode.icon)
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 26, height: 26)
-                    .glassEffect(.regular.interactive(), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .padding(6)
-            .accessibilityLabel("Change visualizer style")
-        }
-        .animation(.easeInOut(duration: 0.3), value: isSilent)
-    }
-
-    // MARK: - Note & chord
+    // MARK: - Tuner
 
     private var hasNote: Bool { !isSilent && chordDetector.detectedNote != "—" }
     /// Low-confidence guesses flicker between chords; only name one the detector is fairly sure of.
@@ -146,22 +79,106 @@ struct InputSourceCard: View {
             && chordDetector.detectedChord != "—" && !chordDetector.detectedChord.isEmpty
     }
 
-    private var noteBadge: some View {
-        Text(hasNote ? chordDetector.detectedNote : "–")
-            .font(.system(size: 20, weight: .bold, design: .rounded))
-            .foregroundStyle(hasNote ? (chordDetector.isInTune ? Color.green : Color.primary) : Color.secondary)
-            .contentTransition(.numericText())
-            .frame(width: 44, height: 44)
-            .glassEffect(.regular.tint((hasNote && chordDetector.isInTune ? Color.green : Color.purple).opacity(0.12)), in: Circle())
-            .animation(.snappy, value: chordDetector.detectedNote)
-            .accessibilityLabel(hasNote ? "Note \(chordDetector.detectedNote)" : "No note")
+    private var tuneColor: Color {
+        guard hasNote else { return .secondary }
+        return chordDetector.isInTune ? .green : (abs(chordDetector.centsDeviation) < 20 ? .yellow : .orange)
     }
 
-    private var chordText: String {
-        hasChord ? chordDetector.detectedChord : "Listening for a chord…"
+    private var tuner: some View {
+        HStack(spacing: 14) {
+            Text(hasNote ? chordDetector.detectedNote : "–")
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .foregroundStyle(hasNote ? tuneColor : .secondary)
+                .contentTransition(.numericText())
+                .frame(width: 58, height: 58)
+                .glassEffect(.regular.tint(tuneColor.opacity(hasNote ? 0.18 : 0.05)), in: Circle())
+                .animation(.snappy, value: chordDetector.detectedNote)
+
+            VStack(alignment: .leading, spacing: 6) {
+                CentsBar(cents: hasNote ? Double(chordDetector.centsDeviation) : 0, isActive: hasNote, color: tuneColor)
+                    .frame(height: 18)
+                Text(tunerCaption)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(hasNote ? tuneColor : .secondary)
+                    .contentTransition(.opacity)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(hasNote ? "Tuner: \(chordDetector.detectedNote), \(tunerCaption)" : "Tuner: no note")
+    }
+
+    private var tunerCaption: String {
+        guard hasNote else {
+            return engine.isRunning ? "Play a single string to tune" : "Start the engine to listen"
+        }
+        let cents = Int(chordDetector.centsDeviation.rounded())
+        if chordDetector.isInTune { return "In tune" }
+        return cents < 0 ? "\(-cents) cents flat – tune up" : "\(cents) cents sharp – tune down"
     }
 
     private var sourceDetail: String {
         engine.isDemoRiffPlaying ? "Demo riff through your pedals" : engine.currentInputDeviceName
+    }
+}
+
+// MARK: - Cents Bar
+
+/// −50…+50 cents, with the in-tune zone in the middle.
+private struct CentsBar: View {
+    let cents: Double
+    let isActive: Bool
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let x = width / 2 + CGFloat(max(-50, min(50, cents)) / 50) * (width / 2 - 3)
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.primary.opacity(0.08)).frame(height: 6)
+                Capsule().fill(Color.green.opacity(0.35))
+                    .frame(width: width * 0.1, height: 6)
+                    .offset(x: width * 0.45)
+                Rectangle().fill(Color.secondary.opacity(0.5))
+                    .frame(width: 1.5, height: geo.size.height)
+                    .offset(x: width / 2)
+                Capsule().fill(isActive ? color : Color.secondary.opacity(0.3))
+                    .frame(width: 5, height: geo.size.height)
+                    .offset(x: x - 2.5)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: cents)
+            }
+            .frame(maxHeight: .infinity)
+        }
+    }
+}
+
+// MARK: - Level Bar
+
+private struct LevelBar: View {
+    let label: String
+    let level: Float
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .foregroundStyle(.secondary)
+                .frame(width: 26, alignment: .leading)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(0.08))
+                    Capsule()
+                        .fill(LinearGradient(colors: [.green, .yellow, .red],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .mask(alignment: .leading) {
+                            Capsule().frame(width: geo.size.width * CGFloat(min(max(level, 0), 1)))
+                        }
+                }
+            }
+            .frame(height: 6)
+            .animation(.linear(duration: 0.05), value: level)
+        }
+        .accessibilityElement()
+        .accessibilityLabel("\(label) level")
+        .accessibilityValue("\(Int(min(max(level, 0), 1) * 100)) percent")
     }
 }

@@ -1,28 +1,53 @@
 import Foundation
 
 // MARK: - Jam Track Synthesizer
-// A built-in backing groove – drums and bass over Em · C · G · D at 112 BPM – rendered on
-// device, so there is always something to play along with, even offline with no music files.
-// It shares the demo riff's key and tempo, so the two lock together.
+// A built-in backing groove – drums and bass over a i · VI · III · VII progression (Em · C ·
+// G · D by default) – rendered on device, so there is always something to play along with,
+// even offline with no music files. Any minor key, 70–160 BPM. At the defaults it shares the
+// demo riff's key and tempo, so the two lock together.
 
 enum JamTrackSynthesizer {
 
-    static let tempo: Double = 112
-    static let progression = ["Em", "C", "G", "D"]
+    static let defaultTempo: Double = 112
+    static let tempoRange: ClosedRange<Double> = 70...160
     static let title = "RiffNode Groove"
-    static var subtitle: String { progression.joined(separator: " · ") + " · \(Int(tempo)) BPM" }
 
-    /// MIDI roots for the bass, one chord per bar (E2, C2, G2, D2).
+    /// Minor keys on offer, as semitones from E minor.
+    static let keys: [(name: String, transpose: Int)] = [
+        ("E minor", 0), ("F♯ minor", 2), ("G minor", 3), ("A minor", 5),
+        ("B minor", -5), ("C minor", -4), ("D minor", -2),
+    ]
+
+    private static let noteNames = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"]
+
+    /// MIDI roots for the bass in E minor, one chord per bar (E2, C2, G2, D2).
     private static let bassRoots = [40, 36, 43, 38]
+    private static let chordIsMinor = [true, false, false, false]
+
+    /// The four chords, one per bar, in the given key.
+    static func chords(transpose: Int) -> [String] {
+        zip(bassRoots, chordIsMinor).map { root, minor in
+            noteNames[((root + transpose) % 12 + 12) % 12] + (minor ? "m" : "")
+        }
+    }
+
+    /// What to solo with over the groove.
+    static func scale(transpose: Int) -> String {
+        noteNames[((4 + transpose) % 12 + 12) % 12] + " minor pentatonic"
+    }
+
+    static func keyName(transpose: Int) -> String {
+        keys.first { $0.transpose == transpose }?.name ?? "E minor"
+    }
 
     /// Renders one four-bar loop as mono samples.
-    static func render(sampleRate: Double) -> [Float] {
+    static func render(sampleRate: Double, tempo: Double = defaultTempo, transpose: Int = 0) -> [Float] {
         let eighth = 60 / tempo / 2
         let barFrames = Int(8 * eighth * sampleRate)
         var output = [Float](repeating: 0, count: barFrames * bassRoots.count)
         var noise = NoiseSource(seed: 0x4A41_4D21)  // "JAM!"
 
-        for (bar, root) in bassRoots.enumerated() {
+        for (bar, root) in bassRoots.map({ $0 + transpose }).enumerated() {
             for step in 0..<8 {
                 let start = bar * barFrames + Int(Double(step) * eighth * sampleRate)
 
