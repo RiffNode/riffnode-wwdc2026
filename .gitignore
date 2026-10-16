@@ -3,3 +3,7 @@
 *.xcuserstate
 xcuserdata/
 .DS_Store
+
+# Local demo recordings – never committed or bundled
+demo-riffs/
+RiffNode.swiftpm/Resources/DemoRiffs/

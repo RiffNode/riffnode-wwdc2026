@@ -64,6 +64,18 @@ final class BackingTrackPlayer: BackingTrackManaging {
 
     // MARK: - Loading
 
+    func detach(from engine: AVAudioEngine) {
+        stopBackingTrack()
+        if engine.attachedNodes.contains(player) { engine.detach(player) }
+        // A newly attached graph may use a different hardware sample rate.
+        buffer = nil
+        backingTrackName = nil
+        backingTrackDuration = 0
+        backingTrackCurrentTime = 0
+        isBuiltInJamTrack = false
+        format = nil
+    }
+
     func loadBackingTrack(url: URL) async throws {
         let file = try AVAudioFile(forReading: url)
         let fileFormat = file.processingFormat

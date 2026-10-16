@@ -39,7 +39,7 @@
 
 ## 為什麼做 RiffNode
 
-- **沒有吉他也能玩。** 內建的 demo riff 是一段原創的 J-rock 分散和弦，走 IV–V–iii–vi「王道進行」，在裝置上即時合成，從真吉他進入的位置送進踏板鏈，任何人都能聽出每顆踏板的作用。
+- **沒有吉他也能玩。** Demo 可播放原創的 J-rock 合成分散和弦，或匯入你自己彈的 clean 錄音，從踏板前端送入。Demo 不需要麥克風權限；踏板預設關閉，也能整組旁通，比較前後而保留設定。
 - **隨時有伴奏。** 內建鼓加貝斯的 groove（C · D · Bm · Em、150 BPM，可換任何小調）同樣即時合成；也可以匯入自己的歌，或讓 Apple Music、Spotify 一起播放。
 - **一塊免費、行為像真的效果器盤。** 彩色的實體效果器從吉他輸入一路接到音箱和喇叭箱，順序和真實玩家一樣 —— 排序不尋常時，RiffNode 會解釋它對聲音的影響。連導線都有模擬：線越長，高頻越悶。
 - **看見物理作用。** Signal Lab 即時畫出每顆踏板「進去」與「出來」的訊號 —— Distortion 削平峰值、Compressor 壓縮音量、Flanger 的梳狀濾波 —— 並用量測數字說明變化。
@@ -52,9 +52,9 @@
 
 | 步驟 | 怎麼做 | 你會看到 |
 | --- | --- | --- |
-| 1 | 點 **Get Started** 並允許麥克風 | 音訊引擎啟動，Riff Notch 亮綠燈 |
+| 1 | 點 **Try the Demo Riff**，或用 **Connect a Guitar** 接實體吉他 | 引擎啟動；只有實體輸入會要求麥克風權限 |
 | 2 | 點 **Take the Tour**（或略過） | 簡短的訊號鏈導覽 |
-| 3 | 點 **No guitar? Try the Demo Riff**（`⌘D`） | riff 經過你的踏板播放；Signal Lab、調音器、和弦偵測同時動起來 |
+| 3 | Input 選 Demo：原創分散和弦，或用 **Import a Recording…** 匯入自己的錄音（`⌘D` 播放／停止） | 開一顆踏板，再用 **Bypass pedals to compare** 比較同一段演奏 |
 | 4 | 點一顆踏板，或雙擊來開關 | 聲音和頻譜立刻改變，Notch 會顯示變化 |
 | 5 | 打開 **Tone Assistant**（`⌘J`），點 *Ambient pad* | 看它一步步挑踏板、設參數，再重建訊號鏈 |
 | 6 | 在 Play Along 按 **Groove** 播放 | 任意小調的鼓與貝斯；目前的和弦會亮起 |
@@ -171,7 +171,7 @@
 
 - **Swift 6 的音訊 tap** —— tap block 是全域、非隔離的函式，寫入有鎖保護的緩衝區，所以音訊執行緒上永遠不會跑到 `@MainActor` 的 closure。
 - **啟動不卡頓** —— `AVAudioSession` 的啟用放在主執行緒之外。
-- **Demo riff 與 groove** —— Karplus–Strong 撥弦合成（all-pass 校正音準、濾波過的撥弦雜訊、悶音 ghost note），加上合成的大鼓、小鼓、hi-hat 和貝斯，都用固定種子在裝置上產生 —— 沒有打包任何音檔。匯入的歌曲會用 `AVAudioConverter` 轉成引擎的取樣率。
+- **Demo riff 與 groove** —— Karplus–Strong 撥弦合成（all-pass 校正音準、濾波過的撥弦雜訊、悶音 ghost note），加上合成的大鼓、小鼓、hi-hat 和貝斯，都用固定種子在裝置上產生；另有兩段各一分鐘的 clean 吉他錄音。Demo 錄音與匯入歌曲會用 `AVAudioConverter` 轉成引擎的取樣率。
 - **即時 DSP** —— 自製的 `AUAudioUnit` 在音訊執行緒上原地處理，不配置記憶體、不用鎖；旋鈕數值透過 `Synchronization.Atomic` 跨執行緒傳遞，音箱的濾波器係數在主執行緒設計好，再用雙緩衝區交給音訊執行緒。
 - **乾淨的削波** —— overdrive、distortion、fuzz 的削波以 4 倍 oversampling 運算，超過 Nyquist 的諧波不會折回成刺耳的 aliasing。
 - **喇叭箱 IR** —— 載入的檔案用 `AVAudioConverter` 重新取樣、截成 2048 tap、依峰值正規化，再用 `vDSP_conv` 卷積。
@@ -295,7 +295,7 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
 
 | 規則 | RiffNode |
 | --- | --- |
-| 個人作品，**App Playground**（`.swiftpm`）壓縮後 **25 MB 以內** | 單一 `.swiftpm`，不打包音檔或模型 —— riff、伴奏、鼓聲都是即時合成 |
+| 個人作品，**App Playground**（`.swiftpm`）壓縮後 **25 MB 以內** | 原始投稿使用單一 `.swiftpm`，riff、伴奏、鼓聲皆即時合成，沒有模型；目前版本另含短 clean 錄音 |
 | **完全離線**（評審時網路關閉） | 沒有網路請求；Apple Intelligence 在裝置上執行，並有離線備援 |
 | **三分鐘內**可以體驗完 | 第一個畫面就能使用 demo riff、Signal Lab 與 Tone Assistant |
 | 使用 **Swift Playgrounds 4.6+ 或 Xcode 26+** 製作 | Swift 6、SwiftUI、iPadOS / macOS 26 |
@@ -325,8 +325,12 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
 
 ## 授權
 
-RiffNode 以 [MIT 授權](LICENSE) 釋出。
+RiffNode 原始碼以 [MIT 授權](LICENSE) 釋出。App 不內含任何第三方音檔。
 
 <p align="center">
   由梁祐嘉（Jesse）用 ❤️ 和無數次的回授製作
 </p>
+
+## 核心回歸驗證
+
+在裝有 Xcode 的 Mac 執行 `scripts/test-core.sh`，驗證音高、FFT、電平、AI 參數修改、舊訊息快照與免麥克風 setup。`scripts/test-audio.sh` 以離線音訊圖驗證 44.1／48 kHz 的 clean／加踏板差異，以及原創合成 riff。

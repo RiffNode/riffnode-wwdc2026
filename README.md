@@ -37,7 +37,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 
 ## Why RiffNode
 
-- **No guitar? Still playable.** A built-in demo riff – an original J-rock arpeggio over the IV–V–iii–vi "royal road" progression – is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
+- **No guitar? Still playable.** Play the original synthesized J-rock arpeggio, or import a clean recording of your own playing. Both enter before the pedals. No microphone permission is needed for Demo; the pedalboard starts bypassed per pedal, and a comparison switch bypasses the whole board without changing its settings.
 - **Always something to jam with.** A built-in drums-and-bass groove (C · D · Bm · Em, 150 BPM, any minor key) is also synthesized on device – or import your own song, or play along with Apple Music and Spotify.
 - **A free pedalboard that behaves like a real one.** Painted stompboxes run from the guitar jack to an amp and speaker cabinet, in the order real players use – and RiffNode explains what an unusual order does to the sound. Even the cable is modelled: longer cable, duller highs.
 - **See the physics.** The Signal Lab draws each pedal's input against its output, live – distortion flattening the peaks, a compressor squeezing the volume, a flanger's comb of notches – with measurements that put numbers on the change.
@@ -50,9 +50,9 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 
 | Step | What to do | What you'll see |
 | --- | --- | --- |
-| 1 | Tap **Get Started** and allow the microphone | The audio engine starts and the Riff Notch turns green |
+| 1 | Tap **Try the Demo Riff**, or **Connect a Guitar** for live input | The engine starts; only live input requests microphone access |
 | 2 | Tap **Take the Tour** (or skip it) | A short walkthrough of the signal chain |
-| 3 | Tap **No guitar? Try the Demo Riff** (`⌘D`) | A riff plays through your pedals; the Signal Lab, tuner and chord detector come alive |
+| 3 | Choose Demo in the Input card – the original arpeggio or **Import a Recording…** of your own (`⌘D` starts/stops Demo) | Enable a pedal, then use **Bypass pedals to compare** on the same performance |
 | 4 | Tap a pedal, or double-tap to bypass it | The sound and the spectrum change instantly; the notch announces the change |
 | 5 | Open the **Tone Assistant** (`⌘J`) and tap *Ambient pad* | Watch it pick pedals and settings step by step, then rebuild the chain |
 | 6 | Press play on **Groove** in Play Along | Drums and bass in any minor key; the current chord lights up |
@@ -169,7 +169,7 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
 
 - **Swift 6 audio taps** – tap blocks are global, non-isolated functions writing into a lock-protected buffer, so no `@MainActor` closure ever runs on the audio thread.
 - **Responsive start-up** – `AVAudioSession` activation runs off the main thread.
-- **Demo riff and groove** – Karplus–Strong plucked strings (all-pass tuned, with filtered pick noise and ghost-note mutes), plus synthesized kick, snare, hi-hat and bass, render on device with seeded generators – no bundled audio files. Imported songs are converted to the engine's sample rate with `AVAudioConverter`.
+- **Demo riff and groove** – Karplus–Strong plucked strings (all-pass tuned, with filtered pick noise and ghost-note mutes), plus synthesized kick, snare, hi-hat and bass, render on device with seeded generators. Two one-minute clean guitar excerpts are also bundled; Demo recordings and imported songs are converted to the engine's sample rate with `AVAudioConverter`.
 - **Real-time DSP** – a custom `AUAudioUnit` processes in place on the audio thread with no allocation or locks; knob values cross threads through `Synchronization.Atomic`, and the amp's filter coefficients are designed on the main thread and handed over in double-buffered banks.
 - **Clean clipping** – the overdrive, distortion and fuzz clippers run 4× oversampled, so harmonics above Nyquist don't fold back as harsh aliasing.
 - **Cabinet IRs** – loaded files are resampled with `AVAudioConverter`, trimmed to 2048 taps, peak-normalised and convolved with `vDSP_conv`.
@@ -293,7 +293,7 @@ Every 2026 winner received:
 
 | Rule | RiffNode |
 | --- | --- |
-| An individual **App Playground** (`.swiftpm`) in a ZIP of **25 MB or less** | One `.swiftpm`, no bundled audio or models – the riff, groove and drums are synthesized |
+| An individual **App Playground** (`.swiftpm`) in a ZIP of **25 MB or less** | The original submission used one `.swiftpm` with synthesized audio and no bundled models; the current demo also includes a short clean recording |
 | Runs **fully offline** (network access is disabled during judging) | No network calls; Apple Intelligence runs on device, with an offline fallback |
 | An experience of **three minutes or less** | Demo riff, Signal Lab and Tone Assistant all reachable from the first screen |
 | Built with **Swift Playgrounds 4.6+ or Xcode 26+** | Swift 6, SwiftUI, iPadOS / macOS 26 |
@@ -323,8 +323,12 @@ It brings low-level signal processing, computer vision and on-device AI together
 
 ## License
 
-RiffNode is released under the [MIT License](LICENSE).
+RiffNode source code is released under the [MIT License](LICENSE). No third-party audio is bundled.
 
 <p align="center">
   Made with ❤️ and a lot of feedback loops by Jesse
 </p>
+
+## Core regression checks
+
+Run `scripts/test-core.sh` for pitch, FFT calibration, metering, AI edits, chat snapshots and permission-free setup. Run `scripts/test-audio.sh` for offline clean/processed audio at 44.1/48 kHz and the original synth source. Both require Xcode on macOS.

@@ -4,8 +4,8 @@ import Foundation
 import Observation
 
 // MARK: - Chord Detector
-// Real-time pitch detection and chord recognition using autocorrelation
-// Educational feature showing AI/ML concepts in audio analysis
+// YIN single-note pitch estimation, with a separate recent-note chord hint.
+// The chord hint describes successive notes; it is not a polyphonic chord detector.
 
 @Observable
 @MainActor
@@ -45,6 +45,8 @@ final class ChordDetector: ChordDetecting {
     var sampleRate: Float = 44100
     private let minFrequency: Float = 60   // ~B1 (lowest guitar note)
     private let maxFrequency: Float = 1400 // ~F6 (highest typical guitar note)
+    @ObservationIgnored private var analysisTask: Task<Void, Never>?
+    @ObservationIgnored private var analysisGeneration = 0
 
     // MARK: - Note Detection History
 
@@ -92,30 +94,40 @@ final class ChordDetector: ChordDetecting {
 
     // MARK: - Analyze Audio
 
-    /// Analyze audio samples — offloads heavy autocorrelation to background thread.
+    /// Keep one analysis in flight; reset/source changes invalidate older results.
     func analyze(samples: [Float]) {
-        guard samples.count >= 2048 else { return }
+        guard samples.count >= 2048, analysisTask == nil else { return }
         let sr = sampleRate
         let minF = minFrequency
         let maxF = maxFrequency
-        // Heavy autocorrelation runs on a background thread; results posted back on MainActor
-        Task.detached(priority: .userInitiated) { [weak self] in
-            let pitch = ChordDetector.computePitchBackground(
+        let generation = analysisGeneration
+        analysisTask = Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Self.computePitchEstimate(
                 samples: samples, sampleRate: sr, minFrequency: minF, maxFrequency: maxF)
-            await self?.applyPitchResult(pitch, samples: samples)
+            }.value
+            guard let self, generation == self.analysisGeneration else { return }
+            self.analysisTask = nil
+            guard sr == self.sampleRate else { return }
+            self.applyPitchResult(result.frequency, confidence: result.confidence)
         }
     }
 
     /// Apply the pitch result computed on a background thread.
     /// All @Observable property mutations stay on MainActor.
     func applyPitchResult(_ pitch: Float, samples: [Float]) {
-        guard pitch > minFrequency && pitch < maxFrequency else {
-            confidence = 0
+        let result = Self.computePitchEstimate(samples: samples, sampleRate: sampleRate)
+        applyPitchResult(pitch, confidence: result.confidence)
+    }
+
+    private func applyPitchResult(_ pitch: Float, confidence periodicity: Float) {
+        guard pitch.isFinite, pitch >= minFrequency, pitch <= maxFrequency, periodicity >= 0.8 else {
+            clearDetection()
             return
         }
 
         detectedPitch = pitch
-        confidence = calculateConfidence(samples: samples, pitch: pitch)
+        confidence = periodicity
 
         let (note, octave, cents) = frequencyToNote(pitch)
         detectedNote = note
@@ -130,42 +142,72 @@ final class ChordDetector: ChordDetecting {
 
     // MARK: - Background Pitch Detection (nonisolated — safe to call from any thread)
 
-    /// Vectorized autocorrelation using vDSP_dotpr — ~10× faster than scalar loops.
-    /// Returns the fundamental frequency in Hz, or 0 if no pitch found.
+    struct PitchEstimate: Sendable {
+        let frequency: Float
+        let confidence: Float
+    }
+
+    /// Returns zero for silence or a signal without a reliable periodic minimum.
     nonisolated static func computePitchBackground(
         samples: [Float],
         sampleRate: Float,
         minFrequency: Float = 60,
         maxFrequency: Float = 1400
     ) -> Float {
-        let count = samples.count
-        guard count >= 2048 else { return 0 }
+        computePitchEstimate(samples: samples, sampleRate: sampleRate,
+                             minFrequency: minFrequency, maxFrequency: maxFrequency).frequency
+    }
 
-        let minLag = Int(sampleRate / maxFrequency)
-        let maxLag = Int(sampleRate / minFrequency)
-        guard minLag > 0, maxLag > minLag, maxLag < count else { return 0 }
-
-        let size = maxLag - minLag
-        var autocorrelation = [Float](repeating: 0, count: size)
-
-        // vDSP_dotpr computes the dot product of two vectors in one SIMD call.
-        // autocorrelation[lag] = Σ samples[i] * samples[i + lag]
-        // This replaces the O(n²) scalar double-loop with vectorized single-pass calls.
-        samples.withUnsafeBufferPointer { buf in
-            let base = buf.baseAddress!
-            for lag in minLag..<maxLag {
-                let n = vDSP_Length(count - lag)
-                vDSP_dotpr(base, 1, base + lag, 1, &autocorrelation[lag - minLag], n)
+    /// YIN cumulative mean normalized difference, followed by parabolic interpolation.
+    nonisolated static func computePitchEstimate(
+        samples: [Float], sampleRate: Float,
+        minFrequency: Float = 60, maxFrequency: Float = 1400
+    ) -> PitchEstimate {
+        let none = PitchEstimate(frequency: 0, confidence: 0)
+        guard samples.count >= 2048, sampleRate.isFinite, sampleRate > 0,
+              minFrequency > 0, maxFrequency > minFrequency,
+              samples.allSatisfy(\.isFinite) else { return none }
+        let minLag = max(2, Int(ceil(sampleRate / maxFrequency)))
+        let maxLag = min(samples.count / 2 - 1, Int(sampleRate / minFrequency))
+        guard maxLag > minLag else { return none }
+        let mean = vDSP.mean(samples)
+        let centered = samples.map { $0 - mean }
+        guard vDSP.rootMeanSquare(centered) >= 0.001 else { return none }
+        let window = samples.count / 2
+        var squares = [Float](repeating: 0, count: centered.count + 1)
+        for i in centered.indices { squares[i + 1] = squares[i] + centered[i] * centered[i] }
+        var normalized = [Float](repeating: 1, count: maxLag + 1)
+        var cumulative: Float = 0
+        centered.withUnsafeBufferPointer { buffer in
+            let base = buffer.baseAddress!
+            for lag in 1...maxLag {
+                var dot: Float = 0
+                vDSP_dotpr(base, 1, base + lag, 1, &dot, vDSP_Length(window))
+                let difference = max(0, squares[window] + squares[window + lag] - squares[lag] - 2 * dot)
+                cumulative += difference
+                normalized[lag] = cumulative > 0 ? difference * Float(lag) / cumulative : 1
             }
         }
-
-        // Find peak lag (vectorized max search)
-        var maxVal: Float = 0
-        var maxIdx: vDSP_Length = 0
-        vDSP_maxvi(autocorrelation, 1, &maxVal, &maxIdx, vDSP_Length(size))
-
-        let lag = Int(maxIdx) + minLag
-        return lag > 0 ? sampleRate / Float(lag) : 0
+        var lag = minLag
+        while lag < maxLag {
+            if normalized[lag] < 0.15 {
+                while lag < maxLag && normalized[lag + 1] < normalized[lag] { lag += 1 }
+                let certainty = max(0, min(1, 1 - normalized[lag]))
+                var refined = Float(lag)
+                if lag > 1, lag < maxLag {
+                    let left = normalized[lag - 1], middle = normalized[lag], right = normalized[lag + 1]
+                    let denominator = left - 2 * middle + right
+                    if abs(denominator) > 1e-9 {
+                        refined += max(-1, min(1, 0.5 * (left - right) / denominator))
+                    }
+                }
+                let frequency = sampleRate / refined
+                guard frequency >= minFrequency, frequency <= maxFrequency else { return none }
+                return PitchEstimate(frequency: frequency, confidence: certainty)
+            }
+            lag += 1
+        }
+        return none
     }
 
     // MARK: - Frequency to Note Conversion
@@ -189,19 +231,6 @@ final class ChordDetector: ChordDetecting {
         let cents = (exactNoteNumber - Float(roundedNoteNumber)) * 100
 
         return (noteNames[noteIndex], octave, cents)
-    }
-
-    // MARK: - Confidence Calculation
-
-    private func calculateConfidence(samples: [Float], pitch: Float) -> Float {
-        // Simple confidence based on signal energy and periodicity
-        var energy: Float = 0
-        vDSP_measqv(samples, 1, &energy, vDSP_Length(samples.count))
-
-        // Normalize to 0-1 range (threshold based on typical guitar levels)
-        let normalizedEnergy = min(1.0, energy / 0.01)
-
-        return normalizedEnergy
     }
 
     // MARK: - Note History Management
@@ -233,7 +262,8 @@ final class ChordDetector: ChordDetecting {
         // Find best matching chord
         var bestMatch: (name: String, score: Int) = ("", 0)
 
-        for (chordName, chordNotes) in chordPatterns {
+        for chordName in chordPatterns.keys.sorted() {
+            let chordNotes = chordPatterns[chordName]!
             let matchingNotes = activeSet.intersection(chordNotes)
             let score = matchingNotes.count
 
@@ -254,6 +284,13 @@ final class ChordDetector: ChordDetecting {
     // MARK: - Reset
 
     func reset() {
+        analysisGeneration += 1
+        analysisTask?.cancel()
+        analysisTask = nil
+        clearDetection()
+    }
+
+    private func clearDetection() {
         detectedPitch = 0
         detectedNote = "—"
         detectedOctave = 0

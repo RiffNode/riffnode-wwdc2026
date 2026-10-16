@@ -22,7 +22,7 @@ final class ToneBalanceViewModel {
         self.analyzer = analyzer
     }
 
-    var isHearingSound: Bool { engine.inputLevel > 0.01 }
+    var isHearingSound: Bool { engine.inputLevel > 0.002 }
     var canOfferDemo: Bool { engine.canPlayDemoRiff && !engine.isDemoRiffPlaying }
 
     func playDemo() { engine.startDemoRiff() }

@@ -54,6 +54,7 @@ final class FFTAnalyzer: SpectrumProviding {
 
     private var fftSetup: OpaquePointer?
     private var window: [Float] = []
+    private var amplitudeScale: Float = 1
     private var realPart: [Float] = []
     private var imagPart: [Float] = []
 
@@ -94,6 +95,8 @@ final class FFTAnalyzer: SpectrumProviding {
         // Create Hanning window to reduce spectral leakage
         window = [Float](repeating: 0, count: fftSize)
         vDSP_hann_window(&window, vDSP_Length(fftSize), Int32(vDSP_HANN_NORM))
+        // Calibrate from the actual window sum (works for either Hann normalization).
+        amplitudeScale = 2 / vDSP.sum(window)
 
         // Allocate buffers (once — reused every analyze() call)
         realPart = [Float](repeating: 0, count: fftSize)
@@ -162,15 +165,13 @@ final class FFTAnalyzer: SpectrumProviding {
             }
         }
 
-        // Scale to full-scale amplitude: a sine at 1.0 → 1.0. FFT bins grow with N/2 and the
-        // Hann window halves the gain, so divide by N/4. Without this, normal guitar levels
-        // sit far above 0 dB and every bar clips at the top.
-        var amplitudeScale: Float = 4 / Float(fftSize)
-        vDSP_vsmul(_magRaw, 1, &amplitudeScale, &_magRaw, 1, vDSP_Length(halfSize))
+        var scale = amplitudeScale
+        vDSP_vsmul(_magRaw, 1, &scale, &_magRaw, 1, vDSP_Length(halfSize))
+        _magRaw[0] *= 0.5 // DC has no mirrored negative-frequency partner.
 
         // Convert to dBFS — write into pre-allocated _magDB (no allocation)
         var reference: Float = 1.0
-        vDSP_vdbcon(_magRaw, 1, &reference, &_magDB, 1, vDSP_Length(halfSize), 0)
+        vDSP_vdbcon(_magRaw, 1, &reference, &_magDB, 1, vDSP_Length(halfSize), 1)
 
         // Bin the frequencies for display
         let binnedMagnitudes = binMagnitudes(_magDB, fromSize: halfSize, toSize: binCount)

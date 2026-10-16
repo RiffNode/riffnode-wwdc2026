@@ -17,6 +17,8 @@ protocol AudioEngineControlling: AnyObject {
 
     func requestMicrophonePermission() async
     func setupEngine() async throws
+    /// Requests microphone access only when the player chooses a real guitar.
+    func enableLiveInput() async throws
     func start() throws
     func stop()
     func refreshInputDevices()
@@ -42,6 +44,7 @@ protocol LatencyReporting: AnyObject {
 /// Live loudness, for meters.
 @MainActor
 protocol AudioLevelProviding: AnyObject {
+    /// Linear RMS, not clipped or scaled for display. 1.0 is 0 dBFS.
     var inputLevel: Float { get }
     var outputLevel: Float { get }
 }
@@ -51,6 +54,8 @@ protocol AudioLevelProviding: AnyObject {
 /// The pedals, their order and their settings.
 @MainActor
 protocol EffectsChainManaging: AnyObject {
+    /// A/B the whole pedalboard without changing individual pedal settings.
+    var isPedalboardBypassed: Bool { get set }
     var effectsChain: [EffectNode] { get set }
     /// Bumped on every preset application, so re-applying the same preset is observable.
     var presetApplyCount: Int { get }
@@ -61,6 +66,7 @@ protocol EffectsChainManaging: AnyObject {
     func toggleEffect(_ effect: EffectNode)
     func updateEffectParameter(_ effect: EffectNode, key: String, value: Float)
     func clearEffects()
+    func resetEffectsToDefaults()
     func applyPreset(_ preset: EffectPreset)
     /// Adds a pedal at its usual place in the chain if it's missing (used by the Tone Assistant).
     func ensureEffectInChain(_ type: EffectType)
@@ -107,6 +113,11 @@ protocol EqualizerControlling: AnyObject {
 /// The built-in demo riff that stands in for a guitar.
 @MainActor
 protocol DemoRiffPlaying: AnyObject {
+    var selectedDemoRiff: DemoRiff { get set }
+    /// Name of the imported clean recording, if any.
+    var demoRecordingName: String? { get }
+    /// Imports a clean recording of your own to use as the demo riff.
+    func importDemoRecording(from url: URL) throws
     var isDemoRiffPlaying: Bool { get }
     /// True once there is an effects chain to play into.
     var canPlayDemoRiff: Bool { get }
