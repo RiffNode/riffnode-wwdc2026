@@ -308,8 +308,19 @@ final class ModulationKernel: @unchecked Sendable {
         if mode == .amp {
             for channel in 0..<channels {
                 guard let source = input[channel].mData?.assumingMemoryBound(to: Float.self),
-                      let destination = output[channel].mData?.assumingMemoryBound(to: Float.self) else { continue }
-                if source != destination { destination.update(from: source, count: frameCount) }
+                      let destination = output[channel].mData?.assumingMemoryBound(to: Float.self),
+                      source != destination else { continue }
+                destination.update(from: source, count: frameCount)
+            }
+            // A neural capture is mono: run it once on the left channel and copy it across
+            if let left = output[0].mData?.assumingMemoryBound(to: Float.self) {
+                amp.processNeural(left, frames: frameCount)
+                if amp.usesNeuralModel, channels > 1, let right = output[1].mData?.assumingMemoryBound(to: Float.self) {
+                    right.update(from: left, count: frameCount)
+                }
+            }
+            for channel in 0..<channels {
+                guard let destination = output[channel].mData?.assumingMemoryBound(to: Float.self) else { continue }
                 amp.process(destination, frames: frameCount, channel: channel)
             }
             return

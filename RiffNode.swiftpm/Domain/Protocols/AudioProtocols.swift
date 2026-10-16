@@ -30,6 +30,15 @@ protocol AudioAnalysisSource: AnyObject {
     var currentPreset: EffectPreset? { get }
 }
 
+/// How long a note takes from the strings to your ears.
+@MainActor
+protocol LatencyReporting: AnyObject {
+    var roundTripLatencyMs: Double { get }
+    var bufferDurationMs: Double { get }
+    var isBluetoothOutput: Bool { get }
+    func refreshLatency()
+}
+
 /// Live loudness, for meters.
 @MainActor
 protocol AudioLevelProviding: AnyObject {
@@ -69,6 +78,10 @@ protocol AmpControlling: AnyObject {
     var cabinetIRName: String? { get }
     /// Loads a cabinet impulse response (.wav/.aiff) and switches the cabinet to it.
     func loadCabinetIR(from url: URL) async throws
+    /// Name of the loaded Neural Amp Modeler capture, if any.
+    var neuralModelName: String? { get }
+    /// Loads a .nam capture and switches the amp to it.
+    func loadNeuralModel(from url: URL) async throws
 }
 
 /// Before the first pedal: pickup and cable, buffer, volume pedal, noise gate, tuner mute.
@@ -144,6 +157,8 @@ protocol BackingTrackManaging: AnyObject {
     var backingTrackThroughEffects: Bool { get }
     var grooveTempo: Double { get }
     var grooveTranspose: Int { get }
+    /// A local copy of the imported song (readable after the file picker's access ends).
+    var songFileURL: URL? { get }
 
     func loadBackingTrack(url: URL) async throws
     func loadBuiltInJamTrack(tempo: Double?, transpose: Int?) throws
@@ -171,6 +186,53 @@ protocol MusicAppControlling: AnyObject {
     func togglePlayback()
     func skipToNext()
     func skipToPrevious()
+}
+
+// MARK: - Sharing
+
+/// A whole tone as a file: export what you hear, import what someone shared.
+@MainActor
+protocol ToneSharing: AnyObject {
+    func makeToneDocument(named name: String) -> ToneDocument
+    func applyToneDocument(_ document: ToneDocument)
+}
+
+// MARK: - Practice
+
+@MainActor
+protocol MetronomeControlling: AnyObject {
+    var isPlaying: Bool { get }
+    var beatsPerMinute: Double { get }
+    var isReady: Bool { get }
+    func toggle()
+    func setTempo(_ bpm: Double)
+}
+
+@MainActor
+protocol LooperControlling: AnyObject {
+    var state: LooperState { get }
+    var loopDuration: TimeInterval { get }
+    var canUndo: Bool { get }
+    var isReady: Bool { get }
+    /// The looper's footswitch: Record → Play → Overdub → Play …
+    func press()
+    func stop()
+    func undo()
+    func clear()
+}
+
+/// Finds a song's key, tempo and sections (on device).
+protocol SongAnalyzing: Sendable {
+    var isAvailable: Bool { get }
+    func analyze(url: URL) async throws -> SongAnalysis
+}
+
+/// A MIDI foot controller.
+@MainActor
+protocol FootswitchListening: AnyObject {
+    var sourceNames: [String] { get }
+    var lastMessage: String? { get }
+    func start()
 }
 
 // MARK: - Analysis
@@ -207,10 +269,12 @@ protocol PresetProviding {
 /// Everything the audio engine offers, for the few places that coordinate it all
 /// (MainViewModel, ContentView). Views take only the pieces they need.
 @MainActor
-protocol AudioManaging: AudioEngineControlling, AudioLevelProviding, AudioAnalysisSource, EffectsChainManaging, AmpControlling, InputStageControlling,
+protocol AudioManaging: AudioEngineControlling, AudioLevelProviding, AudioAnalysisSource, EffectsChainManaging, AmpControlling, InputStageControlling, LatencyReporting, ToneSharing,
     EqualizerControlling, DemoRiffPlaying, EffectAuditioning, SignalProbing, ExpressionControlling {
     /// The groove and imported songs.
     var playAlong: any BackingTrackManaging { get }
+    var metronomeControls: any MetronomeControlling { get }
+    var looperControls: any LooperControlling { get }
 }
 
 // MARK: - Audio Engine Errors

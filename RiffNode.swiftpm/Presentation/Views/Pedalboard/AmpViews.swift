@@ -72,8 +72,12 @@ struct AmpPanelView: View {
     let engine: any AmpControlling
     var isWide: Bool
 
-    @State private var isImportingIR = false
+    /// One file importer for both kinds of file (SwiftUI honours one per view).
+    private enum ImportKind { case impulseResponse, neuralCapture }
+    @State private var importKind: ImportKind?
     @State private var irError: String?
+    @State private var namError: String?
+    @State private var isLoadingNAM = false
 
     private var settings: AmpSettings { engine.ampSettings }
 
@@ -103,11 +107,39 @@ struct AmpPanelView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Amp").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Picker("Amp", selection: binding(\.model)) {
+                    Picker("Amp", selection: Binding(
+                        get: { engine.ampSettings.model },
+                        set: { model in
+                            // A neural capture needs a file first
+                            if model == .captured && engine.neuralModelName == nil {
+                                importKind = .neuralCapture
+                            } else {
+                                engine.ampSettings.model = model
+                            }
+                        }
+                    )) {
                         ForEach(AmpModel.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     Text(settings.model.summary).font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Button(engine.neuralModelName == nil ? "Load a NAM capture…" : "Change capture…", systemImage: "brain") {
+                            importKind = .neuralCapture
+                        }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                        if isLoadingNAM {
+                            ProgressView().controlSize(.small)
+                        } else if let name = engine.neuralModelName {
+                            Text(name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        } else {
+                            Text("Neural Amp Modeler – a real amp, learned by a neural network")
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }
+                    if let namError {
+                        Text(namError).font(.caption).foregroundStyle(.orange)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -117,7 +149,7 @@ struct AmpPanelView: View {
                         set: { cabinet in
                             // An IR needs a file first
                             if cabinet == .impulse && engine.cabinetIRName == nil {
-                                isImportingIR = true
+                                importKind = .impulseResponse
                             } else {
                                 engine.ampSettings.cabinet = cabinet
                             }
@@ -129,7 +161,7 @@ struct AmpPanelView: View {
                     Text(settings.cabinet.summary).font(.caption).foregroundStyle(.secondary)
                     HStack(spacing: 8) {
                         Button(engine.cabinetIRName == nil ? "Load an IR…" : "Change IR…", systemImage: "waveform.badge.plus") {
-                            isImportingIR = true
+                            importKind = .impulseResponse
                         }
                         .buttonStyle(.glass)
                         .controlSize(.small)
@@ -158,14 +190,29 @@ struct AmpPanelView: View {
             .disabled(!settings.isEnabled)
             .opacity(settings.isEnabled ? 1 : 0.6)
         }
-        .fileImporter(isPresented: $isImportingIR, allowedContentTypes: [.wav, .aiff, .audio]) { result in
+        .fileImporter(
+            isPresented: Binding(get: { importKind != nil }, set: { if !$0 { importKind = nil } }),
+            allowedContentTypes: importKind == .neuralCapture ? [.json, .data] : [.wav, .aiff, .audio]
+        ) { result in
+            let kind = importKind
             guard case .success(let url) = result else { return }
             Task {
-                do {
-                    try await engine.loadCabinetIR(from: url)
-                    irError = nil
-                } catch {
-                    irError = "Couldn't read that impulse response."
+                if kind == .neuralCapture {
+                    isLoadingNAM = true
+                    do {
+                        try await engine.loadNeuralModel(from: url)
+                        namError = nil
+                    } catch {
+                        namError = (error as? LocalizedError)?.errorDescription ?? "Couldn't read that capture."
+                    }
+                    isLoadingNAM = false
+                } else {
+                    do {
+                        try await engine.loadCabinetIR(from: url)
+                        irError = nil
+                    } catch {
+                        irError = "Couldn't read that impulse response."
+                    }
                 }
             }
         }

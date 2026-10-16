@@ -1,11 +1,36 @@
 import SwiftUI
+import UniformTypeIdentifiers
+
+/// A tone as a JSON file, for the share and import panels.
+struct ToneFile: FileDocument {
+    static let readableContentTypes: [UTType] = [.json]
+    var document: ToneDocument
+
+    init(document: ToneDocument) { self.document = document }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else { throw CocoaError(.fileReadCorruptFile) }
+        document = try JSONDecoder().decode(ToneDocument.self, from: data)
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return FileWrapper(regularFileWithContents: try encoder.encode(document))
+    }
+}
 
 // MARK: - Preset Picker View
 
 struct PresetPickerView: View {
-    let engine: any EffectsChainManaging
+    let engine: any EffectsChainManaging & ToneSharing
     let presetService: PresetProviding
     @Environment(\.dismiss) private var dismiss
+
+    @State private var exportFile: ToneFile?
+    @State private var isExporting = false
+    @State private var isImporting = false
+    @State private var importMessage: String?
 
     @State private var selectedCategory: EffectPreset.PresetCategory?
     @State private var selectedPreset: EffectPreset?
@@ -47,6 +72,34 @@ struct PresetPickerView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItemGroup(placement: .primaryAction) {
+                    // Share your tone as a small file – pedals, amp and EQ – or load one
+                    Button("Import Tone", systemImage: "square.and.arrow.down") { isImporting = true }
+                    Button("Share My Tone", systemImage: "square.and.arrow.up") {
+                        exportFile = ToneFile(document: engine.makeToneDocument(named: "My RiffNode Tone"))
+                        isExporting = true
+                    }
+                }
+            }
+            .fileExporter(isPresented: $isExporting, document: exportFile, contentType: .json,
+                          defaultFilename: "My RiffNode Tone") { _ in }
+            .fileImporter(isPresented: $isImporting, allowedContentTypes: [.json]) { result in
+                guard case .success(let url) = result else { return }
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                if let data = try? Data(contentsOf: url),
+                   let document = try? JSONDecoder().decode(ToneDocument.self, from: data),
+                   document.format == "riffnode.tone" {
+                    engine.applyToneDocument(document)
+                    dismiss()
+                } else {
+                    importMessage = "That file isn't a RiffNode tone."
+                }
+            }
+            .alert("Couldn't import", isPresented: Binding(get: { importMessage != nil }, set: { if !$0 { importMessage = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(importMessage ?? "")
             }
         }
         #if os(macOS)

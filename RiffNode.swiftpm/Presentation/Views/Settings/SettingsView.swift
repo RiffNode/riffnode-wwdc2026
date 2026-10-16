@@ -1,11 +1,16 @@
 import SwiftUI
+#if os(iOS) && !targetEnvironment(macCatalyst)
+import CoreAudioKit
+#endif
 
 // MARK: - Settings View
 // Apple-style settings with proper section grouping and professional appearance
 
 struct SettingsView: View {
     let engine: any StatusEngine
+    var footswitch: (any FootswitchListening)?
     @Environment(\.dismiss) private var dismiss
+    @State private var showingBluetoothMIDI = false
 
     @State private var showResetConfirmation = false
 
@@ -45,6 +50,57 @@ struct SettingsView: View {
                                 Image(systemName: engine.hasPermission ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                                     .font(.system(size: 20))
                                     .foregroundStyle(engine.hasPermission ? .green : .orange)
+                            }
+                        }
+
+                        // Latency – what you feel when you pick a note
+                        SettingsSection(title: "Latency") {
+                            SettingsRow(
+                                icon: "timer",
+                                iconColor: engine.roundTripLatencyMs < 15 ? .green : (engine.roundTripLatencyMs < 30 ? .orange : .red),
+                                title: String(format: "%.1f ms from string to ear", engine.roundTripLatencyMs),
+                                subtitle: String(format: "Buffer %.1f ms · under 10 ms feels instant, over 30 ms feels late", engine.bufferDurationMs)
+                            ) {
+                                Button { engine.refreshLatency() } label: {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                                .buttonStyle(.glass)
+                                .accessibilityLabel("Measure again")
+                            }
+                            if engine.isBluetoothOutput {
+                                GlassDivider()
+                                SettingsRow(
+                                    icon: "exclamationmark.triangle.fill",
+                                    iconColor: .orange,
+                                    title: "Bluetooth headphones",
+                                    subtitle: "They add 100–200 ms. Use wired headphones or an audio interface to play live."
+                                ) { EmptyView() }
+                            }
+                        }
+
+                        // MIDI foot controllers
+                        if let footswitch {
+                            SettingsSection(title: "MIDI Footswitch") {
+                                SettingsRow(
+                                    icon: "pianokeys",
+                                    iconColor: footswitch.sourceNames.isEmpty ? .secondary : .green,
+                                    title: footswitch.sourceNames.isEmpty ? "No MIDI device" : footswitch.sourceNames.joined(separator: ", "),
+                                    subtitle: footswitch.lastMessage.map { "Last: \($0)" } ?? "Connect a USB or Bluetooth MIDI pedal"
+                                ) {
+                                    #if os(iOS) && !targetEnvironment(macCatalyst)
+                                    Button("Bluetooth…") { showingBluetoothMIDI = true }
+                                        .buttonStyle(.glass)
+                                    #else
+                                    EmptyView()
+                                    #endif
+                                }
+                                GlassDivider()
+                                VStack(alignment: .leading, spacing: 4) {
+                                    SettingsInfoRow(label: "Program Change n", value: "Preset n")
+                                    SettingsInfoRow(label: "CC 80 / CC 81", value: "Next / previous preset")
+                                    SettingsInfoRow(label: "CC 82", value: "Looper footswitch")
+                                    SettingsInfoRow(label: "CC 83", value: "Mute while tuning")
+                                }
                             }
                         }
 
@@ -200,6 +256,19 @@ struct SettingsView: View {
             } message: {
                 Text("This will enable all effects and reset their parameters to default values.")
             }
+            #if os(iOS) && !targetEnvironment(macCatalyst)
+            .sheet(isPresented: $showingBluetoothMIDI) {
+                NavigationStack {
+                    BluetoothMIDIPairing()
+                        .navigationTitle("Bluetooth MIDI")
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showingBluetoothMIDI = false }
+                            }
+                        }
+                }
+            }
+            #endif
         }
         #if os(macOS)
         .frame(width: 450, height: 650)
@@ -295,3 +364,13 @@ private struct SettingsInfoRow: View {
     }
 }
 
+
+#if os(iOS) && !targetEnvironment(macCatalyst)
+// MARK: - Bluetooth MIDI Pairing
+
+/// Apple's Bluetooth MIDI pairing screen – pair a wireless foot controller without leaving RiffNode.
+private struct BluetoothMIDIPairing: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> CABTMIDICentralViewController { CABTMIDICentralViewController() }
+    func updateUIViewController(_ controller: CABTMIDICentralViewController, context: Context) {}
+}
+#endif

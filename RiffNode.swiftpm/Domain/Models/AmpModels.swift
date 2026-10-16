@@ -26,6 +26,8 @@ enum AmpModel: String, CaseIterable, Identifiable, Sendable {
     case crunch = "Crunch"
     /// Modern high gain: tight lows, heavy saturation
     case lead = "Lead"
+    /// A Neural Amp Modeler capture: a neural network trained on a real amp
+    case captured = "NAM"
 
     var id: String { rawValue }
 
@@ -34,6 +36,7 @@ enum AmpModel: String, CaseIterable, Identifiable, Sendable {
         case .clean: "Lots of headroom and sparkle – pedals sound like themselves."
         case .crunch: "Breaks up as you dig in, with pushy upper mids."
         case .lead: "Tight lows and thick saturation for solos and riffs."
+        case .captured: "A neural network trained on recordings of a real amp (.nam capture)."
         }
     }
 }

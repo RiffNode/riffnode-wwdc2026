@@ -1,9 +1,11 @@
 import SwiftUI
 import Observation
+import PhotosUI
 
 // MARK: - AI Chatbot Overlay View
 
 struct AIChatbotOverlayView: View {
+    @State private var photoItem: PhotosPickerItem?
     @Bindable var controller: AIChatbotController
     let processor: SemanticCommandProcessor
     let engine: any EffectsChainManaging
@@ -304,6 +306,18 @@ struct AIChatbotOverlayView: View {
         }
     }
 
+    // MARK: - Photo
+
+    /// Saves the picked photo to a temporary file and asks the assistant about it.
+    private func sendPhoto(_ item: PhotosPickerItem) async {
+        defer { photoItem = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("tone-photo-\(UUID().uuidString).jpg")
+        guard (try? data.write(to: url)) != nil else { return }
+        await controller.sendPhoto(at: url, processor: processor, engine: engine)
+        try? FileManager.default.removeItem(at: url)
+    }
+
     // MARK: - Input Bar
 
     private var inputBar: some View {
@@ -312,6 +326,22 @@ struct AIChatbotOverlayView: View {
             set: { controller.inputText = $0 }
         )
         return HStack(spacing: 10) {
+            // OS 27: Apple Intelligence can look at a photo and suggest the sound it evokes
+            if processor.canReadImages {
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    Image(systemName: "photo.badge.plus")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(width: 32, height: 32)
+                        .glassEffect(.regular.interactive(), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(controller.isProcessing)
+                .accessibilityLabel("Tone from a photo")
+                .onChange(of: photoItem) { _, item in
+                    guard let item else { return }
+                    Task { await sendPhoto(item) }
+                }
+            }
             TextField("Describe your tone...", text: inputBinding, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14))

@@ -60,6 +60,14 @@ struct InputSourceCard: View {
             }
             .animation(.smooth(duration: 0.2), value: chordDetector.detectedChord)
 
+            // Bluetooth headphones lag 100–200 ms behind your fingers
+            if engine.isBluetoothOutput {
+                Label("Bluetooth headphones lag ~150 ms – use wired ones to play live", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             // Real levels: what comes in, and what leaves after the pedals
             VStack(spacing: 6) {
                 LevelBar(label: "IN", level: engine.inputLevel)

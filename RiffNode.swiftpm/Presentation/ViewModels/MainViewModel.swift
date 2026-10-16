@@ -36,6 +36,8 @@ final class MainViewModel {
     let presetService: PresetProviding
 
     let fftAnalyzer = FFTAnalyzer()
+    /// USB / Bluetooth MIDI foot controllers.
+    let midi = MIDIFootswitch()
     let chordDetector = ChordDetector()
     let gestureController = VisionGestureController()
     let semanticProcessor = SemanticCommandProcessor()
@@ -80,6 +82,8 @@ final class MainViewModel {
     // MARK: - Lifecycle
 
     func onAppear() {
+        midi.onEvent = { [weak self] event in self?.handleFootswitch(event) }
+        midi.start()
         gestureController.onGestureDetected = { [weak self] gesture in
             self?.handleGesture(gesture)
         }
@@ -111,6 +115,22 @@ final class MainViewModel {
         } else {
             gestureController.stop()
             engine.setWah(nil)
+        }
+    }
+
+    // MARK: - Footswitch
+
+    private func handleFootswitch(_ event: FootswitchEvent) {
+        switch event {
+        case .programChange(let number):
+            let presets = presetService.presets
+            guard presets.indices.contains(number) else { return }
+            performanceController.currentPresetIndex = number
+            engine.applyPreset(presets[number])
+        case .nextPreset: stepPreset(by: 1)
+        case .previousPreset: stepPreset(by: -1)
+        case .looper: engine.looperControls.press()
+        case .tunerMute: engine.isTunerMuted.toggle()
         }
     }
 

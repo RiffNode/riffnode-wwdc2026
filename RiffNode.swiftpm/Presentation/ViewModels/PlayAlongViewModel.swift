@@ -16,6 +16,12 @@ final class PlayAlongViewModel {
 
     let player: any BackingTrackManaging
     let music: any MusicAppControlling
+    let analyzer: any SongAnalyzing
+    var metronome: (any MetronomeControlling)?
+
+    /// Key, tempo and sections of the imported song.
+    private(set) var analysis: SongAnalysis?
+    private(set) var isAnalyzing = false
 
     var mode: Mode = .groove {
         didSet { if mode != oldValue { modeDidChange() } }
@@ -24,9 +30,10 @@ final class PlayAlongViewModel {
     /// Name shown while an imported file is still loading.
     private(set) var pendingTrackName: String?
 
-    init(player: any BackingTrackManaging, music: any MusicAppControlling) {
+    init(player: any BackingTrackManaging, music: any MusicAppControlling, analyzer: any SongAnalyzing = SongAnalyzer()) {
         self.player = player
         self.music = music
+        self.analyzer = analyzer
     }
 
     // MARK: - Groove
@@ -83,11 +90,27 @@ final class PlayAlongViewModel {
         pendingTrackName = url.deletingPathExtension().lastPathComponent
         Task {
             let accessing = url.startAccessingSecurityScopedResource()
+            analysis = nil
             try? await player.loadBackingTrack(url: url)
             if accessing { url.stopAccessingSecurityScopedResource() }
             isLoading = false
             pendingTrackName = nil
+            await analyzeSong()
         }
+    }
+
+    /// Key, tempo and sections, found on device (iOS / macOS 27).
+    func analyzeSong() async {
+        guard analyzer.isAvailable, let url = player.songFileURL else { return }
+        isAnalyzing = true
+        analysis = try? await analyzer.analyze(url: url)
+        isAnalyzing = false
+    }
+
+    /// Sets the metronome to the song's tempo.
+    func matchMetronomeToSong() {
+        guard let bpm = analysis?.beatsPerMinute else { return }
+        metronome?.setTempo(bpm.rounded())
     }
 
     // MARK: - Modes

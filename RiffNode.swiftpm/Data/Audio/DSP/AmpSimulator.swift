@@ -110,19 +110,22 @@ enum AmpDesign {
         switch model {
         case .clean: 0 + gain * 18
         case .crunch: 10 + gain * 26
-        case .lead: 20 + gain * 30
+        case .lead, .captured: 20 + gain * 30
         }
     }
 
     /// Tone stack + voicing + cabinet, in signal order after the preamp.
     static func stages(for s: AmpSettings) -> [Stage] {
         var stages: [Stage] = []
+        // A neural capture already contains the amp's EQ: only the cabinet follows
+        if s.model != .captured {
         // Tone stack: ±12 dB, centred on each voicing's character
         let midCentre: Float = s.model == .clean ? 500 : (s.model == .crunch ? 800 : 650)
         let midBias: Float = s.model == .clean ? -3 : (s.model == .crunch ? 2 : -2)   // clean scoop, British push
         stages.append(Stage(kind: .lowShelf, frequency: 120, q: 0.7, gainDB: (s.bass - 0.5) * 24))
         stages.append(Stage(kind: .peak, frequency: midCentre, q: 0.8, gainDB: (s.mid - 0.5) * 20 + midBias))
         stages.append(Stage(kind: .highShelf, frequency: 3_200, q: 0.7, gainDB: (s.treble - 0.5) * 24))
+        }
 
         switch s.cabinet {
         case .direct, .impulse:
@@ -167,8 +170,8 @@ final class AmpProcessor: @unchecked Sendable {
 
     static let maxStages = 9
     static let maxIRLength = 2048
-    // Bank layout: [stageCount, preGain, tightCoefficient, masterDrive, postGain, useIR, b0 b1 b2 a1 a2 × maxStages]
-    private static let header = 6
+    // Bank layout: [stageCount, preGain, tightCoefficient, masterDrive, postGain, useIR, useNeural, b0 b1 b2 a1 a2 × maxStages]
+    private static let header = 7
     private static let bankSize = header + maxStages * 5
 
     private let banks = UnsafeMutablePointer<Float>.allocate(capacity: 2 * bankSize)
@@ -180,6 +183,17 @@ final class AmpProcessor: @unchecked Sendable {
     private let irActive = Atomic<Int>(0)
     private let irLength = Atomic<Int>(0)
     private var irWriteBank = 1
+
+    /// The loaded neural capture, handed to the audio thread as a retained pointer
+    /// (the engine keeps every model it ever loaded alive, so a swap never frees one in use).
+    private let neuralModel = Atomic<UnsafeMutableRawPointer?>(nil)
+
+    func setNeuralModel(_ model: NeuralAmpModel?) {
+        neuralModel.store(model.map { Unmanaged.passUnretained($0).toOpaque() }, ordering: .releasing)
+    }
+
+    /// True while a neural capture replaces the preamp, tone stack and power amp.
+    var usesNeuralModel: Bool { useNeural }
 
     private var sampleRate: Float = 48_000
 
@@ -220,6 +234,7 @@ final class AmpProcessor: @unchecked Sendable {
         // Keep loudness roughly steady across gain settings
         base[4] = (0.25 + s.master * 0.5) / max(0.6, min(1.6, 0.9 + s.gain * 0.4))
         base[5] = useIR ? 1 : 0
+        base[6] = s.model == .captured && neuralModel.load(ordering: .acquiring) != nil ? 1 : 0
         for (i, stage) in stages.enumerated() {
             let c = Biquad.coefficients(stage.kind, frequency: stage.frequency, q: stage.q, gainDB: stage.gainDB, sampleRate: sampleRate)
             let o = Self.header + i * 5
@@ -262,6 +277,7 @@ final class AmpProcessor: @unchecked Sendable {
     private var seenGeneration = -1
     private var preGain: Float = 1, tightCoefficient: Float = 0, masterDrive: Float = 1, postGain: Float = 1
     private var useIR = false
+    private var useNeural = false
     private var inputHighPass: (Float, Float) = (0, 0)
 
     /// Per-channel input history for the convolution: the last (maxIRLength − 1) samples, then the block.
@@ -284,6 +300,7 @@ final class AmpProcessor: @unchecked Sendable {
         stageCount = min(Int(base[0]), Self.maxStages)
         preGain = base[1]; tightCoefficient = base[2]; masterDrive = base[3]; postGain = base[4]
         useIR = base[5] > 0.5
+        useNeural = base[6] > 0.5
         for i in 0..<stageCount {
             let o = Self.header + i * 5
             // Coefficients change; the filter's memory stays, so knob turns don't click
@@ -292,9 +309,26 @@ final class AmpProcessor: @unchecked Sendable {
         }
     }
 
+    /// Runs the neural capture on one (mono) block. Call once per block, before `process`.
+    func processNeural(_ data: UnsafeMutablePointer<Float>, frames: Int) {
+        refreshIfNeeded()
+        guard useNeural, let raw = neuralModel.load(ordering: .acquiring) else { return }
+        Unmanaged<NeuralAmpModel>.fromOpaque(raw).takeUnretainedValue().process(data, count: frames)
+    }
+
     func process(_ data: UnsafeMutablePointer<Float>, frames: Int, channel: Int) {
         if channel == 0 { refreshIfNeeded() }
         let frames = min(frames, 4096)
+        if useNeural {
+            // The capture already is the amp: only the cabinet (filters or IR) follows
+            for i in 0..<frames {
+                var y = data[i]
+                for s in 0..<stageCount { y = filters[s].process(y, channel: channel) }
+                data[i] = y
+            }
+            if useIR { convolve(data, frames: frames, channel: channel) }
+            return
+        }
         var low = channel == 0 ? inputHighPass.0 : inputHighPass.1
         for i in 0..<frames {
             let x = data[i]

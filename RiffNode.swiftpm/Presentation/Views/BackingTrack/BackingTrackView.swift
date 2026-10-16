@@ -18,8 +18,11 @@ struct BackingTrackView: View {
     private var music: any MusicAppControlling { viewModel.music }
     private var isLoading: Bool { viewModel.isLoading }
 
-    init(player: any BackingTrackManaging, music: any MusicAppControlling = SystemMusicService()) {
-        _viewModel = State(initialValue: PlayAlongViewModel(player: player, music: music))
+    init(player: any BackingTrackManaging, metronome: (any MetronomeControlling)? = nil,
+         music: any MusicAppControlling = SystemMusicService()) {
+        let model = PlayAlongViewModel(player: player, music: music)
+        model.metronome = metronome
+        _viewModel = State(initialValue: model)
     }
     @Environment(\.openURL) private var openURL
 
@@ -220,9 +223,12 @@ struct BackingTrackView: View {
                 TrackTimeline(
                     currentTime: player.backingTrackCurrentTime,
                     duration: player.backingTrackDuration,
+                    markers: viewModel.analysis?.sections ?? [],
                     onSeek: { player.seekBackingTrack(to: $0) }
                 )
             }
+
+            songAnalysis
 
             volumeSlider
 
@@ -240,6 +246,46 @@ struct BackingTrackView: View {
             }
             .tint(.orange)
         }
+    }
+
+    // MARK: - Song Analysis
+
+    /// Key, tempo and what to solo with – found on device by Music Understanding (OS 27).
+    @ViewBuilder
+    private var songAnalysis: some View {
+        if viewModel.isAnalyzing {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Listening for the key and tempo…").font(.caption).foregroundStyle(.secondary)
+            }
+        } else if let analysis = viewModel.analysis {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    if let key = analysis.key { infoChip(key, systemImage: "music.note") }
+                    if let bpm = analysis.beatsPerMinute { infoChip("\(Int(bpm.rounded())) BPM", systemImage: "metronome") }
+                    if !analysis.sections.isEmpty { infoChip("\(analysis.sections.count) sections", systemImage: "rectangle.split.3x1") }
+                }
+                if let scale = analysis.soloScale {
+                    Label("Solo with \(scale)", systemImage: "hand.point.up.left")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if analysis.beatsPerMinute != nil, viewModel.metronome != nil {
+                    Button("Set metronome to the song", systemImage: "metronome", action: viewModel.matchMetronomeToSong)
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                }
+            }
+        }
+    }
+
+    private func infoChip(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.riffPrimary.opacity(0.14), in: Capsule())
     }
 
     // MARK: - Music App
@@ -387,6 +433,8 @@ struct BackingTrackView: View {
 struct TrackTimeline: View {
     let currentTime: TimeInterval
     let duration: TimeInterval
+    /// Section starts (verse, chorus…) drawn as ticks
+    var markers: [TimeInterval] = []
     let onSeek: (TimeInterval) -> Void
 
     @State private var isDragging = false
@@ -417,6 +465,14 @@ struct TrackTimeline: View {
                         )
                         .frame(width: max(8, geo.size.width * progress), height: 8)
                         .shadow(color: Color.riffPrimary.opacity(0.4), radius: 4, x: 0, y: 0)
+
+                    // Section markers
+                    ForEach(Array(markers.enumerated()), id: \.offset) { _, time in
+                        Capsule()
+                            .fill(Color.primary.opacity(0.45))
+                            .frame(width: 2, height: 12)
+                            .position(x: geo.size.width * CGFloat(time / max(duration, 1)), y: geo.size.height / 2)
+                    }
 
                     // Scrubber knob
                     let knobX = max(10, min(geo.size.width - 10, geo.size.width * progress))

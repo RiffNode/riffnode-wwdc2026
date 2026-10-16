@@ -306,33 +306,8 @@ final class SemanticCommandProcessor {
                     updateThinkingSteps(from: snapshot.content)
                 }
                 let sketch = try await stream.collect().content
-
                 // Pedals the player named themselves always make it in
-                let named = Self.mentionedPedals(in: command)
-                let values = ToneSketchValues(
-                    style: ToneStyle(rawValue: String(describing: sketch.style)) ?? .clean,
-                    gain: ToneGain(rawValue: String(describing: sketch.gain)) ?? .light,
-                    space: ToneSpace(rawValue: String(describing: sketch.space)) ?? .room,
-                    signaturePedals: (sketch.signaturePedals.map { String(describing: $0) } + named).removingDuplicates(),
-                    reason: sketch.reason
-                )
-                let (effects, parameters) = ToneRecipeBook.build(values)
-                setStep("recipe", "Setting the knobs from the \(values.style.title) recipe", done: true)
-                markAllStepsDone()
-
-                let reason = values.reason.trimmingCharacters(in: .whitespacesAndNewlines)
-                let explanation = "\(values.style.title), \(values.gain.rawValue) gain, \(values.space.rawValue) space. "
-                    + (reason.prefix(1).uppercased() + reason.dropFirst())
-                    + (reason.hasSuffix(".") ? "" : ".")
-                var finalParameters = parameters
-                finalParameters.explanation = explanation
-
-                lastCommandMode = "preset"
-                lastEnabledEffects = effects
-                lastDisabledEffects = []
-                lastParameters = finalParameters
-                lastExplanation = explanation
-                lastResponder = .appleIntelligence
+                applySketch(sketch, alsoNamed: command)
                 return true
             } catch {
                 errorMessage = "Apple Intelligence couldn't answer: \(error.localizedDescription)"
@@ -346,6 +321,88 @@ final class SemanticCommandProcessor {
         lastResponder = .offlineMatcher
         return processCommandFallback(command)
     }
+
+    // MARK: - Tone from a Photo (iOS / macOS 27)
+
+    /// True when the on-device model can look at images (OS 27 multimodal prompts).
+    var canReadImages: Bool {
+        #if canImport(FoundationModels)
+        if #available(iOS 27, macOS 27, *) {
+            return SystemLanguageModel.default.isAvailable
+                && SystemLanguageModel.default.capabilities.contains(.vision)
+        }
+        #endif
+        return false
+    }
+
+    /// Looks at a photo – an album cover, a gig poster, a pedalboard – and dials in the
+    /// guitar sound it evokes. On device; the image never leaves it.
+    func processImage(at url: URL) async -> Bool {
+        isProcessing = true
+        defer { isProcessing = false }
+        lastCommand = "Photo"
+        errorMessage = nil
+        lastDeletedEffects = []
+        thinkingSteps = [ThinkingStep(id: "context", text: "Looking at your photo", isDone: false)]
+
+        #if canImport(FoundationModels)
+        if #available(iOS 27, macOS 27, *), canReadImages {
+            do {
+                let session = LanguageModelSession(instructions: instructions)
+                let stream = session.streamResponse(generating: ToneSketch.self) {
+                    "What guitar tone does this picture evoke? Think about its era, mood and genre."
+                    Attachment(imageURL: url)
+                }
+                for try await snapshot in stream {
+                    setStep("context", "Looking at your photo", done: true)
+                    updateThinkingSteps(from: snapshot.content)
+                }
+                let sketch = try await stream.collect().content
+                applySketch(sketch)
+                return true
+            } catch {
+                errorMessage = "Apple Intelligence couldn't read that photo."
+            }
+        }
+        #endif
+        markAllStepsDone()
+        lastResponder = .offlineMatcher
+        lastCommandMode = "chat"
+        lastExplanation = "Reading photos needs Apple Intelligence on iOS or macOS 27. Describe the sound in words instead – \"80s chorus\", \"surf rock\"."
+        return true
+    }
+
+    #if canImport(FoundationModels)
+    /// Turns a model sketch into knob settings via the recipe book.
+    @available(iOS 26, macOS 26, *)
+    private func applySketch(_ sketch: ToneSketch, alsoNamed command: String = "") {
+        let named = Self.mentionedPedals(in: command)
+        let values = ToneSketchValues(
+            style: ToneStyle(rawValue: String(describing: sketch.style)) ?? .clean,
+            gain: ToneGain(rawValue: String(describing: sketch.gain)) ?? .light,
+            space: ToneSpace(rawValue: String(describing: sketch.space)) ?? .room,
+            signaturePedals: (sketch.signaturePedals.map { String(describing: $0) } + named).removingDuplicates(),
+            reason: sketch.reason
+        )
+        let (effects, parameters) = ToneRecipeBook.build(values)
+        setStep("recipe", "Setting the knobs from the \(values.style.title) recipe", done: true)
+        markAllStepsDone()
+
+        let reason = values.reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let explanation = "\(values.style.title), \(values.gain.rawValue) gain, \(values.space.rawValue) space. "
+            + (reason.prefix(1).uppercased() + reason.dropFirst())
+            + (reason.hasSuffix(".") ? "" : ".")
+        var finalParameters = parameters
+        finalParameters.explanation = explanation
+
+        lastCommandMode = "preset"
+        lastEnabledEffects = effects
+        lastDisabledEffects = []
+        lastParameters = finalParameters
+        lastExplanation = explanation
+        lastResponder = .appleIntelligence
+    }
+    #endif
 
     /// Pedal names that appear in the text, in the model's vocabulary.
     private static func mentionedPedals(in text: String) -> [String] {

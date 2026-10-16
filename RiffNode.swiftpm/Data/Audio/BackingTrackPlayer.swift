@@ -26,6 +26,9 @@ final class BackingTrackPlayer: BackingTrackManaging {
     private(set) var grooveTranspose = 0
     private(set) var grooveTempo = JamTrackSynthesizer.defaultTempo
 
+    /// A copy of the imported song in the app's temporary folder, for analysis.
+    private(set) var songFileURL: URL?
+
     /// True once attached to a running audio graph.
     var isReady: Bool { format != nil }
 
@@ -71,6 +74,10 @@ final class BackingTrackPlayer: BackingTrackManaging {
         try file.read(into: fileBuffer)
 
         stopBackingTrack()
+        // Keep a private copy: the file picker's access ends once loading is done
+        let copy = FileManager.default.temporaryDirectory.appendingPathComponent("song-" + url.lastPathComponent)
+        try? FileManager.default.removeItem(at: copy)
+        songFileURL = (try? FileManager.default.copyItem(at: url, to: copy)) != nil ? copy : nil
         // The player is wired at the engine's format and does not resample:
         // a 44.1 kHz song on a 48 kHz device must be converted first.
         buffer = try convertToProcessingFormat(fileBuffer)

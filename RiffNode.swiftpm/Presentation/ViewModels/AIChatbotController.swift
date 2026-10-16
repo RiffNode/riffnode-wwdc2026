@@ -82,6 +82,19 @@ final class AIChatbotController {
             .map { "\($0.type.rawValue.lowercased()) \($0.isEnabled ? "on" : "off")" }
             .joined(separator: ", ")
         let success = await processor.processCommand(text, pedalboard: pedalboard)
+        await present(success: success, processor: processor, engine: engine)
+    }
+
+    /// Sends a photo: Apple Intelligence (OS 27) looks at it and dials in the sound it evokes.
+    func sendPhoto(at url: URL, processor: SemanticCommandProcessor, engine: any EffectsChainManaging) async {
+        messages.append(ChatMessage(role: .user, content: "📷 What tone does this photo sound like?"))
+        isProcessing = true
+        let success = await processor.processImage(at: url)
+        await present(success: success, processor: processor, engine: engine)
+    }
+
+    /// Shows the assistant's answer and applies it to the pedalboard.
+    private func present(success: Bool, processor: SemanticCommandProcessor, engine: any EffectsChainManaging) async {
 
         if success && processor.lastCommandMode == "chat" {
             // A conversational reply: nothing to apply to the pedalboard

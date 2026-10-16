@@ -42,7 +42,12 @@ struct MainInterfaceView: View {
                             InputSourceCard(engine: engine, chordDetector: viewModel.chordDetector)
 
                             // Play along with a song
-                            BackingTrackView(player: engine.playAlong)
+                            BackingTrackView(player: engine.playAlong, metronome: engine.metronomeControls)
+
+                            // Looper and metronome
+                            PracticeCard(looper: engine.looperControls,
+                                         metronome: engine.metronomeControls,
+                                         grooveTempo: engine.playAlong.grooveTempo)
 
                             GestureControlPill(
                                 controller: viewModel.gestureController,
@@ -91,7 +96,7 @@ struct MainInterfaceView: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { containerWidth = $0 }
         .sheet(isPresented: $viewModel.showingSettings) {
-            SettingsView(engine: engine)
+            SettingsView(engine: engine, footswitch: viewModel.midi)
         }
         .sheet(isPresented: $viewModel.showingPresets) {
             PresetPickerView(engine: engine, presetService: viewModel.presetService)

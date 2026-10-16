@@ -67,6 +67,13 @@ final class AudioEngineManager: AudioManaging {
     let backingTrack = BackingTrackPlayer()
     var playAlong: any BackingTrackManaging { backingTrack }
 
+    // MARK: - Practice Tools
+    let metronome = MetronomePlayer()
+    let looper = Looper()
+    var metronomeControls: any MetronomeControlling { metronome }
+    var looperControls: any LooperControlling { looper }
+    @ObservationIgnored private var looperTapInstalled = false
+
     // MARK: - Private Audio Components
 
     private var audioEngine: AVAudioEngine?
@@ -134,9 +141,10 @@ final class AudioEngineManager: AudioManaging {
     
     private func handleAudioConfigurationChange() {
         print("🔄 Audio route changed - reinstalling visualization tap")
-        
+
         // Refresh device detection
         detectAudioInputDevices()
+        refreshLatency()
         
         // Reinstall the visualization tap if engine is running
         if isRunning {
@@ -277,6 +285,15 @@ final class AudioEngineManager: AudioManaging {
         if let mixer = mainMixer {
             backingTrack.attach(to: engine, dryOutput: mixer, effectsInput: fxMixer, format: format)
             demoRiff.attach(to: engine, output: fxMixer, format: format)
+            metronome.attach(to: engine, output: mixer, format: format)
+            looper.attach(to: engine, output: mixer, format: format)
+            metronome.startEngineIfNeeded = { [weak self] in
+                if self?.isRunning == false { try? self?.start() }
+            }
+            looper.startEngineIfNeeded = { [weak self] in
+                if self?.isRunning == false { try? self?.start() }
+            }
+            looper.setRecordingTap = { [weak self] on in self?.setLooperTap(on) }
             backingTrack.startEngineIfNeeded = { [weak self] in
                 if self?.isRunning == false { try? self?.start() }
             }
@@ -290,6 +307,7 @@ final class AudioEngineManager: AudioManaging {
         mainMixer?.installTap(onBus: 0, bufferSize: 1024, format: nil,
                               block: OutputLevelStore.tapBlock(for: outputLevelStore))
 
+        refreshLatency()
         print("setupEngine: DONE - audio chain ready")
     }
 
@@ -417,6 +435,58 @@ final class AudioEngineManager: AudioManaging {
         return min(max(bandwidth, 0.05), 5)
     }
 
+    /// The looper records the amp's output: your guitar through the whole board.
+    private func setLooperTap(_ on: Bool) {
+        guard let amp = effectUnits?.amp else { return }
+        if on && !looperTapInstalled {
+            amp.installTap(onBus: 0, bufferSize: 1024, format: nil, block: LoopTape.tapBlock(for: looper.tape))
+            looperTapInstalled = true
+        } else if !on && looperTapInstalled {
+            amp.removeTap(onBus: 0)
+            looperTapInstalled = false
+        }
+    }
+
+    // MARK: - Tone Sharing
+
+    func makeToneDocument(named name: String) -> ToneDocument {
+        ToneDocument(name: name, chain: effectsChain, amp: ampSettings, eqBands: parametricEQBands)
+    }
+
+    func applyToneDocument(_ document: ToneDocument) {
+        let nodes = document.effectNodes
+        guard !nodes.isEmpty else { return }
+        effectsChain = nodes
+        var amp = document.ampSettings
+        if amp.cabinet == .impulse && cabinetIRName == nil { amp.cabinet = .twoByTwelve }
+        ampSettings = amp
+        var bands = parametricEQBands
+        for (index, gain) in document.eqGains.enumerated() where bands.indices.contains(index) {
+            bands[index].gain = max(-24, min(24, gain))
+        }
+        parametricEQBands = bands
+        rebuildEffectsChain()
+    }
+
+    // MARK: - Latency
+
+    /// Pick-to-ear delay: input + output hardware latency plus one buffer each way, in ms.
+    private(set) var roundTripLatencyMs: Double = 0
+    /// Buffer size the hardware actually granted, in ms.
+    private(set) var bufferDurationMs: Double = 0
+    /// Bluetooth headphones add 100–200 ms – far too much to play along to.
+    private(set) var isBluetoothOutput = false
+
+    func refreshLatency() {
+        #if os(iOS) || targetEnvironment(macCatalyst)
+        let session = AVAudioSession.sharedInstance()
+        bufferDurationMs = session.ioBufferDuration * 1000
+        roundTripLatencyMs = (session.inputLatency + session.outputLatency + 2 * session.ioBufferDuration) * 1000
+        let bluetooth: Set<AVAudioSession.Port> = [.bluetoothA2DP, .bluetoothLE, .bluetoothHFP]
+        isBluetoothOutput = session.currentRoute.outputs.contains { bluetooth.contains($0.portType) }
+        #endif
+    }
+
     // MARK: - Amp & Cabinet
 
     /// The amp at the end of the chain. Every change is heard immediately.
@@ -490,6 +560,29 @@ final class AudioEngineManager: AudioManaging {
         units.ampKernel.amp.loadIR(taps)
         cabinetIRName = url.deletingPathExtension().lastPathComponent
         ampSettings.cabinet = .impulse
+        applyAmpSettings()
+    }
+
+    /// Name of the loaded Neural Amp Modeler capture.
+    private(set) var neuralModelName: String?
+    /// Every capture ever loaded stays alive: the audio thread may still be using the previous one.
+    @ObservationIgnored private var neuralModels: [NeuralAmpModel] = []
+
+    /// Loads a Neural Amp Modeler capture (.nam, standard WaveNet) as the amp.
+    func loadNeuralModel(from url: URL) async throws {
+        guard let units = effectUnits else { throw AudioEngineError.engineNotSetup }
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+        let data = try Data(contentsOf: url)
+        let name = url.deletingPathExtension().lastPathComponent
+        // Parsing and pre-warming take a moment; keep it off the main thread
+        let model = try await Task.detached(priority: .userInitiated) {
+            try NeuralAmpModel(data: data, name: name)
+        }.value
+        neuralModels.append(model)
+        units.ampKernel.amp.setNeuralModel(model)
+        neuralModelName = name
+        ampSettings.model = .captured
         applyAmpSettings()
     }
 
@@ -695,6 +788,9 @@ final class AudioEngineManager: AudioManaging {
         try await Task.detached(priority: .userInitiated) {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .mixWithOthers])
+            // Live guitar needs a short buffer: ~5 ms (256 frames at 48 kHz) instead of the
+            // ~20 ms default, so a note comes out of the amp right as you pick it.
+            try? session.setPreferredIOBufferDuration(0.005)
             try session.setActive(true)
         }.value
         print("setupEngine: Audio session configured")
@@ -796,6 +892,8 @@ final class AudioEngineManager: AudioManaging {
             try engine.start()
             // Stopping the engine halts player nodes; resume what was playing
             demoRiff.resumeAfterEngineRestart()
+            metronome.resumeAfterEngineRestart()
+            looper.resumeAfterEngineRestart()
             if resumeBackingTrack { backingTrack.playBackingTrack() }
         } catch {
             isRunning = false
