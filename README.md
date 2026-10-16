@@ -315,6 +315,16 @@ It brings low-level signal processing, computer vision and on-device AI together
 | 2026-04-14 | 聯合新聞網 udn Tech | [蘋果WWDC 2026 Swift學生挑戰賽：台灣8名學子入圍創紀錄](https://tech.udn.com/tech/story/123153/9439619) |
 | 2026-04-13 | 科技新報 TechNews | [歷年來最多！2026 WWDC Swift Student Challenge 獲獎學生達 8 位](https://technews.tw/2026/04/13/2026-wwdc-swift-student-challenge-taiwan/) |
 
+## Roadmap
+
+- Full recovery from audio route changes and interruptions (unplugging an interface, phone calls)
+- A lock-free ring buffer between the analysis taps and the UI
+- A stricter handshake when swapping amp coefficient banks
+- Hand-gesture (Vision) camera lifecycle across scenes
+- Saving the whole rig – pedals, amp, input, EQ – with Undo
+- An EQ curve drawn from the exact filter response
+- Streaming long backing tracks, synced with the metronome and looper
+
 ## Acknowledgements
 
 - [NotchDrop](https://github.com/Lakr233/NotchDrop) by Lakr Aream (MIT) – inspiration for the notch shape, its states and its spring animation.

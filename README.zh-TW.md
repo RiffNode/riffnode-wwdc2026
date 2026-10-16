@@ -317,6 +317,16 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
 | 2026-04-14 | 聯合新聞網 科技 | [蘋果WWDC 2026 Swift學生挑戰賽：台灣8名學子入圍創紀錄](https://tech.udn.com/tech/story/123153/9439619) |
 | 2026-04-13 | 科技新報 | [歷年來最多！2026 WWDC Swift Student Challenge 獲獎學生達 8 位](https://technews.tw/2026/04/13/2026-wwdc-swift-student-challenge-taiwan/) |
 
+## 未來規劃
+
+- 音訊路由變更與中斷（拔掉錄音介面、來電）後完整恢復
+- 分析 tap 與介面之間改用無鎖 ring buffer
+- 切換音箱係數 bank 時更嚴謹的交接
+- 手勢（Vision）相機在不同畫面間的生命週期
+- 儲存整組設定（踏板、音箱、輸入、EQ）並支援 Undo
+- EQ 曲線依實際濾波器響應繪製
+- 長伴奏串流播放，並與節拍器、Looper 同步
+
 ## 致謝
 
 - Lakr Aream 的 [NotchDrop](https://github.com/Lakr233/NotchDrop)（MIT）—— 瀏海形狀、狀態與彈簧動畫的靈感來源。
