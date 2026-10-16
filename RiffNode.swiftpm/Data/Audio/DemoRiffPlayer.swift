@@ -13,44 +13,81 @@ final class DemoRiffPlayer {
     var riff: DemoRiff = .originalArpeggio {
         didSet { if riff != oldValue { buffer = nil } }
     }
-    /// The imported clean recording, if any.
-    private(set) var recordingURL: URL?
+    /// Clean recordings the player imported, by name.
+    private(set) var recordings: [URL] = []
+    /// The recording that plays when `riff` is `.recording`.
+    private(set) var selectedRecording: URL?
 
     private let player = AVAudioPlayerNode()
     @ObservationIgnored private var buffer: AVAudioPCMBuffer?
     private var format: AVAudioFormat?
 
-    init(recordingURL: URL? = DemoRiffPlayer.storedRecordingURL()) {
-        self.recordingURL = recordingURL
+    /// `recordingURL` plays a specific file (the tests); otherwise the imported ones are listed.
+    init(recordingURL: URL? = nil) {
+        if let recordingURL {
+            recordings = [recordingURL]
+        } else {
+            reloadRecordings()
+        }
+        selectedRecording = recordings.first
     }
 
-    /// Where an imported recording is kept between launches.
+    /// Where imported recordings are kept between launches.
     nonisolated static func recordingsFolder() -> URL? {
         guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
         return support.appendingPathComponent("DemoRecording", isDirectory: true)
     }
 
-    nonisolated static func storedRecordingURL() -> URL? {
-        guard let folder = recordingsFolder(),
-              let name = try? FileManager.default.contentsOfDirectory(atPath: folder.path).first else { return nil }
-        return folder.appendingPathComponent(name)
+    private func reloadRecordings() {
+        guard let folder = Self.recordingsFolder(),
+              let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else {
+            recordings = []
+            return
+        }
+        recordings = names.filter { !$0.hasPrefix(".") }.sorted()
+            .map { folder.appendingPathComponent($0) }
     }
 
-    /// Copies a recording the player chose into the app's own storage and selects it.
-    func importRecording(from url: URL) throws {
+    /// Copies recordings the player chose into the app's own storage and selects the first.
+    /// Files that aren't audio are skipped; throws only if none could be used.
+    func importRecordings(from urls: [URL], access: (URL, () throws -> Void) throws -> Void) throws {
         guard let folder = Self.recordingsFolder() else { throw AudioEngineError.bufferCreationFailed }
-        try? FileManager.default.removeItem(at: folder)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let destination = folder.appendingPathComponent(url.lastPathComponent)
-        try FileManager.default.copyItem(at: url, to: destination)
-        _ = try AVAudioFile(forReading: destination)   // reject files that aren't audio
-        recordingURL = destination
+        var imported: [URL] = []
+        for url in urls {
+            let destination = folder.appendingPathComponent(url.lastPathComponent)
+            do {
+                try access(url) {
+                    try? FileManager.default.removeItem(at: destination)
+                    try FileManager.default.copyItem(at: url, to: destination)
+                }
+                _ = try AVAudioFile(forReading: destination)   // reject files that aren't audio
+                imported.append(destination)
+            } catch {
+                try? FileManager.default.removeItem(at: destination)
+            }
+        }
+        reloadRecordings()
+        guard let first = imported.first else { throw AudioEngineError.bufferCreationFailed }
+        select(first)
+    }
+
+    /// Plays this recording next.
+    func select(_ url: URL) {
+        selectedRecording = url
         buffer = nil
         riff = .recording
     }
 
-    /// The imported recording's name, for the menu.
-    var recordingName: String? { recordingURL?.deletingPathExtension().lastPathComponent }
+    func removeRecording(_ url: URL) {
+        try? FileManager.default.removeItem(at: url)
+        reloadRecordings()
+        if selectedRecording == url {
+            selectedRecording = recordings.first
+            buffer = nil
+            if selectedRecording == nil { riff = .originalArpeggio }
+        }
+    }
 
     /// True once attached to the engine.
     var isReady: Bool { format != nil }
@@ -102,7 +139,7 @@ final class DemoRiffPlayer {
 
     private func makeBuffer(format: AVAudioFormat) throws -> AVAudioPCMBuffer? {
         if riff == .recording {
-            guard let url = recordingURL else {
+            guard let url = selectedRecording else {
                 throw AudioEngineError.bufferCreationFailed
             }
             let file = try AVAudioFile(forReading: url)

@@ -11,4 +11,4 @@ typealias LearnEngine = SignalLabEngine & EffectAuditioning & AudioLevelProvidin
 typealias InputEngine = AudioEngineControlling & AudioLevelProviding & DemoRiffPlaying & InputStageControlling & EffectsChainManaging & LatencyReporting
 typealias StatusEngine = AudioEngineControlling & AudioLevelProviding & EffectsChainManaging & LatencyReporting
 typealias ToneBalanceEngine = EqualizerControlling & DemoRiffPlaying & AudioLevelProviding
-typealias PerformanceEngine = EffectsChainManaging & AudioLevelProviding & ExpressionControlling
+typealias PerformanceEngine = EffectsChainManaging & AudioLevelProviding & ExpressionControlling & InputStageControlling

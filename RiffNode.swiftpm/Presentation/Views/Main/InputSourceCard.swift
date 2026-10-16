@@ -19,7 +19,7 @@ struct InputSourceCard: View {
             get: { engine.isDemoRiffPlaying ? .demo : .guitar },
             set: { newValue in
                 if newValue == .demo {
-                    engine.startDemoRiff()
+                    whenReady { engine.startDemoRiff() }
                 } else {
                     Task {
                         do { try await engine.enableLiveInput() }
@@ -45,31 +45,14 @@ struct InputSourceCard: View {
                 }
                 .pickerStyle(.segmented)
                 .fixedSize()
-                .disabled(!engine.canPlayDemoRiff)
                 .help("⌘D toggles the demo riff")
             }
 
-            if engine.isDemoRiffPlaying {
-                // The original arpeggio, or a clean recording of your own
-                Menu {
-                    Button(DemoRiff.originalArpeggio.title) { engine.selectedDemoRiff = .originalArpeggio }
-                    if let name = engine.demoRecordingName {
-                        Button(name) { engine.selectedDemoRiff = .recording }
-                    }
-                    Divider()
-                    Button("Import a Recording…", systemImage: "square.and.arrow.down") { isImportingRecording = true }
-                } label: {
-                    Label(engine.selectedDemoRiff == .recording ? (engine.demoRecordingName ?? "Your Recording") : DemoRiff.originalArpeggio.title,
-                          systemImage: "music.note")
-                        .font(.subheadline)
-                }
-                .menuStyle(.button)
-                .fileImporter(isPresented: $isImportingRecording, allowedContentTypes: [.audio]) { result in
-                    guard case .success(let url) = result else { return }
-                    do { try engine.importDemoRecording(from: url) }
-                    catch { engine.errorMessage = "Couldn't use that recording." }
-                }
+            // What the demo plays: the original arpeggio, or clean recordings of your own.
+            // Always here, so you can import before (or without) starting the demo.
+            riffMenu
 
+            if engine.isDemoRiffPlaying {
                 Toggle("Bypass pedals to compare", isOn: Binding(
                     get: { engine.isPedalboardBypassed }, set: { engine.isPedalboardBypassed = $0 }
                 ))
@@ -119,6 +102,74 @@ struct InputSourceCard: View {
         }
         .padding(Spacing.md)
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: CornerRadius.xl))
+    }
+
+    // MARK: - Demo Riff Menu
+
+    private var isPlayingRecording: Bool { engine.selectedDemoRiff == .recording }
+
+    private var riffMenu: some View {
+        HStack(spacing: 8) {
+            Menu {
+                Button {
+                    whenReady {
+                        engine.selectedDemoRiff = .originalArpeggio
+                        engine.startDemoRiff()
+                    }
+                } label: {
+                    if !isPlayingRecording { Label(DemoRiff.originalArpeggio.title, systemImage: "checkmark") }
+                    else { Text(DemoRiff.originalArpeggio.title) }
+                }
+                if !engine.demoRecordings.isEmpty {
+                    Section("Your Recordings") {
+                        ForEach(engine.demoRecordings, id: \.self) { name in
+                            Button {
+                                whenReady { engine.playDemoRecording(named: name) }
+                            } label: {
+                                if isPlayingRecording && engine.selectedDemoRecording == name { Label(name, systemImage: "checkmark") }
+                                else { Text(name) }
+                            }
+                        }
+                    }
+                }
+                Divider()
+                Button("Import Recordings…", systemImage: "square.and.arrow.down") { isImportingRecording = true }
+                if !engine.demoRecordings.isEmpty {
+                    Menu("Remove", systemImage: "trash") {
+                        ForEach(engine.demoRecordings, id: \.self) { name in
+                            Button(name, role: .destructive) { engine.removeDemoRecording(named: name) }
+                        }
+                    }
+                }
+            } label: {
+                Label(isPlayingRecording ? (engine.selectedDemoRecording ?? DemoRiff.recording.title) : DemoRiff.originalArpeggio.title,
+                      systemImage: isPlayingRecording ? "waveform" : "music.note")
+                    .font(.subheadline)
+                    .lineLimit(1)
+            }
+            .menuStyle(.button)
+            .buttonStyle(.glass)
+            .accessibilityHint("Chooses what the demo plays through your pedals, or imports a clean recording of your own")
+            Spacer(minLength: 0)
+        }
+        .fileImporter(isPresented: $isImportingRecording, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
+            guard case .success(let urls) = result, !urls.isEmpty else { return }
+            whenReady {
+                do { try engine.importDemoRecordings(from: urls) }
+                catch { engine.errorMessage = "Couldn't use those files – choose WAV, AIFF, M4A or MP3 recordings." }
+            }
+        }
+    }
+
+    /// The demo needs the effects chain; build it first if the engine hasn't been started yet.
+    private func whenReady(_ action: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            if !engine.canPlayDemoRiff {
+                do { try await engine.setupEngine() }
+                catch { engine.errorMessage = error.localizedDescription; return }
+            }
+            action()
+        }
     }
 
     // MARK: - Tuner

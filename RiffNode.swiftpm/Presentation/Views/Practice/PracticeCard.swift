@@ -113,7 +113,10 @@ struct PracticeCard: View {
 
             Spacer(minLength: 0)
 
-            Button("Match groove") { metronome.setTempo(grooveTempo) }
+            // An icon on narrow cards, so the words never break mid-word
+            Button("Match groove", systemImage: "arrow.triangle.2.circlepath") { metronome.setTempo(grooveTempo) }
+                .labelStyle(.iconOnly)
+                .help("Match the groove's tempo")
                 .font(.caption.weight(.semibold))
                 .buttonStyle(.glass)
                 .controlSize(.small)

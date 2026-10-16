@@ -827,15 +827,37 @@ final class AudioEngineManager: AudioManaging {
         }
     }
 
-    var demoRecordingName: String? { demoRiff.recordingName }
+    var demoRecordings: [String] { demoRiff.recordings.map(Self.recordingName) }
+    var selectedDemoRecording: String? { demoRiff.selectedRecording.map(Self.recordingName) }
 
-    /// Imports a clean recording (the player's own) as the demo riff, and plays it if the demo is on.
-    func importDemoRecording(from url: URL) throws {
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-        let wasPlaying = isDemoRiffPlaying
+    private nonisolated static func recordingName(_ url: URL) -> String {
+        url.deletingPathExtension().lastPathComponent
+    }
+
+    /// Imports clean recordings (the player's own) and plays the first through the pedals.
+    func importDemoRecordings(from urls: [URL]) throws {
+        stopDemoRiff()
+        try demoRiff.importRecordings(from: urls) { url, copy in
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+            try copy()
+        }
+        errorMessage = nil
+        startDemoRiff()
+    }
+
+    func playDemoRecording(named name: String) {
+        guard let url = demoRiff.recordings.first(where: { Self.recordingName($0) == name }) else { return }
+        stopDemoRiff()
+        demoRiff.select(url)
+        startDemoRiff()
+    }
+
+    func removeDemoRecording(named name: String) {
+        guard let url = demoRiff.recordings.first(where: { Self.recordingName($0) == name }) else { return }
+        let wasPlaying = isDemoRiffPlaying && demoRiff.selectedRecording == url
         if wasPlaying { stopDemoRiff() }
-        try demoRiff.importRecording(from: url)
+        demoRiff.removeRecording(url)
         if wasPlaying { startDemoRiff() }
     }
 
@@ -859,8 +881,15 @@ final class AudioEngineManager: AudioManaging {
             try demoRiff.play(analysisTap: audioTapCallback)
         } catch {
             errorMessage = "Couldn't load the demo riff: \(error.localizedDescription)"
-            formatConverterMixer?.outputVolume = 1
-            startRealAudioVisualization()
+            if demoRiff.riff == .recording {
+                // A missing or unreadable recording: fall back to the original riff
+                demoRiff.riff = .originalArpeggio
+                try? demoRiff.play(analysisTap: audioTapCallback)
+            }
+            if !demoRiff.isPlaying {
+                formatConverterMixer?.outputVolume = 1
+                startRealAudioVisualization()
+            }
         }
         startVisualizationPolling()
     }

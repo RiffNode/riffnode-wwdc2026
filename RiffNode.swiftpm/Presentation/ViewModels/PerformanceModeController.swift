@@ -57,19 +57,18 @@ final class PerformanceModeController {
 
     // All effects bypass state
     private(set) var allBypassed = false
-    private var preBypassStates: [UUID: Bool] = [:]
 
     // Current preset index for preset navigation
     var currentPresetIndex: Int = 0
 
     // MARK: - Gesture Bindings
 
-    /// Map gestures to actions
+    /// Map gestures to actions – the same ones the gesture guide and notch describe
     var gestureBindings: [VisionGestureController.Gesture: PerformanceGestureAction] = [
-        .headNodDown: .toggleFirstEffect,
+        .headNodDown: .nextPreset,
         .headNodUp: .previousPreset,
         .headTiltLeft: .bypassAll,
-        .headTiltRight: .toggleSecondEffect,
+        .headTiltRight: .enableAll,
         .mouthOpen: .wahControl,
         .eyebrowRaise: .momentaryBoost
     ]
@@ -78,7 +77,6 @@ final class PerformanceModeController {
 
     func activate() {
         isActive = true
-        print("PerformanceModeController: Activated")
     }
 
     func deactivate() {
@@ -89,7 +87,6 @@ final class PerformanceModeController {
         lastTriggeredAction = nil
         isBoostActive = false
         allBypassed = false
-        print("PerformanceModeController: Deactivated")
     }
 
     // MARK: - Handle Gestures
@@ -147,54 +144,29 @@ final class PerformanceModeController {
     // MARK: - Wah/Expression Control
 
     /// Update wah position from mouth openness (0.0 to 1.0)
-    func updateWahPosition(_ value: Float, engine: any EffectsChainManaging & ExpressionControlling) {
-        guard isActive else { return }
-
+    func updateWahPosition(_ value: Float) {
         wahPosition = value
-
-        // The real wah: a resonant band-pass swept by the mouth
-        engine.setWah(value)
     }
 
     // MARK: - Bypass All
 
-    private func toggleBypassAll(engine: any EffectsChainManaging & ExpressionControlling) {
-        if allBypassed {
-            // Restore previous states
-            for effect in engine.effectsChain {
-                if let wasEnabled = preBypassStates[effect.id] {
-                    if wasEnabled != effect.isEnabled {
-                        engine.toggleEffect(effect)
-                    }
-                }
-            }
-            preBypassStates.removeAll()
-            allBypassed = false
-        } else {
-            // Save current states and bypass all
-            preBypassStates.removeAll()
-            for effect in engine.effectsChain {
-                preBypassStates[effect.id] = effect.isEnabled
-                if effect.isEnabled {
-                    engine.toggleEffect(effect)
-                }
-            }
-            allBypassed = true
-        }
+    /// Bypasses the whole board at once – each pedal keeps its own on/off state.
+    func toggleBypassAll(engine: any EffectsChainManaging) {
+        engine.isPedalboardBypassed.toggle()
+        allBypassed = engine.isPedalboardBypassed
     }
 
     private func enableAllEffects(engine: any EffectsChainManaging & ExpressionControlling) {
-        for effect in engine.effectsChain {
-            if !effect.isEnabled {
-                engine.toggleEffect(effect)
-            }
+        engine.isPedalboardBypassed = false
+        for effect in engine.effectsChain where !effect.isEnabled {
+            engine.toggleEffect(effect)
         }
         allBypassed = false
     }
 
     // MARK: - Momentary Boost
 
-    private func toggleMomentaryBoost(engine: any EffectsChainManaging & ExpressionControlling) {
+    func toggleMomentaryBoost(engine: any EffectsChainManaging & ExpressionControlling) {
         if isBoostActive {
             // Restore previous levels
             for effect in engine.effectsChain {

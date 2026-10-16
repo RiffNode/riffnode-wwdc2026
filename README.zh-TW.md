@@ -39,7 +39,7 @@
 
 ## 為什麼做 RiffNode
 
-- **沒有吉他也能玩。** Demo 可播放原創的 J-rock 合成分散和弦，或匯入你自己彈的 clean 錄音，從踏板前端送入。Demo 不需要麥克風權限；踏板預設關閉，也能整組旁通，比較前後而保留設定。
+- **沒有吉他也能玩。** Demo 可播放原創的 J-rock 合成分散和弦，或匯入你自己彈的 clean 錄音（可一次匯入多段，在 Input 卡片切換），從踏板前端送入。Demo 不需要麥克風權限；踏板預設關閉，也能整組旁通，比較前後而保留設定。
 - **隨時有伴奏。** 內建鼓加貝斯的 groove（C · D · Bm · Em、150 BPM，可換任何小調）同樣即時合成；也可以匯入自己的歌，或讓 Apple Music、Spotify 一起播放。
 - **一塊免費、行為像真的效果器盤。** 彩色的實體效果器從吉他輸入一路接到音箱和喇叭箱，順序和真實玩家一樣 —— 排序不尋常時，RiffNode 會解釋它對聲音的影響。連導線都有模擬：線越長，高頻越悶。
 - **看見物理作用。** Signal Lab 即時畫出每顆踏板「進去」與「出來」的訊號 —— Distortion 削平峰值、Compressor 壓縮音量、Flanger 的梳狀濾波 —— 並用量測數字說明變化。
@@ -98,7 +98,7 @@
 | 調變 | Chorus · Phaser · Flanger · Tremolo |
 | 時間與空間 | Delay · Reverb |
 
-**14 組內建 preset**，涵蓋 Clean、Crunch、Heavy、Ambient —— 從 *Slapback Echo* 到 *Djent Machine* 和 *Shoegaze*。**Stage Mode** 把踏板變成全螢幕演出畫面，配上大型腳踏開關。
+**14 組內建 preset**，涵蓋 Clean、Crunch、Heavy、Ambient —— 從 *Slapback Echo* 到 *Djent Machine* 和 *Shoegaze*。**Stage Mode** 是現場演出用的踏板：所有踏板一次排滿畫面、變成大型腳踏開關（點一下就踩），preset 名稱遠遠就看得清楚，還有 Looper、整組旁通與調音靜音；觸控、鍵盤、MIDI 腳踏或頭部手勢都能控制，演出時螢幕不會變暗。
 
 ### 免手 Vision 控制
 
@@ -107,7 +107,7 @@
 | 點頭向下／向上 | 下一個／上一個 preset |
 | 頭向左／右歪 | 全部關閉／全部開啟 |
 | 張嘴 | Wah —— 閉嘴是 heel down（暗），張開是 toe down（亮） |
-| 挑眉 | 開關 Compressor |
+| 挑眉 | 開關 Compressor（Stage Mode 中為瞬間增益） |
 
 ### 裝置上的 AI 與分析
 
@@ -123,7 +123,7 @@
 - **低延遲** —— 約 5 ms 的 I/O 緩衝區，設定頁顯示實測的「弦到耳朵」延遲；使用藍牙耳機（多 100–200 ms）時會提醒。
 - **Looper** —— 一顆踩踏開關：錄音、播放、疊錄、undo。錄的是音箱輸出，所以只會疊上你的吉他。
 - **節拍器** —— 第一拍重音，可一鍵對齊 groove 的速度。
-- **Neural Amp Modeler** —— 載入真實音箱的 `.nam` 擷取檔。以 Accelerate BLAS 移植原版 WaveNet，逐樣本與 NeuralAmpModelerCore 比對（訊雜比 130 dB，即時速度的 27 倍）。
+- **Neural Amp Modeler** —— 載入真實音箱的 `.nam` 擷取檔。以 Accelerate BLAS 移植原版 WaveNet，逐樣本與 NeuralAmpModelerCore 比對（訊雜比 130 dB，即時速度的 27 倍）。點踏板盤最右邊的音箱，選 **Load a NAM capture…**；支援標準（A1）WaveNet 擷取檔。
 - **分享音色** —— 把踏板、音箱與 EQ 匯出成小小的 JSON 檔，或匯入別人的。
 - **MIDI 踏板** —— USB 或藍牙 MIDI 踏板：Program Change 切換 preset；CC 80/81 下一個／上一個、CC 82 looper、CC 83 靜音。
 - **iOS / macOS 27** —— 匯入的歌曲用 Music Understanding framework 在裝置上分析（調性、速度、段落、solo 音階）；Tone Assistant 也能透過 Foundation Models 的圖片輸入，從照片建議音色。
@@ -138,6 +138,8 @@
 | `⌘K` | 展開／收合 Riff Notch |
 | `⌘J` | 開啟／關閉 Tone Assistant |
 | `⌘1` – `⌘3` | Pedalboard · EQ & Tone · Learn |
+| `1` – `9` | Stage Mode：踩第 1–9 顆踏板 |
+| `←` `→` · `L` · `B` · `T` · `Esc` | Stage Mode：preset · Looper · 整組旁通 · 調音靜音 · 離開 |
 
 ## 畫面
 
@@ -151,7 +153,8 @@
     <td><img src="screenshots/mac_cable.jpg" alt="Mac 上的吉他輸入面板：40 英尺導線、buffer、音量踏板與 noise gate，頻率響應在 2.8 kHz 以上滾降"><br><sub><b>吉他與導線</b> —— 量得到的 tone suck：f = 1/(2π√LC)</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="screenshots/mac_learn.jpg" alt="Mac 上的 Learn 分頁：試聽 Overdrive，即時 Signal Lab 顯示輸入與被圓滑削波的輸出"><br><sub><b>Learn</b> —— 單獨聽一顆踏板，同時看它對波形做了什麼</sub></td>
+    <td><img src="screenshots/mac_learn.jpg" alt="Mac 上的 Learn 分頁：試聽 Overdrive，即時 Signal Lab 顯示輸入與被圓滑削波的輸出"><br><sub><b>Learn</b> —— 單獨聽一顆踏板，同時看它對波形做了什麼</sub></td>
+    <td><img src="screenshots/mac_stage.jpg" alt="Mac 上的 Stage Mode：七顆踏板變成彩色大型腳踏開關，顯示 preset 名稱、Looper、整組旁通、調音靜音與 preset 列"><br><sub><b>Stage Mode</b> —— 每顆踏板都是腳踏開關，點一下就踩</sub></td>
   </tr>
 </table>
 

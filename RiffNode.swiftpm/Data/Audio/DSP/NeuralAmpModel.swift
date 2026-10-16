@@ -19,7 +19,7 @@ enum NeuralAmpModelError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notAModel: "That file isn't a Neural Amp Modeler capture."
-        case .unsupportedArchitecture(let name): "This capture uses \(name), which RiffNode can't play yet (standard WaveNet captures work)."
+        case .unsupportedArchitecture(let name): "This capture uses \(name), which RiffNode can't play yet. Standard (A1) WaveNet captures work – on TONE3000, download the A1 version."
         case .weightCountMismatch: "The capture's weights don't match its layout."
         }
     }

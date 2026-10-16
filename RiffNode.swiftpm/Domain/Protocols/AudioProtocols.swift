@@ -114,10 +114,15 @@ protocol EqualizerControlling: AnyObject {
 @MainActor
 protocol DemoRiffPlaying: AnyObject {
     var selectedDemoRiff: DemoRiff { get set }
-    /// Name of the imported clean recording, if any.
-    var demoRecordingName: String? { get }
-    /// Imports a clean recording of your own to use as the demo riff.
-    func importDemoRecording(from url: URL) throws
+    /// Names of the clean recordings you imported.
+    var demoRecordings: [String] { get }
+    /// The recording that plays when the demo riff is `.recording`.
+    var selectedDemoRecording: String? { get }
+    /// Imports clean recordings of your own; the first one starts playing.
+    func importDemoRecordings(from urls: [URL]) throws
+    /// Plays one of your recordings through the pedals.
+    func playDemoRecording(named name: String)
+    func removeDemoRecording(named name: String)
     var isDemoRiffPlaying: Bool { get }
     /// True once there is an effects chain to play into.
     var canPlayDemoRiff: Bool { get }

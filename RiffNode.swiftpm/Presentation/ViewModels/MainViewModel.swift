@@ -88,8 +88,9 @@ final class MainViewModel {
             self?.handleGesture(gesture)
         }
         // Your mouth is the wah pedal: closed = heel down (dark), open = toe down (bright)
-        gestureController.onMouthOpenValueChanged = { [engine] value in
+        gestureController.onMouthOpenValueChanged = { [engine, performanceController] value in
             engine.setWah(value)
+            performanceController.updateWahPosition(value)
         }
         engine.onAudioSamplesAvailable = { [engine, fftAnalyzer, chordDetector] samples in
             if samples.count >= 2048 {
@@ -160,6 +161,10 @@ final class MainViewModel {
     // MARK: - Gestures
 
     func handleGesture(_ gesture: VisionGestureController.Gesture) {
+        if performanceController.isActive {
+            performanceController.handleGesture(gesture, engine: engine, presets: presetService.presets)
+            return
+        }
         switch gesture {
         case .headNodDown:
             stepPreset(by: 1)

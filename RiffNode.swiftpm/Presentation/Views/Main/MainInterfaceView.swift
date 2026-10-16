@@ -133,9 +133,18 @@ struct MainInterfaceView: View {
         .fullScreenCover(isPresented: $viewModel.showingPerformanceMode) {
             PerformanceModeView(
                 engine: engine,
+                looper: engine.looperControls,
                 gestureController: viewModel.gestureController,
                 controller: viewModel.performanceController,
                 presets: viewModel.presetService.presets,
+                onToggleGestures: { viewModel.gestureControlEnabled.toggle() },
+                onStepPreset: { viewModel.stepPreset(by: $0) },
+                onSelectPreset: { index in
+                    let presets = viewModel.presetService.presets
+                    guard presets.indices.contains(index) else { return }
+                    viewModel.performanceController.currentPresetIndex = index
+                    engine.applyPreset(presets[index])
+                },
                 onExit: { viewModel.showingPerformanceMode = false }
             )
         }

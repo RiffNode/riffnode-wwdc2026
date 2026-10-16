@@ -37,7 +37,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 
 ## Why RiffNode
 
-- **No guitar? Still playable.** Play the original synthesized J-rock arpeggio, or import a clean recording of your own playing. Both enter before the pedals. No microphone permission is needed for Demo; the pedalboard starts bypassed per pedal, and a comparison switch bypasses the whole board without changing its settings.
+- **No guitar? Still playable.** Play the original synthesized J-rock arpeggio, or import clean recordings of your own playing (several at once) and switch between them from the Input card. Both enter before the pedals. No microphone permission is needed for Demo; the pedalboard starts bypassed per pedal, and a comparison switch bypasses the whole board without changing its settings.
 - **Always something to jam with.** A built-in drums-and-bass groove (C · D · Bm · Em, 150 BPM, any minor key) is also synthesized on device – or import your own song, or play along with Apple Music and Spotify.
 - **A free pedalboard that behaves like a real one.** Painted stompboxes run from the guitar jack to an amp and speaker cabinet, in the order real players use – and RiffNode explains what an unusual order does to the sound. Even the cable is modelled: longer cable, duller highs.
 - **See the physics.** The Signal Lab draws each pedal's input against its output, live – distortion flattening the peaks, a compressor squeezing the volume, a flanger's comb of notches – with measurements that put numbers on the change.
@@ -96,7 +96,7 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
 | Modulation | Chorus · Phaser · Flanger · Tremolo |
 | Time & Ambience | Delay · Reverb |
 
-**14 built-in presets** across Clean, Crunch, Heavy and Ambient – from *Slapback Echo* to *Djent Machine* and *Shoegaze*. **Stage Mode** turns the pedalboard into a full-screen performance view with large footswitches.
+**14 built-in presets** across Clean, Crunch, Heavy and Ambient – from *Slapback Echo* to *Djent Machine* and *Shoegaze*. **Stage Mode** is the board for playing live: every pedal on screen at once as a big footswitch (one tap stomps it), the preset name readable from across the room, the looper, a board-wide bypass and tuner mute – driven by touch, the keyboard, a MIDI foot controller or your head. The screen never dims while it is up.
 
 ### Hands-free Vision control
 
@@ -105,7 +105,7 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
 | Nod down / up | Next / previous preset |
 | Tilt left / right | Bypass all / enable all |
 | Open mouth | Wah – closed is heel down (dark), open is toe down (bright) |
-| Raise eyebrows | Toggle compressor |
+| Raise eyebrows | Toggle compressor (in Stage Mode: a momentary boost) |
 
 ### On-device AI
 
@@ -121,7 +121,7 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
 - **Low latency** – a ~5 ms I/O buffer, the measured string-to-ear latency in Settings, and a warning when Bluetooth headphones would add 100–200 ms.
 - **Looper** – one footswitch: record, play, overdub, undo. It records the amp's output, so only your guitar is layered.
 - **Metronome** – an accented click that can match the groove's tempo.
-- **Neural Amp Modeler** – load a `.nam` capture of a real amp. A Swift port of the original WaveNet using Accelerate BLAS, verified sample by sample against NeuralAmpModelerCore (130 dB SNR, 27× real time).
+- **Neural Amp Modeler** – load a `.nam` capture of a real amp. A Swift port of the original WaveNet using Accelerate BLAS, verified sample by sample against NeuralAmpModelerCore (130 dB SNR, 27× real time). Open the amp at the end of the board and choose **Load a NAM capture…**; standard (A1) WaveNet captures are supported.
 - **Share a tone** – export pedals, amp and EQ as a small JSON file, or import one.
 - **MIDI footswitch** – USB or Bluetooth MIDI pedals: Program Change selects a preset; CC 80/81 next/previous, CC 82 looper, CC 83 mute.
 - **iOS / macOS 27** – imported songs are analysed on device with the Music Understanding framework (key, tempo, sections, solo scale), and the Tone Assistant can suggest a sound from a photo through Foundation Models image prompts.
@@ -136,6 +136,8 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
 | `⌘K` | Open / close the Riff Notch |
 | `⌘J` | Open / close the Tone Assistant |
 | `⌘1` – `⌘3` | Pedalboard · EQ & Tone · Learn |
+| `1` – `9` | Stage Mode: stomp pedal 1–9 |
+| `←` `→` · `L` · `B` · `T` · `Esc` | Stage Mode: presets · looper · bypass board · tuner mute · exit |
 
 ## Gallery
 
@@ -149,7 +151,8 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
     <td><img src="screenshots/mac_cable.jpg" alt="Guitar input panel on Mac: 40 ft of cable, buffer, volume pedal and noise gate, with the pickup and cable response rolling off above 2.8 kHz"><br><sub><b>Guitar &amp; cable</b> – tone suck, measured: f = 1/(2π√LC)</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="screenshots/mac_learn.jpg" alt="Learn tab on Mac auditioning Overdrive with the live Signal Lab showing the input and the rounded, clipped output"><br><sub><b>Learn</b> – hear a pedal on its own and watch what it does to the wave</sub></td>
+    <td><img src="screenshots/mac_learn.jpg" alt="Learn tab on Mac auditioning Overdrive with the live Signal Lab showing the input and the rounded, clipped output"><br><sub><b>Learn</b> – hear a pedal on its own and watch what it does to the wave</sub></td>
+    <td><img src="screenshots/mac_stage.jpg" alt="Stage Mode on Mac: seven pedals as large colored footswitches with on lights, the preset name Clean and Clear, looper, bypass board, tuner mute and the preset bar"><br><sub><b>Stage Mode</b> – every pedal a footswitch, one tap to stomp</sub></td>
   </tr>
 </table>
 

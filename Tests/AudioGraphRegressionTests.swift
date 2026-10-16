@@ -8,7 +8,12 @@ struct AudioGraphRegressionTests {
 
     /// A synthetic clean "recording" (decaying plucked notes, 44.1 kHz mono) written to a temp
     /// file, standing in for a player's imported recording – the tests need no bundled audio.
+    /// Set RIFFNODE_TEST_RECORDING to a WAV of your own (e.g. in the gitignored demo-riffs/)
+    /// to run the same checks on a real recording.
     static func makeTestRecording() throws -> URL {
+        if let path = ProcessInfo.processInfo.environment["RIFFNODE_TEST_RECORDING"] {
+            return URL(fileURLWithPath: path)
+        }
         let rate = 44_100.0
         let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
         let frames = AVAudioFrameCount(rate * 2)

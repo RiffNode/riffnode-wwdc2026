@@ -60,10 +60,10 @@ final class VisionGestureController: NSObject {
             switch self {
             case .headNodDown: return "Next Preset"
             case .headNodUp: return "Previous Preset"
-            case .headTiltLeft: return "Toggle Bypass"
-            case .headTiltRight: return "Toggle Effect"
+            case .headTiltLeft: return "Bypass All"
+            case .headTiltRight: return "Enable All"
             case .mouthOpen: return "Wah Effect"
-            case .eyebrowRaise: return "Boost Gain"
+            case .eyebrowRaise: return "Toggle Compressor"
             }
         }
     }
