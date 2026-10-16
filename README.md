@@ -4,6 +4,8 @@
 
 <h1 align="center">RiffNode</h1>
 
+<p align="center"><b>English</b> · <a href="README.zh-TW.md">繁體中文</a></p>
+
 <p align="center">
   <strong>A visual guitar effects playground for iPad and Mac.</strong><br>
   Build a pedalboard, see your sound, and control it hands-free – all on device, all offline.
@@ -28,8 +30,7 @@
 </p>
 
 <p align="center">
-  <img src="screenshots/ipad_pedalboard_signal_lab.jpg" width="440" alt="RiffNode on iPad: the pedalboard with the Signal Lab showing distortion flattening the waveform">
-  <img src="screenshots/ipad_dark_signal_lab.jpg" width="440" alt="RiffNode on iPad in dark mode with the Signal Lab, tuner and Play Along groove">
+  <img src="screenshots/mac_pedalboard.jpg" width="900" alt="RiffNode on Mac: the pedalboard, the Distortion pedal's knobs and the Signal Lab showing the waveform flattened, with the tuner and Play Along groove on the left">
 </p>
 
 Guitar effects are usually explained with jargon and sold as expensive boxes. RiffNode turns them into something you can **see, touch and hear** in a few minutes: drag pedals into a signal chain, watch the waveform and spectrum change as you play, ask the on-device AI for a tone in plain English, and switch presets with a nod of your head while both hands stay on the guitar.
@@ -37,10 +38,10 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 ## Why RiffNode
 
 - **No guitar? Still playable.** A built-in demo riff – an original J-rock arpeggio over the IV–V–iii–vi "royal road" progression – is synthesized on device and fed into the chain exactly where a guitar would enter, so anyone can hear what each pedal does.
-- **Always something to jam with.** A built-in drums-and-bass groove (Em · C · G · D, 112 BPM) is also synthesized on device – or import your own song and send it through your pedals.
+- **Always something to jam with.** A built-in drums-and-bass groove (C · D · Bm · Em, 150 BPM, any minor key) is also synthesized on device – or import your own song, or play along with Apple Music and Spotify.
 - **See the physics.** The Signal Lab draws each pedal's input against its output, live – distortion flattening the peaks, a compressor squeezing the volume, a flanger's comb of notches – with measurements that put numbers on the change.
 - **Hands-free control.** Vision face tracking turns head nods and tilts into preset changes and bypass, and your mouth into a wah pedal – a resonant band-pass that sweeps from 350 Hz to 2.2 kHz as you open it.
-- **Describe the tone, get the tone.** Foundation Models translates "warm jazz clean" or "heavy metal riff" into real effect parameters, entirely on device – and shows each step live as it picks pedals and dials in settings.
+- **Describe the tone, get the tone.** Foundation Models recognises "surf rock" or "Comfortably Numb solo" and RiffNode dials in the pedals, entirely on device – showing each step live as it thinks.
 - **Learn by listening.** Every effect in the guide has a **Hear it** button: the demo riff plays through that pedal alone, with an A/B switch against the dry sound.
 - **Private and offline.** No account, no network, no analytics. Audio, camera frames and AI prompts never leave the device.
 
@@ -50,7 +51,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 | --- | --- | --- |
 | 1 | Tap **Get Started** and allow the microphone | The audio engine starts and the Riff Notch turns green |
 | 2 | Tap **Take the Tour** (or skip it) | A short walkthrough of the signal chain |
-| 3 | Tap **No guitar? Try the Demo Riff** (`⌘D`) | A riff plays through your pedals; the visualizer, spectrum and chord detector come alive |
+| 3 | Tap **No guitar? Try the Demo Riff** (`⌘D`) | A riff plays through your pedals; the Signal Lab, tuner and chord detector come alive |
 | 4 | Tap a pedal, or double-tap to bypass it | The sound and the spectrum change instantly; the notch announces the change |
 | 5 | Open the **Tone Assistant** (`⌘J`) and tap *Ambient pad* | Watch it pick pedals and settings step by step, then rebuild the chain |
 | 6 | Press play on **Groove** in Play Along | Drums and bass in any minor key; the current chord lights up |
@@ -61,8 +62,6 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 
 ## The Riff Notch
 
-<img src="screenshots/ipad_notch_open.jpg" width="420" align="right" alt="The Riff Notch opened on iPad, showing the tuner, input and output meters, transport controls and pedal chips">
-
 A Dynamic Island–style notch hangs from the top of the window on both iPad and Mac. It gives you feedback while your eyes are on the fretboard – especially important for head gestures, which otherwise have no visual response.
 
 | State | Shows |
@@ -72,8 +71,6 @@ A Dynamic Island–style notch hangs from the top of the window on both iPad and
 | **Opened** | Tuner, IN/OUT meters, start/stop, previous/next preset and tap-to-toggle pedal chips |
 
 Tap it or press `⌘K` to open it. Its shape, states and spring animation are inspired by [NotchDrop](https://github.com/Lakr233/NotchDrop), rebuilt as a single animatable SwiftUI `Shape` so it works inside an App Playground on iPad and Mac Catalyst.
-
-<br clear="right">
 
 ## Features
 
@@ -118,22 +115,17 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 | `⌘←` `⌘→` | Previous / next preset |
 | `⌘K` | Open / close the Riff Notch |
 | `⌘J` | Open / close the Tone Assistant |
-| `⌘1` – `⌘4` | Pedalboard · Parametric EQ · Analyze · Learn |
+| `⌘1` – `⌘3` | Pedalboard · EQ & Tone · Learn |
 
 ## Gallery
 
 <table>
   <tr>
-    <td width="50%"><img src="screenshots/ipad_tone_assistant.jpg" alt="Tone Assistant chat adding a delay pedal"><br><sub><b>Tone Assistant</b> – describe a sound, get a pedalboard; it says which engine answered</sub></td>
-    <td width="50%"><img src="screenshots/ipad_eq_tone.jpg" alt="EQ and Tone tab: tone balance card with a one-tap Boost 1 kHz suggestion above the parametric EQ"><br><sub><b>EQ &amp; Tone</b> – where your sound sits, and the EQ move to fix it in one tap</sub></td>
+    <td width="50%"><img src="screenshots/mac_assistant.jpg" alt="Tone Assistant on Mac answering surf rock with Apple Intelligence and switching on overdrive, reverb, tremolo, chorus and delay"><br><sub><b>Tone Assistant</b> – “surf rock”, answered on device by Apple Intelligence</sub></td>
+    <td width="50%"><img src="screenshots/mac_eq.jpg" alt="EQ and Tone tab on Mac: tone balance card suggesting Boost 1 kHz above the parametric EQ and live spectrum"><br><sub><b>EQ &amp; Tone</b> – where your sound sits, and the EQ move to fix it in one tap</sub></td>
   </tr>
   <tr>
-    <td><img src="screenshots/ipad_learn_live_lab.jpg" alt="Learn tab auditioning Overdrive with the live Signal Lab"><br><sub><b>Learn</b> – hear a pedal on its own and watch what it does to the wave</sub></td>
-    <td><img src="screenshots/ipad_play_along_music.jpg" alt="Play Along card in Music app mode with Apple Music and Spotify"><br><sub><b>Play Along</b> – the groove, your songs, or Apple Music and Spotify alongside</sub></td>
-  </tr>
-  <tr>
-    <td><img src="screenshots/screenshot_8.jpg" alt="Performance mode with large pedals and quick preset bar"><br><sub><b>Stage Mode</b> – big footswitches and a quick preset bar</sub></td>
-    <td><img src="screenshots/screenshot_6.jpg" alt="Guided tour explaining the signal chain"><br><sub><b>Guided tour</b> – how sound flows through a chain</sub></td>
+    <td colspan="2"><img src="screenshots/mac_learn.jpg" alt="Learn tab on Mac auditioning Overdrive with the live Signal Lab showing the input and the rounded, clipped output"><br><sub><b>Learn</b> – hear a pedal on its own and watch what it does to the wave</sub></td>
   </tr>
 </table>
 
@@ -155,7 +147,7 @@ Tap it or press `⌘K` to open it. Its shape, states and spring animation are in
 - **Responsive start-up** – `AVAudioSession` activation runs off the main thread.
 - **Demo riff and groove** – Karplus–Strong plucked strings (all-pass tuned, with filtered pick noise and ghost-note mutes), plus synthesized kick, snare, hi-hat and bass, render on device with seeded generators – no bundled audio files. Imported songs are converted to the engine's sample rate with `AVAudioConverter`.
 - **Real-time modulation DSP** – a custom `AUAudioUnit` processes in place on the audio thread with no allocation or locks; parameters cross threads through `Synchronization.Atomic`.
-- **Fast on-device AI** – a compact `@Generable` schema (up to five pedals, three settings each) and a fresh, prewarmed session per request keep responses to a few seconds and never overflow the 4K context window.
+- **Fast on-device AI** – the model fills a small `@Generable` sketch (style, gain, space, up to three signature pedals) instead of raw knob values; a prewarmed session per request answers in about 3.5 seconds on the macOS 27 model and never overflows the 4K context window.
 
 ## Architecture
 

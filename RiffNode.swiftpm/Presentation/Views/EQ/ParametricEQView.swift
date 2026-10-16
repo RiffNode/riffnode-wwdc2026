@@ -172,12 +172,12 @@ struct GlassEQHeader: View {
                 } label: {
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(isAnalyzerActive ? Color.primary : Color.secondary)
+                            .fill(isAnalyzerActive ? Color.white : Color.secondary)
                             .frame(width: 6, height: 6)
                         Text("Analyzer")
                     }
                 }
-                .buttonStyle(GlassPillStyle(isSelected: isAnalyzerActive, tint: .primary))
+                .buttonStyle(GlassPillStyle(isSelected: isAnalyzerActive, tint: .riffPrimary))
 
                 // Reset button
                 Button(action: onReset) {
