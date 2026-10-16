@@ -38,7 +38,7 @@ let package = Package(
                 .camera(purposeString: "RiffNode uses the camera for hands-free gesture control - control effects with head movements while playing."),
                 .bluetoothAlways(purposeString: "RiffNode connects to Bluetooth MIDI foot controllers so you can switch presets and run the looper with your feet."),
                 .mediaLibrary(purposeString: "RiffNode can play and pause Apple Music so you can play along with your own songs."),
-                .fileAccess(.userSelectedFiles, mode: .readOnly),
+                .fileAccess(.userSelectedFiles, mode: .readWrite),
                 .fileAccess(.downloadsFolder, mode: .readOnly),
                 .fileAccess(.musicFolder, mode: .readOnly),
                 .fileAccess(.pictureFolder, mode: .readOnly),
