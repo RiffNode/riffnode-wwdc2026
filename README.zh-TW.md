@@ -237,6 +237,11 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
   <br><sub>WWDC26 舞台上 —— 名單牆上的 <b>Yu-Jia, Taiwan</b></sub>
 </p>
 
+<p align="center">
+  <img src="screenshots/wwdc26-apple-park-stage.jpg" width="860" alt="WWDC26 於 Apple Park 現場：舞台上是 2026 Swift Student Challenge 全體得獎者名單牆">
+  <br><sub>WWDC26 · Apple Park 現場 —— 今年全體得獎者的名單牆</sub>
+</p>
+
 <table>
   <tr>
     <td width="50%"><img src="screenshots/ssc-2026-winner-certificate.jpg" alt="Apple 寄給梁祐嘉（Yu-Jia Liang）的 Swift Student Challenge 2026 得獎信"><br><sub>Apple 的得獎信</sub></td>
