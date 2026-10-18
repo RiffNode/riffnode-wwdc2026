@@ -6,6 +6,8 @@ import SwiftUI
 struct MainInterfaceView: View {
     @State private var viewModel: MainViewModel
     @State private var containerWidth: CGFloat = 1200
+    /// The left column (input, play along, practice) can be hidden to give the board room.
+    @AppStorage("layout.showsSidebar") private var showsSidebar = true
 
     /// Narrower side panel on smaller windows (iPad portrait, split view)
     /// so the pedalboard keeps room for more pedals.
@@ -27,7 +29,8 @@ struct MainInterfaceView: View {
                 engine: engine,
                 chordDetector: viewModel.chordDetector,
                 showingSettings: $viewModel.showingSettings,
-                showingPresets: $viewModel.showingPresets
+                showingPresets: $viewModel.showingPresets,
+                showsSidebar: $showsSidebar
             )
             .padding(.horizontal, Spacing.md)
             .padding(.top, RiffNotchMetrics.closedHeight + Spacing.xs)
@@ -59,7 +62,10 @@ struct MainInterfaceView: View {
                     .padding(Spacing.md)
                 }
                 .scrollIndicators(.hidden)
-                .frame(width: sidePanelWidth)
+                .frame(width: showsSidebar ? sidePanelWidth : 0)
+                .opacity(showsSidebar ? 1 : 0)
+                .allowsHitTesting(showsSidebar)
+                .accessibilityHidden(!showsSidebar)
 
                 // Right panel with tab switching
                 VStack(spacing: 0) {
@@ -186,6 +192,7 @@ struct MainInterfaceView: View {
 
 private struct MainKeyboardShortcuts: View {
     let viewModel: MainViewModel
+    @AppStorage("layout.showsSidebar") private var showsSidebar = true
 
     var body: some View {
         Group {
@@ -206,6 +213,10 @@ private struct MainKeyboardShortcuts: View {
                     .keyboardShortcut("z", modifiers: [.command, .shift])
                     .disabled(!viewModel.history.canRedo)
             }
+            Button("Show or Hide Sidebar") {
+                withAnimation(.smooth(duration: 0.3)) { showsSidebar.toggle() }
+            }
+            .keyboardShortcut("s", modifiers: [.command, .control])
             Button("Quick Controls", action: viewModel.notch.toggle)
                 .keyboardShortcut("k", modifiers: .command)
             Button("Tone Assistant") {

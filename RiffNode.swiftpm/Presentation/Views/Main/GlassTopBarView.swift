@@ -7,12 +7,16 @@ struct GlassTopBarView: View {
     let chordDetector: (any ChordDetecting)?
     @Binding var showingSettings: Bool
     @Binding var showingPresets: Bool
+    /// Shows or hides the left column (absent: no sidebar button).
+    var showsSidebar: Binding<Bool>?
 
-    init(engine: any AudioEngineControlling, chordDetector: (any ChordDetecting)? = nil, showingSettings: Binding<Bool>, showingPresets: Binding<Bool>) {
+    init(engine: any AudioEngineControlling, chordDetector: (any ChordDetecting)? = nil, showingSettings: Binding<Bool>,
+         showingPresets: Binding<Bool>, showsSidebar: Binding<Bool>? = nil) {
         self.engine = engine
         self.chordDetector = chordDetector
         self._showingSettings = showingSettings
         self._showingPresets = showingPresets
+        self.showsSidebar = showsSidebar
     }
 
     var body: some View {
@@ -20,6 +24,15 @@ struct GlassTopBarView: View {
         // fuse into a single liquid glass bar.
         GlassEffectContainer(spacing: 20) {
             HStack(spacing: 16) {
+                if let showsSidebar {
+                    Button(showsSidebar.wrappedValue ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left") {
+                        withAnimation(.smooth(duration: 0.3)) { showsSidebar.wrappedValue.toggle() }
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.glass)
+                    .help("Show or hide the sidebar (⌃⌘S)")
+                }
+
                 // Logo with custom RiffNode icon
                 HStack(spacing: 12) {
                     Image("RiffNodeLogo")
