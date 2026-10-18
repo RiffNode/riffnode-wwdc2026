@@ -7,29 +7,21 @@ import Foundation
 
 extension AudioEngineManager {
 
-    /// Sync bypass state for all effects
+    /// Sync bypass state for every pedal's unit: on when its pedal is on (and the board isn't
+    /// bypassed), off otherwise – including shared units no pedal is using right now.
     func syncBypassStates() {
         guard let units = effectUnits else { return }
-        
-        // Create a set of enabled effect types
-        var enabledTypes = Set<EffectType>()
-        for effect in effectsChain where effect.isEnabled && !isPedalboardBypassed {
-            enabledTypes.insert(effect.type)
+        for type in EffectType.allCases {
+            let first = effectsChain.first(where: { $0.type == type })
+            let off = first.map { !$0.isEnabled || isPedalboardBypassed } ?? true
+            setBypass(units.audioUnit(for: type), usesKernel: units.kernel(for: type) != nil, bypassed: off)
         }
-        
-        // Set bypass for all effect units
-        units.compressor.bypass = !enabledTypes.contains(.compressor)
-        units.overdrive.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.overdrive)
-        units.distortion.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.distortion)
-        units.fuzz.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.fuzz)
-        for type in [EffectType.chorus, .phaser, .flanger, .tremolo] {
-            units.setBypass(for: type, bypassed: !enabledTypes.contains(type))
+        for (id, pedal) in extraUnits {
+            let node = effectsChain.first(where: { $0.id == id })
+            setBypass(pedal.unit, usesKernel: pedal.kernel != nil,
+                      bypassed: node.map { !$0.isEnabled || isPedalboardBypassed } ?? true)
         }
-        units.delay.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.delay)
-        units.reverb.bypass = !enabledTypes.contains(.reverb)
-        units.equalizer?.bypass = !enabledTypes.contains(.equalizer)
         units.wah.auAudioUnit.shouldBypassEffect = isPedalboardBypassed || !isWahActive
-        
         Log.audio.debug("syncBypassStates: Bypass states synchronized")
     }
     /// Coalesces several edits in one turn of the run loop (e.g. append + sort) into one rewire.
@@ -49,9 +41,10 @@ extension AudioEngineManager {
         kernel.level = (effect.parameters["level"] ?? 50) / 100
     }
     func applyEffectParameters(_ effect: EffectNode) {
-        guard let units = effectUnits else { return }
+        guard effectUnits != nil else { return }
+        let kernel = self.kernel(for: effect)
         // Which classic pedal it is: its circuit's voicing goes to the DSP first
-        if let voicing = effect.model?.voicing, let kernel = units.kernel(for: effect.type) {
+        if let voicing = effect.model?.voicing, let kernel {
             kernel.setVoicing(voicing)
         }
 
@@ -69,7 +62,7 @@ extension AudioEngineManager {
             let releaseMs = effect.parameters["release"]   ?? 100
             // Map ratio (1–20) to headRoom (40–2 dB): higher ratio = tighter = less headroom
             let headRoom  = max(2.0, min(40.0, 40.0 / ratio))
-            let au = units.compressor.audioUnit
+            guard let au = (audioUnit(for: effect) as? AVAudioUnitEffect)?.audioUnit else { return }
             AudioUnitSetParameter(au, 0, kAudioUnitScope_Global, 0, threshold, 0)
             AudioUnitSetParameter(au, 1, kAudioUnitScope_Global, 0, headRoom, 0)
             AudioUnitSetParameter(au, 4, kAudioUnitScope_Global, 0, attackMs / 1000.0, 0)
@@ -80,46 +73,48 @@ extension AudioEngineManager {
             applyParametricEQ()
 
         case .overdrive:
-            setDrive(units.overdriveKernel, effect, driveKey: "drive")
+            if let kernel { setDrive(kernel, effect, driveKey: "drive") }
 
         case .distortion:
-            setDrive(units.distortionKernel, effect, driveKey: "drive")
+            if let kernel { setDrive(kernel, effect, driveKey: "drive") }
 
         case .fuzz:
-            setDrive(units.fuzzKernel, effect, driveKey: "fuzz")
+            if let kernel { setDrive(kernel, effect, driveKey: "fuzz") }
 
         case .chorus:
-            let kernel = units.chorusKernel
+            guard let kernel else { return }
             kernel.rate = effect.parameters["rate"] ?? 1.0          // 0.1–10 Hz
             kernel.depth = (effect.parameters["depth"] ?? 50) / 100
             kernel.mix = (effect.parameters["mix"] ?? 50) / 100
 
         case .phaser:
-            let kernel = units.phaserKernel
+            guard let kernel else { return }
             kernel.rate = effect.parameters["rate"] ?? 0.5          // 0.1–5 Hz
             kernel.depth = (effect.parameters["depth"] ?? 50) / 100
             kernel.feedback = (effect.parameters["feedback"] ?? 30) / 100 * 0.9
 
         case .flanger:
-            let kernel = units.flangerKernel
+            guard let kernel else { return }
             kernel.rate = effect.parameters["rate"] ?? 0.3          // 0.1–2 Hz
             kernel.depth = (effect.parameters["depth"] ?? 50) / 100
             kernel.feedback = (effect.parameters["feedback"] ?? 50) / 100 * 0.9
 
         case .tremolo:
-            let kernel = units.tremoloKernel
+            guard let kernel else { return }
             kernel.rate = effect.parameters["rate"] ?? 5.0          // 0.5–15 Hz
             kernel.depth = (effect.parameters["depth"] ?? 50) / 100
 
         case .delay:
-            units.delayKernel.rate = effect.parameters["time"] ?? 0.3
-            units.delayKernel.feedback = (effect.parameters["feedback"] ?? 40) / 100
-            units.delayKernel.mix = (effect.parameters["mix"] ?? 30) / 100
+            guard let kernel else { return }
+            kernel.rate = effect.parameters["time"] ?? 0.3
+            kernel.feedback = (effect.parameters["feedback"] ?? 40) / 100
+            kernel.mix = (effect.parameters["mix"] ?? 30) / 100
 
         case .reverb:
-            units.reverb.wetDryMix = effect.parameters["wetDryMix"] ?? 40
+            guard let reverb = audioUnit(for: effect) as? AVAudioUnitReverb else { return }
+            reverb.wetDryMix = effect.parameters["wetDryMix"] ?? 40
             if let decay = effect.parameters["decay"] {
-                selectReverbPreset(decaySeconds: decay)
+                selectReverbPreset(decaySeconds: decay, on: reverb)
             }
         }
     }

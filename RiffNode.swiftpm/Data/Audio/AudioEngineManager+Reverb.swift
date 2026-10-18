@@ -8,8 +8,7 @@ extension AudioEngineManager {
     // MARK: - Reverb Preset Selection
 
     /// Select an appropriate AVAudioUnitReverb preset based on decay time
-    func selectReverbPreset(decaySeconds: Float) {
-        guard let units = effectUnits else { return }
+    func selectReverbPreset(decaySeconds: Float, on reverb: AVAudioUnitReverb) {
         let preset: AVAudioUnitReverbPreset
         if decaySeconds < 0.8 {
             preset = .smallRoom
@@ -22,6 +21,6 @@ extension AudioEngineManager {
         } else {
             preset = .cathedral
         }
-        units.reverb.loadFactoryPreset(preset)
+        reverb.loadFactoryPreset(preset)
     }
 }

@@ -157,12 +157,20 @@ Pedal and amp names, panels and enclosures are RiffNode's own – no logos or co
 ### Practice, sharing and live control
 
 - **Low latency** – a ~5 ms I/O buffer, the measured string-to-ear latency in Settings, and a warning when Bluetooth headphones would add 100–200 ms.
+- **Undo and autosave** – every change to the board (pedals, order, models, knobs, amp, EQ) is one undo step once it settles, so a knob drag is one step; the board is saved and comes back next launch.
+- **Two of a kind** – stack two overdrives, or a short and a long delay: every pedal after the first of its type gets its own audio unit, and the Signal Lab probes exactly the one you picked.
 - **Looper** – one footswitch: record, play, overdub, undo. It records the amp's output, so only your guitar is layered.
 - **Metronome** – an accented click that can match the groove's tempo.
 - **Neural Amp Modeler** – load a `.nam` capture of a real amp. A Swift port of NeuralAmpModelerCore's WaveNet on Accelerate, for both the original A1 captures and the newer A2 ones (slimmable containers – the full-size model is used – with per-layer kernel sizes, LeakyReLU and a temporal head). Verified sample by sample against the reference renderer: 132–135 dB SNR, 13–22× real time. Open the amp at the end of the board and choose **Load a NAM capture…**; experimental options (FiLM conditioning, in-layer slimming) are refused with a clear message rather than played wrong.
 - **Share a tone** – export pedals, amp and EQ as a small JSON file, or import one.
 - **MIDI footswitch** – USB or Bluetooth MIDI pedals: Program Change selects a preset; CC 80/81 next/previous, CC 82 looper, CC 83 mute.
 - **iOS / macOS 27** – imported songs are analysed on device with the Music Understanding framework (key, tempo, sections, solo scale), and the Tone Assistant can suggest a sound from a photo through Foundation Models image prompts.
+
+### Accessibility
+
+- Text follows the system text size (Dynamic Type); pedal and amp artwork keeps the fixed sizes of the hardware it draws, and fixed-size controls grow up to extra large.
+- Reduce Motion stills the animated background and indicators; Reduce Transparency removes the colour orbs behind the glass; Increase Contrast gives glass cards a clear edge.
+- Knobs are adjustable with VoiceOver (swipe up/down); pedals, the tuner and Stage Mode's footswitches have spoken labels and values.
 
 ### Keyboard shortcuts (Mac and iPad)
 
@@ -174,6 +182,8 @@ Pedal and amp names, panels and enclosures are RiffNode's own – no logos or co
 | `⌘K` | Open / close the Riff Notch |
 | `⌘J` | Open / close the Tone Assistant |
 | `⌘1` – `⌘3` | Pedalboard · EQ & Tone · Learn |
+| `⌘Z` · `⇧⌘Z` | Undo · redo any change to the board |
+| `⌃⌘S` | Show or hide the sidebar |
 | `1` – `9` | Stage Mode: stomp pedal 1–9 |
 | `←` `→` · `L` · `B` · `T` · `Esc` | Stage Mode: presets · looper · bypass board · tuner mute · exit |
 
@@ -366,7 +376,7 @@ It brings low-level signal processing, computer vision and on-device AI together
 - Full recovery from audio route changes and interruptions (unplugging an interface, phone calls)
 - A lock-free ring buffer between the analysis taps and the UI
 - Hand-gesture (Vision) camera lifecycle across scenes
-- Saving the whole rig – pedals, amp, input, EQ – with Undo
+- Saving the input stage (cable, buffer, gate) with the rest of the board
 - An EQ curve drawn from the exact filter response
 - Streaming long backing tracks, synced with the metronome and looper
 

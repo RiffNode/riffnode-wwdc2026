@@ -10,10 +10,10 @@ extension AudioEngineManager {
     /// Starts watching the signal just before and just after one pedal.
     /// `owner` identifies the view asking: views are rebuilt when you switch pedals or a preset
     /// replaces the chain, and the old view's "stop" can arrive after the new view's "start".
-    func probe(_ type: EffectType, owner: UUID) {
+    func probe(_ effect: EffectNode, owner: UUID) {
         probeOwner = owner
-        guard type != probedEffectType else { return }
-        probedEffectType = type
+        guard effect.id != probedEffectID else { return }
+        probedEffectID = effect.id
         installProbeTaps()
     }
 
@@ -25,7 +25,7 @@ extension AudioEngineManager {
     func stopProbe(owner: UUID) {
         guard probeOwner == owner else { return }
         probeOwner = nil
-        probedEffectType = nil
+        probedEffectID = nil
         installProbeTaps()
     }
 
@@ -36,15 +36,15 @@ extension AudioEngineManager {
         probedNodes = []
         signalProbe.reset()
 
-        guard let type = probedEffectType,
+        guard let id = probedEffectID,
               let units = effectUnits,
               let fxMixer = fxInputMixer,
-              let order = connectedEffectOrder,
-              let index = order.firstIndex(of: type),
-              let after = units.audioUnit(for: type) else { return }
-        let before: AVAudioNode = index == 0
-            ? units.wah
-            : units.audioUnit(for: order[index - 1]) ?? fxMixer
+              let order = connectedNodeIDs,
+              let index = order.firstIndex(of: id),
+              let effect = effectsChain.first(where: { $0.id == id }),
+              let after = audioUnit(for: effect) else { return }
+        let previous = index > 0 ? effectsChain.first(where: { $0.id == order[index - 1] }) : nil
+        let before: AVAudioNode = index == 0 ? units.wah : previous.flatMap { audioUnit(for: $0) } ?? fxMixer
 
         before.installTap(onBus: 0, bufferSize: 1024, format: nil,
                           block: SignalProbeStore.tapBlock(for: signalProbe, side: .before))

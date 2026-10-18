@@ -34,7 +34,7 @@ struct SignalLabView: View {
             }
         }
         .task(id: effect.type) {
-            engine.probe(effect.type, owner: probeID)
+            engine.probe(effect, owner: probeID)
             model.clear()
             while !Task.isCancelled {
                 model.update(from: engine.probeSnapshot())

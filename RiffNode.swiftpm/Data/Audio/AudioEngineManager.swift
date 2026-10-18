@@ -55,7 +55,11 @@ final class AudioEngineManager: AudioManaging {
         didSet { if oldValue != isPedalboardBypassed { syncBypassStates() } }
     }
     /// The pedal order currently wired into the audio graph (nil = not wired yet).
-    @ObservationIgnored var connectedEffectOrder: [EffectType]?
+    /// The pedals currently wired, in order – the chain is rewired only when this changes.
+    @ObservationIgnored var connectedNodeIDs: [UUID]?
+    /// Second-or-later pedals of a type each get their own audio unit (see +PedalUnits).
+    @ObservationIgnored var extraUnits: [UUID: PedalUnit] = [:]
+    @ObservationIgnored var pendingExtraUnits: Set<UUID> = []
     @ObservationIgnored var isChainRebuildScheduled = false
 
     /// The most recently applied preset, and a counter that bumps on every apply
@@ -78,7 +82,7 @@ final class AudioEngineManager: AudioManaging {
 
     // MARK: - Private Audio Components
 
-    private var audioEngine: AVAudioEngine?
+    private(set) var audioEngine: AVAudioEngine?
     var inputNode: AVAudioInputNode?
     var mainMixer: AVAudioMixerNode?
 
@@ -108,7 +112,7 @@ final class AudioEngineManager: AudioManaging {
     @ObservationIgnored let outputLevelStore = OutputLevelStore()
     @ObservationIgnored var probedNodes: [AVAudioNode] = []
     /// The pedal whose input and output the Signal Lab is watching.
-    var probedEffectType: EffectType?
+    var probedEffectID: UUID?
     
     // Store processing format for rebuilding audio chain
     var processingFormat: AVAudioFormat?
@@ -285,7 +289,8 @@ final class AudioEngineManager: AudioManaging {
         isRunning = false
         inputNode = nil
         formatConverterMixer = nil
-        connectedEffectOrder = nil
+        connectedNodeIDs = nil
+        discardExtraUnits()
         probedNodes = []
 
         // Configure audio session (required for iOS/Mac Catalyst)
@@ -441,13 +446,14 @@ final class AudioEngineManager: AudioManaging {
         effect.isEnabled.toggle()
         
         // Use bypass instead of rebuilding entire chain (more stable)
-        guard let units = effectUnits else {
+        guard effectUnits != nil else {
         rebuildAudioChain()
             return
         }
         
-        // Set bypass directly on the specific effect unit
-        units.setBypass(for: effect.type, bypassed: isPedalboardBypassed || !effect.isEnabled)
+        // Set bypass directly on this pedal's own unit
+        setBypass(audioUnit(for: effect), usesKernel: kernel(for: effect) != nil,
+                  bypassed: isPedalboardBypassed || !effect.isEnabled)
         Log.audio.debug("toggleEffect: \(effect.type.rawValue, privacy: .public) \(effect.isEnabled ? "enabled" : "bypassed", privacy: .public)")
     }
 
@@ -703,8 +709,11 @@ final class AudioEngineManager: AudioManaging {
               let units = effectUnits,
               let format = processingFormat else { return }
 
-        let order = effectsChain.map(\.type)
-        guard order != connectedEffectOrder else { return }
+        // Second-or-later pedals of a type need their own units (created asynchronously)
+        prepareExtraUnits(on: engine)
+        let wired = effectsChain.filter { audioUnit(for: $0) != nil }
+        let ids = wired.map(\.id)
+        guard ids != connectedNodeIDs else { return }
 
         let wasRunning = engine.isRunning
         let resumeBackingTrack = backingTrack.isBackingTrackPlaying
@@ -713,7 +722,7 @@ final class AudioEngineManager: AudioManaging {
 
         // Tear down the old pedal wiring (input -> converter -> fxInputMixer stays intact)
         engine.disconnectNodeOutput(fxMixer)
-        for unit in units.allUnits where engine.attachedNodes.contains(unit) {
+        for unit in units.allUnits + extraUnits.values.map(\.unit) where engine.attachedNodes.contains(unit) {
             engine.disconnectNodeOutput(unit)
         }
 
@@ -722,8 +731,8 @@ final class AudioEngineManager: AudioManaging {
         engine.connect(units.input, to: units.wah, format: format)
         applyInputSettings()
         var currentNode: AVAudioNode = units.wah
-        for type in order {
-            guard let unit = units.audioUnit(for: type) else { continue }
+        for effect in wired {
+            guard let unit = audioUnit(for: effect) else { continue }
             engine.connect(currentNode, to: unit, format: format)
             currentNode = unit
         }
@@ -731,13 +740,13 @@ final class AudioEngineManager: AudioManaging {
         engine.connect(currentNode, to: units.amp, format: format)
         engine.connect(units.amp, to: mixer, format: format)
         applyAmpSettings()
-        connectedEffectOrder = order
+        connectedNodeIDs = ids
         installProbeTaps()
 
         // Newly added pedals (AI, presets, Add Pedal) start from their own settings
         for effect in effectsChain { applyEffectParameters(effect) }
         syncBypassStates()
-        Log.audio.debug("rebuildAudioChain: wired \(order.map(\.abbreviation).joined(separator: " → "), privacy: .public)")
+        Log.audio.debug("rebuildAudioChain: wired \(wired.map(\.type.abbreviation).joined(separator: " → "), privacy: .public)")
 
         guard wasRunning else { return }
         engine.prepare()

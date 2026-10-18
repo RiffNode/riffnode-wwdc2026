@@ -149,7 +149,8 @@ protocol EffectAuditioning: AnyObject {
 /// Watching the signal on both sides of one pedal (Signal Lab).
 @MainActor
 protocol SignalProbing: AnyObject {
-    func probe(_ type: EffectType, owner: UUID)
+    /// Watches the signal into and out of this pedal (the right copy when there are two of a kind).
+    func probe(_ effect: EffectNode, owner: UUID)
     func stopProbe(owner: UUID)
     /// The latest captures into and out of the probed pedal.
     func probeSnapshot() -> (before: SignalCapture, after: SignalCapture)

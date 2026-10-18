@@ -159,12 +159,20 @@
 ### 練習、分享與現場控制
 
 - **低延遲** —— 約 5 ms 的 I/O 緩衝區，設定頁顯示實測的「弦到耳朵」延遲；使用藍牙耳機（多 100–200 ms）時會提醒。
+- **復原與自動儲存** —— 踏板盤的每次修改（踏板、順序、型號、旋鈕、音箱、EQ）在停止變動後成為一個復原步驟，拖一次旋鈕只算一步；踏板盤會自動儲存，下次開啟就回來。
+- **同款疊兩顆** —— 疊兩顆 overdrive，或一短一長兩顆 delay：同類型的第二顆以後各有自己的音訊單元，Signal Lab 也只擷取你選的那一顆。
 - **Looper** —— 一顆踩踏開關：錄音、播放、疊錄、undo。錄的是音箱輸出，所以只會疊上你的吉他。
 - **節拍器** —— 第一拍重音，可一鍵對齊 groove 的速度。
 - **Neural Amp Modeler** —— 載入真實音箱的 `.nam` 擷取檔。以 Accelerate 移植 NeuralAmpModelerCore 的 WaveNet，同時支援原始的 A1 與新的 A2 擷取檔（可縮放容器 —— 使用完整大小的模型 —— 加上每層不同的 kernel、LeakyReLU 與時間向的 head）。逐樣本與參考實作比對：訊雜比 132–135 dB、即時速度的 13–22 倍。點踏板盤最右邊的音箱，選 **Load a NAM capture…**；實驗性選項（FiLM 調變、層內縮放）會明確提示不支援，不會播放錯誤的聲音。
 - **分享音色** —— 把踏板、音箱與 EQ 匯出成小小的 JSON 檔，或匯入別人的。
 - **MIDI 踏板** —— USB 或藍牙 MIDI 踏板：Program Change 切換 preset；CC 80/81 下一個／上一個、CC 82 looper、CC 83 靜音。
 - **iOS / macOS 27** —— 匯入的歌曲用 Music Understanding framework 在裝置上分析（調性、速度、段落、solo 音階）；Tone Assistant 也能透過 Foundation Models 的圖片輸入，從照片建議音色。
+
+### 無障礙
+
+- 文字跟著系統字級（Dynamic Type）縮放；踏板與音箱的繪圖保持實體硬體的固定大小，固定尺寸的控制項最大放到特大。
+- 「減少動態效果」會讓動態背景與指示停住；「降低透明度」會拿掉玻璃後方的彩色光球；「增加對比」讓玻璃卡片有清楚的邊框。
+- 旋鈕可以用 VoiceOver 上下滑動調整；踏板、調音器與 Stage Mode 的腳踏開關都有語音標籤與數值。
 
 ### 鍵盤快捷鍵（Mac 與 iPad）
 
@@ -176,6 +184,8 @@
 | `⌘K` | 展開／收合 Riff Notch |
 | `⌘J` | 開啟／關閉 Tone Assistant |
 | `⌘1` – `⌘3` | Pedalboard · EQ & Tone · Learn |
+| `⌘Z` · `⇧⌘Z` | 復原 · 重做踏板盤的任何修改 |
+| `⌃⌘S` | 顯示或隱藏側欄 |
 | `1` – `9` | Stage Mode：踩第 1–9 顆踏板 |
 | `←` `→` · `L` · `B` · `T` · `Esc` | Stage Mode：preset · Looper · 整組旁通 · 調音靜音 · 離開 |
 
@@ -368,7 +378,7 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
 - 音訊路由變更與中斷（拔掉錄音介面、來電）後完整恢復
 - 分析 tap 與介面之間改用無鎖 ring buffer
 - 手勢（Vision）相機在不同畫面間的生命週期
-- 儲存整組設定（踏板、音箱、輸入、EQ）並支援 Undo
+- 輸入端設定（導線、buffer、gate）也一起存進踏板盤
 - EQ 曲線依實際濾波器響應繪製
 - 長伴奏串流播放，並與節拍器、Looper 同步
 
