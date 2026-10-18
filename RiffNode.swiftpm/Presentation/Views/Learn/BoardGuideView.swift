@@ -100,6 +100,7 @@ struct BoardGuideView: View {
             .buttonStyle(.glass)
         }
         .padding(Spacing.lg)
+        .highContrastOutline(cornerRadius: CornerRadius.xl)   // drawn into the card, so a glass container can't cover it
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: CornerRadius.xl))
     }
 

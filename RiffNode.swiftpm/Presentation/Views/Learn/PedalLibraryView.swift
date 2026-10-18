@@ -180,6 +180,7 @@ private struct PedalDetail: View {
             RoundedRectangle(cornerRadius: CornerRadius.xl)
                 .fill(LinearGradient(colors: [tint.opacity(0.22), tint.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing))
         )
+        .highContrastOutline(cornerRadius: CornerRadius.xl)   // drawn into the card, so a glass container can't cover it
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: CornerRadius.xl))
         .animation(.smooth(duration: 0.2), value: isAuditioning)
     }

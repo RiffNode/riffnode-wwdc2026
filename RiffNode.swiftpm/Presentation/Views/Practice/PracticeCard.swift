@@ -20,6 +20,7 @@ struct PracticeCard: View {
             metronomeRow
         }
         .padding(Spacing.md)
+        .highContrastOutline(cornerRadius: CornerRadius.xl)   // drawn into the card, so a glass container can't cover it
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: CornerRadius.xl))
     }
 
