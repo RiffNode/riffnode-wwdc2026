@@ -17,6 +17,7 @@ struct AppDependencies {
     let musicApp: any MusicAppControlling
     let songAnalyzer: any SongAnalyzing
     let effectGuide: any EffectGuideServiceProtocol
+    let toneStore: any ToneStoring
 
     /// The real thing: audio engine, analysis, camera, MIDI and on-device AI.
     static func live() -> AppDependencies {
@@ -30,7 +31,8 @@ struct AppDependencies {
             toneAssistant: SemanticCommandProcessor(),
             musicApp: SystemMusicService(),
             songAnalyzer: SongAnalyzer(),
-            effectGuide: EffectGuideService.shared
+            effectGuide: EffectGuideService.shared,
+            toneStore: ToneAutosaveStore()
         )
     }
 }

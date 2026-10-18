@@ -5,13 +5,16 @@ import SwiftUI
 
 struct EffectsChainView: View {
     let engine: any PedalboardEngine
+    /// Undo / redo for the board (absent in previews).
+    var history: BoardHistory? = nil
     /// Selection is kept by ID and resolved against the live chain: presets and the AI
     /// replace every node, and editing a stale node would change nothing you can hear.
     @State private var selectedEffectID: UUID?
-    /// The amp at the end of the chain is selected instead of a pedal.
-    @State private var isAmpSelected = false
+    /// The amp at the end of the chain is selected instead of a pedal; it (or the guitar
+    /// panel) stays open between launches, like the last tool you used.
+    @AppStorage("board.ampSelected") private var isAmpSelected = false
     /// The guitar input (pickup, cable, gate) is selected.
-    @State private var isInputSelected = false
+    @AppStorage("board.inputSelected") private var isInputSelected = false
     @State private var width: CGFloat = 800
 
     private var selectedEffect: EffectNode? {
@@ -41,6 +44,21 @@ struct EffectsChainView: View {
                 }
 
                 Spacer()
+
+                if let history {
+                    GlassEffectContainer(spacing: 4) {
+                        HStack(spacing: 4) {
+                            Button("Undo", systemImage: "arrow.uturn.backward") { history.undo() }
+                                .disabled(!history.canUndo)
+                                .help("Undo (⌘Z)")
+                            Button("Redo", systemImage: "arrow.uturn.forward") { history.redo() }
+                                .disabled(!history.canRedo)
+                                .help("Redo (⇧⌘Z)")
+                        }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.glass)
+                    }
+                }
 
                 // Add effect menu
                 Menu {

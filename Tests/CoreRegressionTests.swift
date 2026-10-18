@@ -37,6 +37,25 @@ final class TestEngine: EffectsChainManaging, AudioEngineControlling {
     func rebuildEffectsChain() {}
 }
 
+/// A board that only remembers its tone document, for the undo history.
+@MainActor
+final class FakeBoard: ToneSharing {
+    var drive: Float = 50
+    func makeToneDocument(named name: String) -> ToneDocument {
+        ToneDocument(name: name, chain: [EffectNode(type: .overdrive, parameters: ["drive": drive, "tone": 50, "level": 50])],
+                     amp: AmpSettings(), eqBands: [])
+    }
+    func applyToneDocument(_ document: ToneDocument) {
+        drive = document.pedals.first?.parameters["drive"] ?? 0
+    }
+}
+
+final class MemoryToneStore: ToneStoring, @unchecked Sendable {
+    var saved: ToneDocument?
+    func load() -> ToneDocument? { saved }
+    func save(_ document: ToneDocument) { saved = document }
+}
+
 @main
 struct CoreRegressionTests {
     @MainActor static var checks = 0
@@ -133,6 +152,30 @@ struct CoreRegressionTests {
         check(!unknownMatch.matched && unknownMatch.explanation?.isEmpty == false, "Matcher explains what it couldn't understand")
         let missingMatch = OfflineToneMatcher.match("delete")
         check(!missingMatch.matched, "Matcher refuses a delete with no pedal named")
+
+        // Undo history: settled changes are one step each; undo/redo walk them; autosave restores
+        let board = FakeBoard()
+        let store = MemoryToneStore()
+        let history = BoardHistory(store: store, board: board)
+        history.record(board.makeToneDocument(named: "Current"))          // the starting board
+        for value in [Float(60), 62, 64, 70] {                            // a knob drag: one step
+            board.drive = value
+            history.record(board.makeToneDocument(named: "Current"))
+        }
+        try? await Task.sleep(for: .milliseconds(800))
+        board.drive = 90
+        history.record(board.makeToneDocument(named: "Current"))
+        try? await Task.sleep(for: .milliseconds(800))
+        history.undo()
+        check(board.drive == 70, "Undo returns to the settled drag result")
+        history.undo()
+        check(board.drive == 50 && !history.canUndo, "Second undo returns to the start")
+        history.redo(); history.redo()
+        check(board.drive == 90 && !history.canRedo, "Redo walks forward again")
+        board.drive = 10
+        let restored = BoardHistory(store: store, board: board)
+        restored.restoreSavedBoard()
+        check(board.drive == 90, "The saved board is restored at launch")
 
         let setupEngine = TestEngine()
         let setup = SetupViewModel(audioEngine: setupEngine)

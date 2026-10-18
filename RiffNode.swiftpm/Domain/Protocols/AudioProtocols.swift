@@ -222,6 +222,12 @@ protocol ToneSharing: AnyObject {
     func applyToneDocument(_ document: ToneDocument)
 }
 
+/// Keeps the board you were playing between launches.
+protocol ToneStoring: Sendable {
+    func load() -> ToneDocument?
+    func save(_ document: ToneDocument)
+}
+
 // MARK: - Practice
 
 @MainActor

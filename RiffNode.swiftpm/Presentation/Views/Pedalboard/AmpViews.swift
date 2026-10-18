@@ -218,6 +218,7 @@ struct AmpPanelView: View {
                         ForEach(AmpModel.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.menu)
+                    .labelsHidden()
                     Text(settings.model.summary).font(.caption).foregroundStyle(.secondary)
                     if settings.model != .captured {
                         Text("Voiced after the \(settings.model.inspiredBy). \(settings.model.about)")

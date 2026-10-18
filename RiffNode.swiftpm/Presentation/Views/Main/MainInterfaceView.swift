@@ -73,7 +73,7 @@ struct MainInterfaceView: View {
                     Group {
                         switch viewModel.selectedTab {
                         case .pedalboard:
-                            EffectsChainView(engine: engine)
+                            EffectsChainView(engine: engine, history: viewModel.history)
                         case .parametricEQ:
                             ScrollView {
                                 VStack(spacing: Spacing.md) {
@@ -172,6 +172,9 @@ struct MainInterfaceView: View {
         .onReceive(NotificationCenter.default.publisher(for: .enterPerformanceMode)) { _ in
             viewModel.showingPerformanceMode = true
         }
+        .onChange(of: viewModel.boardDocument) { _, document in
+            if let document { viewModel.history.record(document) }
+        }
         .onAppear {
             viewModel.onAppear()
         }
@@ -194,6 +197,15 @@ private struct MainKeyboardShortcuts: View {
                 .keyboardShortcut(.rightArrow, modifiers: .command)
             Button("Previous Preset") { viewModel.stepPreset(by: -1) }
                 .keyboardShortcut(.leftArrow, modifiers: .command)
+            // Undo/redo the board – not while typing to the Tone Assistant (the text field owns ⌘Z then)
+            if !viewModel.showingChatbot {
+                Button("Undo") { viewModel.history.undo() }
+                    .keyboardShortcut("z", modifiers: .command)
+                    .disabled(!viewModel.history.canUndo)
+                Button("Redo") { viewModel.history.redo() }
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+                    .disabled(!viewModel.history.canRedo)
+            }
             Button("Quick Controls", action: viewModel.notch.toggle)
                 .keyboardShortcut("k", modifiers: .command)
             Button("Tone Assistant") {

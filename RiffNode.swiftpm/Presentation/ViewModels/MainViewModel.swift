@@ -44,6 +44,8 @@ final class MainViewModel {
     let musicApp: any MusicAppControlling
     let songAnalyzer: any SongAnalyzing
     let effectGuide: any EffectGuideServiceProtocol
+    /// Undo / redo and autosave for the whole board.
+    let history: BoardHistory
     let chatbotController = AIChatbotController()
     let performanceController = PerformanceModeController()
     let notch = RiffNotchController()
@@ -75,6 +77,13 @@ final class MainViewModel {
         musicApp = d.musicApp
         songAnalyzer = d.songAnalyzer
         effectGuide = d.effectGuide
+        history = BoardHistory(store: d.toneStore, board: d.engine)
+    }
+
+    /// The board as a tone document – nil while Learn auditions a pedal, so the temporary
+    /// one-pedal board is never recorded or saved.
+    var boardDocument: ToneDocument? {
+        engine.auditionEffect == nil ? engine.makeToneDocument(named: "Current") : nil
     }
 
     // MARK: - Computed Properties
@@ -93,6 +102,9 @@ final class MainViewModel {
     // MARK: - Lifecycle
 
     func onAppear() {
+        // Put back last session's board, then make it the first step undo can return to
+        history.restoreSavedBoard()
+        if let document = boardDocument { history.record(document) }
         midi.onEvent = { [weak self] event in self?.handleFootswitch(event) }
         midi.start()
         gestureController.onGestureDetected = { [weak self] gesture in

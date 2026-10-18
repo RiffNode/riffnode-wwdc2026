@@ -14,6 +14,7 @@ xcrun swiftc -swift-version 6 -parse-as-library \
   RiffNode.swiftpm/Data/AI/OfflineToneMatcher.swift \
   RiffNode.swiftpm/Presentation/ViewModels/SetupViewModel.swift \
   RiffNode.swiftpm/Presentation/ViewModels/AIChatbotController.swift \
+  RiffNode.swiftpm/Presentation/ViewModels/BoardHistory.swift \
   Tests/CoreRegressionTests.swift \
   -o "$riff_test_dir/core-tests"
 "$riff_test_dir/core-tests"
