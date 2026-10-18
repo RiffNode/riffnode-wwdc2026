@@ -370,7 +370,7 @@ struct GlassEffectDemoView: View {
 
                     // Effect name
                     Text(effectType.rawValue)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
                 .frame(width: 90, height: 110)

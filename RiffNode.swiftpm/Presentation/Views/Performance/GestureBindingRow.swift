@@ -11,7 +11,7 @@ struct GestureBindingRow: View {
         HStack(spacing: 12) {
             // Gesture icon
             Image(systemName: gesture.icon)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(.callout, weight: .medium))
                 .foregroundStyle(.purple)
                 .frame(width: 24)
 
@@ -36,9 +36,9 @@ struct GestureBindingRow: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: action.icon)
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                     Text(action.rawValue)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(.footnote, weight: .medium))
                 }
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 10)

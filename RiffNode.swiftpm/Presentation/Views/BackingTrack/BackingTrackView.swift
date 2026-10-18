@@ -58,7 +58,7 @@ struct BackingTrackView: View {
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: "music.note.list")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(.callout, weight: .semibold))
                 .foregroundStyle(Color.riffPrimary)
                 .frame(width: 36, height: 36)
                 .glassEffect(.regular.tint(Color.riffPrimary.opacity(0.12)), in: RoundedRectangle(cornerRadius: 10))
@@ -368,7 +368,7 @@ struct BackingTrackView: View {
 
     private func appIcon(_ symbol: String, tint: Color) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: 13, weight: .bold))
+            .font(.system(.footnote, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: 30, height: 30)
             .background(tint.gradient, in: RoundedRectangle(cornerRadius: 7))
@@ -377,7 +377,7 @@ struct BackingTrackView: View {
     private func transportButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(.footnote, weight: .bold))
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 32, height: 32)
                 .glassEffect(.regular.interactive(), in: Circle())
@@ -395,7 +395,7 @@ struct BackingTrackView: View {
                     ProgressView().controlSize(.small)
                 } else {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(.subheadline, weight: .bold))
                         .contentTransition(.symbolEffect(.replace))
                 }
             }
@@ -507,7 +507,7 @@ struct TrackTimeline: View {
                                   Int(duration - (isDragging ? dragProgress * duration : currentTime)) / 60,
                                   Int(duration - (isDragging ? dragProgress * duration : currentTime)) % 60))
             }
-            .font(.system(size: 11, design: .monospaced))
+            .font(.system(.caption2, design: .monospaced))
             .foregroundStyle(.secondary)
         }
     }

@@ -152,7 +152,7 @@ struct GlassEQHeader: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "list.bullet")
-                            .font(.system(size: 11))
+                            .font(.system(.caption2))
                         Text("Presets")
                     }
                     .font(.caption.weight(.medium))
@@ -227,12 +227,12 @@ struct GlassEQPresetPicker: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: preset.icon)
-                                        .font(.system(size: 14))
+                                        .font(.system(.subheadline))
                                         .foregroundStyle(.primary)
                                         .frame(width: 24)
 
                                     Text(preset.name)
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(.system(.caption, weight: .medium))
                                         .foregroundStyle(.primary)
 
                                     Spacer()
@@ -599,7 +599,7 @@ struct GlassEQBandControls: View {
                             } label: {
                                 VStack(spacing: 2) {
                                     Image(systemName: type.icon)
-                                        .font(.system(size: 12))
+                                        .font(.system(.caption))
                                     Text(type.shortName)
                                         .font(.system(size: 8, weight: .medium))
                                 }
@@ -626,7 +626,7 @@ struct GlassEQBandControls: View {
                             .foregroundStyle(.secondary)
 
                         Text(formatFrequency(band.frequency))
-                            .font(.system(size: 16, weight: .bold).monospacedDigit())
+                            .font(.system(.callout, weight: .bold).monospacedDigit())
                             .foregroundStyle(.primary)
                     }
                     .frame(width: 70)
@@ -642,13 +642,13 @@ struct GlassEQBandControls: View {
                                 band.gain = max(-24, band.gain - 1)
                             } label: {
                                 Image(systemName: "minus")
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(.system(.caption, weight: .bold))
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
 
                             Text(String(format: "%+.1f", band.gain))
-                                .font(.system(size: 16, weight: .bold).monospacedDigit())
+                                .font(.system(.callout, weight: .bold).monospacedDigit())
                                 .foregroundStyle(.primary)
                                 .frame(width: 50)
 
@@ -656,7 +656,7 @@ struct GlassEQBandControls: View {
                                 band.gain = min(24, band.gain + 1)
                             } label: {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(.system(.caption, weight: .bold))
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
@@ -674,13 +674,13 @@ struct GlassEQBandControls: View {
                                 band.q = max(0.1, band.q - 0.1)
                             } label: {
                                 Image(systemName: "minus")
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(.system(.caption, weight: .bold))
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
 
                             Text(String(format: "%.1f", band.q))
-                                .font(.system(size: 16, weight: .bold).monospacedDigit())
+                                .font(.system(.callout, weight: .bold).monospacedDigit())
                                 .foregroundStyle(.primary)
                                 .frame(width: 36)
 
@@ -688,7 +688,7 @@ struct GlassEQBandControls: View {
                                 band.q = min(10, band.q + 0.1)
                             } label: {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(.system(.caption, weight: .bold))
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)

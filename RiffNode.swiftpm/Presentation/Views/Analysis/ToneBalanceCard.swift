@@ -17,7 +17,7 @@ struct ToneBalanceCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: Spacing.md) {
                 Image(systemName: region == nil ? "ear" : "lightbulb.max.fill")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(.title3, weight: .semibold))
                     .foregroundStyle(region?.color ?? .secondary)
                     .frame(width: 42, height: 42)
                     .glassEffect(.regular.tint((region?.color ?? .gray).opacity(0.15)), in: Circle())

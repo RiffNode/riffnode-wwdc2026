@@ -8,6 +8,12 @@ struct RiffNotchHost: View {
     let viewModel: MainViewModel
 
     var body: some View {
+        notch
+            // The notch is a fixed-size island: its text grows with Dynamic Type up to a point
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
+    }
+
+    private var notch: some View {
         GeometryReader { proxy in
             ZStack(alignment: .top) {
                 if viewModel.notch.status == .opened {
@@ -154,7 +160,7 @@ private struct NotchClosedContent: View {
             Spacer(minLength: 0)
 
             Text(hasNote ? detector.detectedNote : "—")
-                .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
+                .font(.system(.footnote, design: .rounded, weight: .bold).monospacedDigit())
                 .foregroundStyle(hasNote ? (detector.isInTune ? Color.green : Color.white) : Color.white.opacity(0.4))
                 .contentTransition(.numericText())
                 .animation(.snappy, value: detector.detectedNote)
@@ -173,19 +179,19 @@ private struct NotchActivityContent: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: activity.icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(.subheadline, weight: .semibold))
                 .foregroundStyle(activity.tint)
                 .frame(width: 32, height: 32)
                 .background(activity.tint.opacity(0.22), in: Circle())
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(activity.title)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 if let detail = activity.detail {
                     Text(detail)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(.white.opacity(0.6))
                         .lineLimit(1)
                 }
@@ -220,7 +226,7 @@ private struct NotchOpenedContent: View {
                     .accessibilityHidden(true)
 
                 Text(viewModel.currentPresetName)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                     .contentTransition(.opacity)
@@ -238,7 +244,7 @@ private struct NotchOpenedContent: View {
                     viewModel.notch.close()
                 } label: {
                     Image(systemName: "chevron.compact.up")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(.title3, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.6))
                         .frame(width: 32, height: 24)
                         .contentShape(Rectangle())
@@ -267,7 +273,7 @@ private struct NotchOpenedContent: View {
                                     .fill(effect.isEnabled ? Color.green : Color.white.opacity(0.25))
                                     .frame(width: 5, height: 5)
                                 Text(effect.type.abbreviation)
-                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .font(.system(.caption2, design: .rounded, weight: .bold))
                             }
                             .foregroundStyle(effect.isEnabled ? effect.type.color : .white.opacity(0.45))
                             .padding(.horizontal, 10)
@@ -395,7 +401,7 @@ private struct NotchTransportTile: View {
 
                 Button(action: viewModel.toggleEngine) {
                     Image(systemName: isRunning ? "stop.fill" : "play.fill")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(.title3, weight: .bold))
                         .foregroundStyle(.black)
                         .frame(width: 48, height: 48)
                         .background(isRunning ? Color.white : Color.green, in: Circle())
@@ -412,7 +418,7 @@ private struct NotchTransportTile: View {
     private func transportButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(.subheadline, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 36, height: 36)
                 .background(Color.white.opacity(0.1), in: Circle())

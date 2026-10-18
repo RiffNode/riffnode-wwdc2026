@@ -80,7 +80,7 @@ struct EffectsChainView: View {
                         Image(systemName: "plus")
                         Text("Add Pedal")
                     }
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(.primary)
                     .padding(.vertical, 8)
                     .padding(.horizontal, 16)
@@ -96,7 +96,7 @@ struct EffectsChainView: View {
                         Image(systemName: "rectangle.expand.vertical")
                         Text("Stage Mode")
                     }
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(.footnote, weight: .semibold))
                     .foregroundStyle(.primary)
                     .padding(.vertical, 8)
                     .padding(.horizontal, 16)
@@ -390,7 +390,7 @@ struct PedalboardJack: View {
 
             // Label
             Text(label)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(.system(.caption2, design: .rounded, weight: .bold))
                 .foregroundStyle(isInput ? Color.green : Color(white: 0.55))
         }
     }
@@ -432,7 +432,7 @@ struct GlassPedalControlsView: View {
                 HStack {
                     HStack(spacing: 8) {
                         Image(systemName: effect.type.icon)
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.system(.callout, weight: .medium))
                             .foregroundStyle(effect.type.color)
 
                         PedalModelMenu(effect: effect, engine: engine)

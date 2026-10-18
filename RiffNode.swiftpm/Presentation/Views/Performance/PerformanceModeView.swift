@@ -71,7 +71,7 @@ struct PerformanceModeView: View {
                 Spacer()
 
                 Label("PERFORMANCE", systemImage: "music.mic")
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .font(.system(.footnote, design: .monospaced, weight: .bold))
                     .foregroundStyle(.orange)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
@@ -102,7 +102,7 @@ struct PerformanceModeView: View {
                 if presets.indices.contains(presetIndex) {
                     let preset = presets[presetIndex]
                     Text("PRESET \(presetIndex + 1)")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .font(.system(.caption, design: .monospaced, weight: .bold))
                         .foregroundStyle(preset.category.color)
                     Text(preset.name)
                         .font(.system(size: 44, weight: .black, design: .rounded))
@@ -155,6 +155,8 @@ struct PerformanceModeView: View {
 
             QuickPresetBar(presets: presets, currentIndex: presetIndex, onSelect: onSelectPreset)
         }
+        // Footswitch-sized buttons: their labels grow with Dynamic Type up to a point
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
     }
 
     private func boardButton(_ title: String, icon: String, isOn: Bool, tint: Color, key: String,
@@ -325,10 +327,10 @@ struct QuickPresetBar: View {
                             } label: {
                                 VStack(spacing: 4) {
                                     Image(systemName: preset.icon)
-                                        .font(.system(size: 16))
+                                        .font(.system(.callout))
                                         .foregroundStyle(index == currentIndex ? .white : preset.category.color)
                                     Text(preset.name)
-                                        .font(.system(size: 11, weight: .medium))
+                                        .font(.system(.caption2, weight: .medium))
                                         .foregroundStyle(index == currentIndex ? .white : .primary)
                                         .lineLimit(1)
                                 }
@@ -401,7 +403,7 @@ struct GestureIndicatorOverlay: View {
                                 .fill(gestureController.faceDetected ? Color.green : Color.red)
                                 .frame(width: 8, height: 8)
                             Text(gestureController.faceDetected ? "Face found" : "No face")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(.caption2, weight: .semibold))
                         }
                         GestureStatusRow(icon: "arrow.up.arrow.down", label: "Nod · preset",
                                          isActive: performanceController.lastTriggeredGesture == .headNodDown ||
@@ -411,10 +413,10 @@ struct GestureIndicatorOverlay: View {
                                                    performanceController.lastTriggeredGesture == .headTiltRight)
                         HStack(spacing: 8) {
                             Image(systemName: "mouth.fill")
-                                .font(.system(size: 12))
+                                .font(.system(.caption))
                                 .foregroundStyle(.purple)
                                 .frame(width: 16)
-                            Text("Wah").font(.system(size: 11)).foregroundStyle(.secondary)
+                            Text("Wah").font(.system(.caption2)).foregroundStyle(.secondary)
                             GeometryReader { geometry in
                                 ZStack(alignment: .leading) {
                                     Capsule().fill(Color.white.opacity(0.1))
@@ -451,11 +453,11 @@ struct GestureStatusRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 12))
+                .font(.system(.caption))
                 .foregroundStyle(isActive ? .green : .secondary)
                 .frame(width: 16)
             Text(label)
-                .font(.system(size: 11))
+                .font(.system(.caption2))
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
             Circle()

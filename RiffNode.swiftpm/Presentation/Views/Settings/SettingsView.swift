@@ -48,7 +48,7 @@ struct SettingsView: View {
                                 subtitle: engine.hasPermission ? "Permission granted" : "Permission required"
                             ) {
                                 Image(systemName: engine.hasPermission ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                                    .font(.system(size: 20))
+                                    .font(.system(.title3))
                                     .foregroundStyle(engine.hasPermission ? .green : .orange)
                             }
                         }
@@ -116,7 +116,7 @@ struct SettingsView: View {
                                     engine.refreshInputDevices()
                                 } label: {
                                     Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.system(.subheadline, weight: .medium))
                                         .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
@@ -280,7 +280,7 @@ private struct SettingsSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
             Text(title.uppercased())
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, Spacing.lg + 4)
 
@@ -312,7 +312,7 @@ private struct SettingsRow<Trailing: View>: View {
                     .frame(width: 36, height: 36)
 
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(.callout, weight: .semibold))
                     .foregroundStyle(iconColor)
             }
 

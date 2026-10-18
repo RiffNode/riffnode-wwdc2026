@@ -130,7 +130,7 @@ struct AIChatbotOverlayView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Tone Assistant")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                 // Honest status: only claim Apple Intelligence when it is actually answering
                 Text(processor.isAvailable ? "Apple Intelligence · on device" : "Offline tone matcher")
                     .font(.system(size: 10, weight: .medium))
@@ -160,7 +160,7 @@ struct AIChatbotOverlayView: View {
                     }
                 } label: {
                     Image(systemName: isMinimized ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .frame(width: 28, height: 28)
                         .glassEffect(.regular, in: Circle())
@@ -252,13 +252,13 @@ struct AIChatbotOverlayView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
                             Image(systemName: starter.icon)
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(.callout, weight: .semibold))
                                 .foregroundStyle(starter.tint)
                             Text(starter.title)
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(.footnote, weight: .semibold))
                                 .foregroundStyle(.primary)
                             Text(starter.detail)
-                                .font(.system(size: 11))
+                                .font(.system(.caption2))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
@@ -289,7 +289,7 @@ struct AIChatbotOverlayView: View {
                             Image(systemName: suggestion.icon)
                                 .font(.system(size: 10, weight: .semibold))
                             Text(suggestion.label)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(.caption, weight: .medium))
                         }
                         .foregroundStyle(.primary)
                         .padding(.vertical, 6)
@@ -330,7 +330,7 @@ struct AIChatbotOverlayView: View {
             if processor.canReadImages {
                 PhotosPicker(selection: $photoItem, matching: .images) {
                     Image(systemName: "photo.badge.plus")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .frame(width: 32, height: 32)
                         .glassEffect(.regular.interactive(), in: Circle())
                 }
@@ -344,7 +344,7 @@ struct AIChatbotOverlayView: View {
             }
             TextField("Describe your tone...", text: inputBinding, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 14))
+                .font(.system(.subheadline))
                 .lineLimit(1...3)
                 .focused($inputFocused)
                 .onSubmit {
@@ -372,7 +372,7 @@ struct AIChatbotOverlayView: View {
                         )
                         .frame(width: 32, height: 32)
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(.footnote, weight: .bold))
                         .foregroundStyle(
                             controller.inputText.isEmpty || controller.isProcessing
                                 ? Color.secondary
@@ -422,7 +422,7 @@ struct ChatMessageBubble: View {
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
                 // Message text
                 Text(message.content)
-                    .font(.system(size: 14))
+                    .font(.system(.subheadline))
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 13)
                     .padding(.vertical, 9)
@@ -484,7 +484,7 @@ struct ChatMessageBubble: View {
                                 }())
                                 .foregroundStyle(.green)
                             }
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(.caption2, weight: .medium))
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         } else {
                             Button {
@@ -512,7 +512,7 @@ struct ChatMessageBubble: View {
                                         }
                                     }())
                                 }
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(.caption, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .padding(.vertical, 7)
                                 .padding(.horizontal, 14)
@@ -660,7 +660,7 @@ struct ThinkingStepsView: View {
                                 .tint(.purple)
                         }
                     }
-                    .font(.system(size: 12))
+                    .font(.system(.caption))
                     .frame(width: 14, height: 14)
 
                     Text(step.text)
@@ -705,14 +705,14 @@ struct AIChatbotFAB: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: symbol)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(.body, weight: .semibold))
                     .foregroundStyle(isExpanded ? AnyShapeStyle(.secondary) : AnyShapeStyle(assistantGradient))
                     .contentTransition(.symbolEffect(.replace))
                     .symbolEffect(.pulse, options: .repeating, isActive: isThinking && !reduceMotion)
 
                 if !isExpanded {
                     Text(isThinking ? "Thinking…" : "Tone Assistant")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
                         .foregroundStyle(.primary)
                         .contentTransition(.opacity)
                         .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))

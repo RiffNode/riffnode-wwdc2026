@@ -492,9 +492,9 @@ struct GlassEffectCardDetails: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "bolt.fill")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(.caption, weight: .semibold))
                             Text("Add to Pedalboard")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(.footnote, weight: .semibold))
                         }
                         .foregroundStyle(effect.color)
                         .frame(maxWidth: .infinity)
@@ -623,7 +623,7 @@ struct GlassEffectArtistsSection: View {
             FlowLayout(spacing: 6) {
                 ForEach(artistList, id: \.self) { artist in
                     Text(artist)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(.caption2, weight: .medium))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -662,7 +662,7 @@ struct EffectAuditionPanel: View {
                     if isAuditioning { engine.stopAudition() } else { engine.startAudition(type) }
                 } label: {
                     Label(isAuditioning ? "Stop" : "Hear it", systemImage: isAuditioning ? "stop.fill" : "play.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(.footnote, weight: .semibold))
                         .foregroundStyle(isAuditioning ? .white : tint)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)

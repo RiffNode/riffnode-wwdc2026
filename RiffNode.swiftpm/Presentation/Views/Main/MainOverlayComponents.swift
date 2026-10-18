@@ -12,17 +12,17 @@ struct ChordSuggestionChip: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "music.note")
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(.footnote, weight: .medium))
                 .foregroundStyle(.purple)
 
             Text(suggestion)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(.footnote, weight: .medium))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
 
             Button(action: onApply) {
                 Text("Apply")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -56,7 +56,7 @@ struct GestureControlPill: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "eye.fill")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(.subheadline, weight: .medium))
                     .foregroundStyle(isEnabled ? .purple : .secondary)
                     .symbolEffect(.pulse, options: .repeating, value: isEnabled && controller.faceDetected)
 
@@ -66,7 +66,7 @@ struct GestureControlPill: View {
                         .foregroundStyle(.secondary)
 
                     Text(statusText)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(statusColor)
                 }
 

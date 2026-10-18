@@ -44,7 +44,7 @@ struct PracticeCard: View {
                     Circle()
                         .strokeBorder(footswitchColor, lineWidth: looper.state == .empty || looper.state == .stopped ? 2 : 4)
                     Image(systemName: looper.state == .recording || looper.state == .overdubbing ? "record.circle" : "repeat")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(.callout, weight: .bold))
                         .foregroundStyle(looper.state == .recording ? Color.red : Color(white: 0.2))
                         .symbolEffect(.pulse, isActive: looper.state == .recording || looper.state == .overdubbing)
                 }
@@ -91,7 +91,7 @@ struct PracticeCard: View {
         HStack(spacing: 12) {
             Button(action: metronome.toggle) {
                 Image(systemName: metronome.isPlaying ? "pause.fill" : "metronome.fill")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(.callout, weight: .bold))
                     .frame(width: 52, height: 40)
                     .glassEffect(.regular.tint(Color.riffPrimary.opacity(metronome.isPlaying ? 0.35 : 0.12)).interactive(), in: Capsule())
                     .contentTransition(.symbolEffect(.replace))
@@ -102,6 +102,7 @@ struct PracticeCard: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Metronome").font(.subheadline.weight(.semibold))
+                    .lineLimit(1).minimumScaleFactor(0.7)
                 HStack(spacing: 6) {
                     smallButton("minus", label: "Slower") { metronome.setTempo(metronome.beatsPerMinute - 2) }
                     Text("\(Int(metronome.beatsPerMinute)) BPM")

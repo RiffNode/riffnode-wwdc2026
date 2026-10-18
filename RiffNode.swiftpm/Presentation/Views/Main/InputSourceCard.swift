@@ -213,6 +213,8 @@ struct InputSourceCard: View {
                         Label(engine.isTunerMuted ? "Muted" : "Mute", systemImage: engine.isTunerMuted ? "speaker.slash.fill" : "speaker.wave.2")
                             .font(.caption2.weight(.semibold))
                             .labelStyle(.titleAndIcon)
+                            .lineLimit(1)
+                            .fixedSize()
                             .foregroundStyle(engine.isTunerMuted ? Color.orange : Color.secondary)
                     }
                     .buttonStyle(.plain)

@@ -19,7 +19,7 @@ struct VisionGestureControlView: View {
                     Image(systemName: "eye.fill")
                         .foregroundStyle(.purple)
                     Text("GESTURE CONTROL")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .font(.system(.caption, design: .monospaced, weight: .bold))
                 }
 
                 Spacer()
@@ -80,7 +80,7 @@ struct VisionGestureControlView: View {
                         Image(systemName: lastGesture.icon)
                             .foregroundStyle(.purple)
                         Text(lastGesture.defaultAction)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -133,7 +133,7 @@ struct GestureIndicator: View {
                     .frame(width: 40, height: 40)
 
                 Image(systemName: gesture.icon)
-                    .font(.system(size: 16))
+                    .font(.system(.callout))
                     .foregroundStyle(isActive ? .white : (isEnabled ? .secondary : .secondary.opacity(0.3)))
             }
 

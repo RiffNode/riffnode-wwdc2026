@@ -106,7 +106,7 @@ struct GlassAudioInputBadge: View {
                         .frame(width: 28, height: 28)
 
                     Image(systemName: deviceType.icon)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(deviceType.color)
                 }
 
@@ -117,7 +117,7 @@ struct GlassAudioInputBadge: View {
                         .foregroundStyle(.secondary)
 
                     Text(formatDeviceName(deviceName))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                 }
