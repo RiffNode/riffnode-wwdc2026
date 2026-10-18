@@ -19,8 +19,8 @@ struct BackingTrackView: View {
     private var isLoading: Bool { viewModel.isLoading }
 
     init(player: any BackingTrackManaging, metronome: (any MetronomeControlling)? = nil,
-         music: any MusicAppControlling = SystemMusicService()) {
-        let model = PlayAlongViewModel(player: player, music: music)
+         music: any MusicAppControlling, analyzer: any SongAnalyzing) {
+        let model = PlayAlongViewModel(player: player, music: music, analyzer: analyzer)
         model.metronome = metronome
         _viewModel = State(initialValue: model)
     }
@@ -295,9 +295,9 @@ struct BackingTrackView: View {
             if music.canControlAppleMusic {
                 appleMusicControls
             } else {
-                appRow(name: "Apple Music", icon: "music.note", tint: .pink, url: SystemMusicService.appleMusicURL)
+                appRow(name: "Apple Music", icon: "music.note", tint: .pink, url: MusicApp.appleMusic.url)
             }
-            appRow(name: "Spotify", icon: "dot.radiowaves.left.and.right", tint: .green, url: SystemMusicService.spotifyURL)
+            appRow(name: "Spotify", icon: "dot.radiowaves.left.and.right", tint: .green, url: MusicApp.spotify.url)
 
             Label("Songs from Apple Music and Spotify keep playing while your guitar runs through RiffNode. Use headphones so the mic only hears your guitar.",
                   systemImage: "headphones")
@@ -518,7 +518,7 @@ struct TrackTimeline: View {
 #Preview {
     ZStack {
         AdaptiveBackground()
-        BackingTrackView(player: BackingTrackPlayer())
+        BackingTrackView(player: AppDependencies.live().engine.playAlong, music: AppDependencies.live().musicApp, analyzer: AppDependencies.live().songAnalyzer)
             .padding()
             .frame(width: 400)
     }

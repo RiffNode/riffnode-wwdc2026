@@ -9,7 +9,7 @@ import Observation
 
 @Observable
 @MainActor
-final class ChordDetector: ChordDetecting {
+final class ChordDetector: ChordAnalyzing {
 
     // MARK: - Output
 

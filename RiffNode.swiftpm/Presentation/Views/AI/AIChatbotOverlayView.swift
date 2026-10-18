@@ -7,7 +7,7 @@ import PhotosUI
 struct AIChatbotOverlayView: View {
     @State private var photoItem: PhotosPickerItem?
     @Bindable var controller: AIChatbotController
-    let processor: SemanticCommandProcessor
+    let processor: any ToneAssisting
     let engine: any EffectsChainManaging
     @Binding var isExpanded: Bool
 
@@ -641,7 +641,7 @@ struct AssistantAvatar: View {
 // What the assistant is doing right now, built from the model's streamed output.
 
 struct ThinkingStepsView: View {
-    let steps: [SemanticCommandProcessor.ThinkingStep]
+    let steps: [AssistantThinkingStep]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -773,8 +773,8 @@ struct AIChatbotFAB: View {
                 Spacer()
                 AIChatbotOverlayView(
                     controller: AIChatbotController(),
-                    processor: SemanticCommandProcessor(),
-                    engine: AudioEngineManager(),
+                    processor: AppDependencies.live().toneAssistant,
+                    engine: AppDependencies.live().engine,
                     isExpanded: .constant(true)
                 )
                 .padding()

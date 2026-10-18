@@ -7,8 +7,9 @@ struct ContentView: View {
 
     // MARK: - Dependencies (Dependency Injection)
 
-    @State private var engine = AudioEngineManager()
-    @State private var presetService = PresetService()
+    /// Built once, here – the only place that names the concrete Data types.
+    @State private var dependencies = AppDependencies.live()
+    private var engine: AudioEngineManager { dependencies.engine }
 
     // MARK: - State
 
@@ -50,10 +51,7 @@ struct ContentView: View {
                 }
 
             case .main:
-                MainInterfaceView(
-                    engine: engine,
-                    presetService: presetService
-                )
+                MainInterfaceView(dependencies: dependencies)
             }
         }
         // Follows the system appearance – dark mode suits the dark pedal hardware on stage

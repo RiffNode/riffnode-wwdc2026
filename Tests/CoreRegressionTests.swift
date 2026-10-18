@@ -121,6 +121,18 @@ struct CoreRegressionTests {
         processor.applyToEngine(engine)
         check(engine.effectsChain.first(where: { $0.type == .delay })?.isEnabled == false, "Bypass command remains supported")
 
+        // The offline matcher on its own: pure input → outcome
+        let deleteMatch = OfflineToneMatcher.match("delete reverb")
+        check(deleteMatch.matched && deleteMatch.mode == "delete" && deleteMatch.deleted == ["reverb"], "Matcher deletes a named pedal")
+        let bypassMatch = OfflineToneMatcher.match("turn off chorus")
+        check(bypassMatch.matched && bypassMatch.mode == "remove" && bypassMatch.disabled?.contains("chorus") == true, "Matcher bypasses a named pedal")
+        let genreMatch = OfflineToneMatcher.match("heavy metal")
+        check(genreMatch.matched && genreMatch.enabled?.contains("distortion") == true, "Matcher turns a style into pedals")
+        let unknownMatch = OfflineToneMatcher.match("qwertyuiop")
+        check(!unknownMatch.matched && unknownMatch.explanation?.isEmpty == false, "Matcher explains what it couldn't understand")
+        let missingMatch = OfflineToneMatcher.match("delete")
+        check(!missingMatch.matched, "Matcher refuses a delete with no pedal named")
+
         let setupEngine = TestEngine()
         let setup = SetupViewModel(audioEngine: setupEngine)
         await setup.performNextStep()

@@ -9,7 +9,7 @@ import Observation
 
 @Observable
 @MainActor
-final class FFTAnalyzer: SpectrumProviding {
+final class FFTAnalyzer: SpectrumAnalyzing {
 
     // MARK: - Configuration
 
@@ -87,7 +87,7 @@ final class FFTAnalyzer: SpectrumProviding {
 
         // Validate setup succeeded
         guard fftSetup != nil else {
-            print("⚠️ FFTAnalyzer: Failed to create DFT setup")
+            Log.analysis.error("FFTAnalyzer: Failed to create DFT setup")
             isSetupValid = false
             return
         }
@@ -108,7 +108,7 @@ final class FFTAnalyzer: SpectrumProviding {
 
         // Mark setup as valid
         isSetupValid = true
-        print("✅ FFTAnalyzer: Setup complete (fftSize: \(fftSize), binCount: \(binCount))")
+        Log.analysis.debug("FFTAnalyzer: setup complete (fftSize \(self.fftSize), binCount \(self.binCount))")
     }
 
     private func calculateFrequencyLabels() -> [Float] {

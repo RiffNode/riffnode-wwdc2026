@@ -674,7 +674,7 @@ struct GlassEffectKnobsView: View {
 #Preview {
     ZStack {
         AdaptiveBackground()
-        EffectsChainView(engine: AudioEngineManager())
+        EffectsChainView(engine: AppDependencies.live().engine)
             .frame(height: 500)
             .padding()
     }

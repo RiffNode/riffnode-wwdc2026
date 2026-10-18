@@ -33,40 +33,10 @@ private func visionProcessFaceData(_ data: ExtractedFaceData) {
 
 @Observable
 @MainActor
-final class VisionGestureController: NSObject {
+final class VisionGestureController: NSObject, GestureControlling {
 
-    // MARK: - Gesture Types
-
-    enum Gesture: String, CaseIterable {
-        case headNodDown = "Nod Down"
-        case headNodUp = "Nod Up"
-        case headTiltLeft = "Tilt Left"
-        case headTiltRight = "Tilt Right"
-        case mouthOpen = "Mouth Open"
-        case eyebrowRaise = "Eyebrow Raise"
-
-        var icon: String {
-            switch self {
-            case .headNodDown: return "arrow.down"
-            case .headNodUp: return "arrow.up"
-            case .headTiltLeft: return "arrow.left"
-            case .headTiltRight: return "arrow.right"
-            case .mouthOpen: return "mouth.fill"
-            case .eyebrowRaise: return "eyebrow"
-            }
-        }
-
-        var defaultAction: String {
-            switch self {
-            case .headNodDown: return "Next Preset"
-            case .headNodUp: return "Previous Preset"
-            case .headTiltLeft: return "Bypass All"
-            case .headTiltRight: return "Enable All"
-            case .mouthOpen: return "Wah Effect"
-            case .eyebrowRaise: return "Toggle Compressor"
-            }
-        }
-    }
+    /// The gestures live in the Domain; kept under this name for the detector code below.
+    typealias Gesture = FaceGesture
 
     // MARK: - Callbacks
 
@@ -144,14 +114,14 @@ final class VisionGestureController: NSObject {
         await setupCaptureSession()
         captureSession?.startRunning()
         isRunning = true
-        print("VisionGestureController: Started")
+        Log.vision.debug("VisionGestureController: Started")
     }
 
     func stop() {
         captureSession?.stopRunning()
         isRunning = false
         faceDetected = false
-        print("VisionGestureController: Stopped")
+        Log.vision.debug("VisionGestureController: Stopped")
     }
 
     // MARK: - Setup
@@ -294,7 +264,7 @@ final class VisionGestureController: NSObject {
         rollHistory.removeAll()
         yawHistory.removeAll()
 
-        print("VisionGestureController: Detected \(gesture.rawValue)")
+        Log.vision.debug("Detected \(gesture.rawValue, privacy: .public)")
         onGestureDetected?(gesture)
     }
 }
@@ -343,7 +313,7 @@ extension VisionGestureController: AVCaptureVideoDataOutputSampleBufferDelegate 
                 visionProcessFaceData(data)
             }
         } catch {
-            print("VisionGestureController: Face detection error - \(error)")
+            Log.vision.error("Face detection error: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

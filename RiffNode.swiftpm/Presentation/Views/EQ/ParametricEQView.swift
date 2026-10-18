@@ -713,7 +713,7 @@ struct GlassEQBandControls: View {
     ZStack {
         AdaptiveBackground()
 
-        ParametricEQView(engine: AudioEngineManager())
+        ParametricEQView(engine: AppDependencies.live().engine)
             .frame(height: 500)
             .padding()
     }

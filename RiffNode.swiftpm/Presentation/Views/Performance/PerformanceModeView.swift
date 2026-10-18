@@ -9,7 +9,7 @@ import SwiftUI
 struct PerformanceModeView: View {
     let engine: any PerformanceEngine
     let looper: any LooperControlling
-    @Bindable var gestureController: VisionGestureController
+    let gestureController: any GestureControlling
     @Bindable var controller: PerformanceModeController
     let presets: [EffectPreset]
     let onToggleGestures: () -> Void
@@ -494,7 +494,7 @@ private struct PerformanceKeyboardShortcuts: View {
 // MARK: - Gesture Indicator Overlay
 
 struct GestureIndicatorOverlay: View {
-    @Bindable var gestureController: VisionGestureController
+    let gestureController: any GestureControlling
     @Bindable var performanceController: PerformanceModeController
 
     var body: some View {

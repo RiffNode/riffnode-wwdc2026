@@ -30,7 +30,7 @@ final class PlayAlongViewModel {
     /// Name shown while an imported file is still loading.
     private(set) var pendingTrackName: String?
 
-    init(player: any BackingTrackManaging, music: any MusicAppControlling, analyzer: any SongAnalyzing = SongAnalyzer()) {
+    init(player: any BackingTrackManaging, music: any MusicAppControlling, analyzer: any SongAnalyzing) {
         self.player = player
         self.music = music
         self.analyzer = analyzer

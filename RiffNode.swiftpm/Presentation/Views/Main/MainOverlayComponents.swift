@@ -47,7 +47,7 @@ struct ChordSuggestionChip: View {
 // Compact toggle in the left panel. Shows face-detection status when active.
 
 struct GestureControlPill: View {
-    @Bindable var controller: VisionGestureController
+    let controller: any GestureControlling
     @Binding var isEnabled: Bool
 
     var body: some View {

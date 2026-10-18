@@ -575,5 +575,5 @@ struct GlassSignalChainDiagram: View {
 // MARK: - Preview
 
 #Preview {
-    GuidedTourView(engine: AudioEngineManager(), onComplete: {})
+    GuidedTourView(engine: AppDependencies.live().engine, onComplete: {})
 }

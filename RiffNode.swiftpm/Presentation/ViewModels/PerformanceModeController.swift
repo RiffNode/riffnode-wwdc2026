@@ -48,7 +48,7 @@ final class PerformanceModeController {
 
     private(set) var isActive = false
     private(set) var wahPosition: Float = 0
-    private(set) var lastTriggeredGesture: VisionGestureController.Gesture?
+    private(set) var lastTriggeredGesture: FaceGesture?
     private(set) var lastTriggeredAction: PerformanceGestureAction?
 
     // Momentary boost state
@@ -64,7 +64,7 @@ final class PerformanceModeController {
     // MARK: - Gesture Bindings
 
     /// Map gestures to actions – the same ones the gesture guide and notch describe
-    var gestureBindings: [VisionGestureController.Gesture: PerformanceGestureAction] = [
+    var gestureBindings: [FaceGesture: PerformanceGestureAction] = [
         .headNodDown: .nextPreset,
         .headNodUp: .previousPreset,
         .headTiltLeft: .bypassAll,
@@ -92,7 +92,7 @@ final class PerformanceModeController {
     // MARK: - Handle Gestures
 
     /// Handle a detected gesture and execute the bound action
-    func handleGesture(_ gesture: VisionGestureController.Gesture, engine: any EffectsChainManaging & ExpressionControlling, presets: [EffectPreset] = []) {
+    func handleGesture(_ gesture: FaceGesture, engine: any EffectsChainManaging & ExpressionControlling, presets: [EffectPreset] = []) {
         guard isActive else { return }
 
         lastTriggeredGesture = gesture

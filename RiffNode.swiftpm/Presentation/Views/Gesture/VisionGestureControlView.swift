@@ -6,8 +6,8 @@ import Observation
 // MARK: - Vision Gesture Control View
 
 struct VisionGestureControlView: View {
-    @Bindable var controller: VisionGestureController
-    let onGestureAction: (VisionGestureController.Gesture) -> Void
+    let controller: any GestureControlling
+    let onGestureAction: (FaceGesture) -> Void
 
     @State private var showSettings = false
 
@@ -121,7 +121,7 @@ struct VisionGestureControlView: View {
 // MARK: - Gesture Indicator
 
 struct GestureIndicator: View {
-    let gesture: VisionGestureController.Gesture
+    let gesture: FaceGesture
     let isActive: Bool
     let isEnabled: Bool
 
@@ -175,9 +175,8 @@ struct MouthIndicator: View {
 // MARK: - Preview
 
 #Preview {
-    @Previewable @State var previewController = VisionGestureController()
     VisionGestureControlView(
-        controller: previewController,
+        controller: AppDependencies.live().gestures,
         onGestureAction: { _ in }
     )
     .padding()

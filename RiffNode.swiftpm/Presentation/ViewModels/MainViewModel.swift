@@ -35,12 +35,15 @@ final class MainViewModel {
     let engine: any AudioManaging
     let presetService: PresetProviding
 
-    let fftAnalyzer = FFTAnalyzer()
+    let fftAnalyzer: any SpectrumAnalyzing
     /// USB / Bluetooth MIDI foot controllers.
-    let midi = MIDIFootswitch()
-    let chordDetector = ChordDetector()
-    let gestureController = VisionGestureController()
-    let semanticProcessor = SemanticCommandProcessor()
+    let midi: any FootswitchListening
+    let chordDetector: any ChordAnalyzing
+    let gestureController: any GestureControlling
+    let semanticProcessor: any ToneAssisting
+    let musicApp: any MusicAppControlling
+    let songAnalyzer: any SongAnalyzing
+    let effectGuide: any EffectGuideServiceProtocol
     let chatbotController = AIChatbotController()
     let performanceController = PerformanceModeController()
     let notch = RiffNotchController()
@@ -61,9 +64,17 @@ final class MainViewModel {
     @ObservationIgnored private var lastSuggestedChord = ""
     @ObservationIgnored private var chordSuggestionTask: Task<Void, Never>?
 
-    init(engine: any AudioManaging, presetService: PresetProviding) {
-        self.engine = engine
-        self.presetService = presetService
+    init(dependencies d: AppDependencies) {
+        engine = d.engine
+        presetService = d.presets
+        fftAnalyzer = d.spectrum
+        midi = d.footswitch
+        chordDetector = d.chords
+        gestureController = d.gestures
+        semanticProcessor = d.toneAssistant
+        musicApp = d.musicApp
+        songAnalyzer = d.songAnalyzer
+        effectGuide = d.effectGuide
     }
 
     // MARK: - Computed Properties
@@ -160,7 +171,7 @@ final class MainViewModel {
 
     // MARK: - Gestures
 
-    func handleGesture(_ gesture: VisionGestureController.Gesture) {
+    func handleGesture(_ gesture: FaceGesture) {
         if performanceController.isActive {
             performanceController.handleGesture(gesture, engine: engine, presets: presetService.presets)
             return

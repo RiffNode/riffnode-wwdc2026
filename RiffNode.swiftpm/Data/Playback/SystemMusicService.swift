@@ -91,9 +91,4 @@ final class SystemMusicService: MusicAppControlling {
         refresh()
         #endif
     }
-
-    // MARK: - Opening the apps
-
-    static let appleMusicURL = URL(string: "music://")!
-    static let spotifyURL = URL(string: "spotify://")!
 }

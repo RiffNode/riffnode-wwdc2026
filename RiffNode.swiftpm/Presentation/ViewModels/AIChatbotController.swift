@@ -13,7 +13,7 @@ struct ChatMessage: Identifiable {
     var isApplied: Bool = false
     var toneSnapshot: EffectPreset?
     /// Which engine answered (assistant replies only).
-    var responder: SemanticCommandProcessor.Responder?
+    var responder: ToneResponder?
 
     enum Role {
         case user
@@ -27,7 +27,7 @@ struct ChatMessage: Identifiable {
         timestamp: Date = Date(),
         appliedEffects: [String]? = nil,
         commandMode: String? = nil,
-        responder: SemanticCommandProcessor.Responder? = nil
+        responder: ToneResponder? = nil
     ) {
         self.id = id
         self.role = role
@@ -71,7 +71,7 @@ final class AIChatbotController {
         ))
     }
 
-    func sendMessage(_ text: String, processor: SemanticCommandProcessor, engine: any EffectsChainManaging) async {
+    func sendMessage(_ text: String, processor: any ToneAssisting, engine: any EffectsChainManaging) async {
         guard !isProcessing, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         messages.append(ChatMessage(role: .user, content: text))
@@ -87,7 +87,7 @@ final class AIChatbotController {
     }
 
     /// Sends a photo: Apple Intelligence (OS 27) looks at it and dials in the sound it evokes.
-    func sendPhoto(at url: URL, processor: SemanticCommandProcessor, engine: any EffectsChainManaging) async {
+    func sendPhoto(at url: URL, processor: any ToneAssisting, engine: any EffectsChainManaging) async {
         messages.append(ChatMessage(role: .user, content: "📷 What tone does this photo sound like?"))
         isProcessing = true
         let success = await processor.processImage(at: url)
@@ -95,7 +95,7 @@ final class AIChatbotController {
     }
 
     /// Shows the assistant's answer and applies it to the pedalboard.
-    private func present(success: Bool, processor: SemanticCommandProcessor, engine: any EffectsChainManaging) async {
+    private func present(success: Bool, processor: any ToneAssisting, engine: any EffectsChainManaging) async {
 
         if success && processor.lastCommandMode == "chat" {
             // A conversational reply: nothing to apply to the pedalboard
@@ -150,7 +150,7 @@ final class AIChatbotController {
         isProcessing = false
     }
 
-    func applyEffects(from message: ChatMessage, processor: SemanticCommandProcessor, engine: any EffectsChainManaging) {
+    func applyEffects(from message: ChatMessage, processor: any ToneAssisting, engine: any EffectsChainManaging) {
         guard let snapshot = message.toneSnapshot else { return }
         engine.applyPreset(snapshot)
         if let index = messages.firstIndex(where: { $0.id == message.id }) {
@@ -158,7 +158,7 @@ final class AIChatbotController {
         }
     }
 
-    func clearHistory(processor: SemanticCommandProcessor? = nil) {
+    func clearHistory(processor: (any ToneAssisting)? = nil) {
         processor?.resetConversation()
         messages = [ChatMessage(
             role: .assistant,

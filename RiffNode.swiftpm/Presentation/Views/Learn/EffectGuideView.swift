@@ -24,7 +24,7 @@ struct EffectGuideView: View {
 
     // MARK: - Initialization
 
-    init(guideService: EffectGuideServiceProtocol = EffectGuideService.shared, engine: (any LearnEngine)? = nil) {
+    init(guideService: any EffectGuideServiceProtocol, engine: (any LearnEngine)? = nil) {
         self.guideService = guideService
         self.engine = engine
     }
@@ -581,7 +581,7 @@ struct GlassEffectArtistsSection: View {
     ZStack {
         AdaptiveBackground()
 
-        EffectGuideView()
+        EffectGuideView(guideService: AppDependencies.live().effectGuide)
     }
 }
 

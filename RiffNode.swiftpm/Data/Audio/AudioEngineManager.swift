@@ -20,15 +20,15 @@ final class AudioEngineManager: AudioManaging {
 
     // MARK: - Audio Input Device Properties
 
-    private(set) var currentInputDeviceName: String = "No Input"
-    private(set) var currentInputDeviceType: AudioInputDeviceType = .none
-    private(set) var availableInputDevices: [AudioInputDevice] = []
+    var currentInputDeviceName: String = "No Input"
+    var currentInputDeviceType: AudioInputDeviceType = .none
+    var availableInputDevices: [AudioInputDevice] = []
 
     // MARK: - Visualization Properties (AudioVisualizationProviding)
 
-    private(set) var waveformSamples: [Float] = Array(repeating: 0, count: 128)
-    private(set) var inputLevel: Float = 0
-    private(set) var outputLevel: Float = 0
+    var waveformSamples: [Float] = Array(repeating: 0, count: 128)
+    var inputLevel: Float = 0
+    var outputLevel: Float = 0
 
     // MARK: - Audio Analysis Callbacks (for AI features)
 
@@ -42,7 +42,7 @@ final class AudioEngineManager: AudioManaging {
     }
 
     /// Latest audio samples buffer for analysis
-    private(set) var latestAudioSamples: [Float] = []
+    var latestAudioSamples: [Float] = []
     private let analysisBufferSize = 4096
 
     // MARK: - Effects Chain (EffectsChainManaging)
@@ -55,14 +55,13 @@ final class AudioEngineManager: AudioManaging {
         didSet { if oldValue != isPedalboardBypassed { syncBypassStates() } }
     }
     /// The pedal order currently wired into the audio graph (nil = not wired yet).
-    @ObservationIgnored private var connectedEffectOrder: [EffectType]?
-    @ObservationIgnored private var isChainRebuildScheduled = false
+    @ObservationIgnored var connectedEffectOrder: [EffectType]?
+    @ObservationIgnored var isChainRebuildScheduled = false
 
     /// The most recently applied preset, and a counter that bumps on every apply
     /// (so re-applying the same preset is still observable).
     private(set) var currentPreset: EffectPreset?
     private(set) var presetApplyCount = 0
-
 
     // MARK: - Play Along
 
@@ -80,43 +79,78 @@ final class AudioEngineManager: AudioManaging {
     // MARK: - Private Audio Components
 
     private var audioEngine: AVAudioEngine?
-    private var inputNode: AVAudioInputNode?
-    private var mainMixer: AVAudioMixerNode?
+    var inputNode: AVAudioInputNode?
+    var mainMixer: AVAudioMixerNode?
 
     // Effect units - following composition over inheritance
-    private var effectUnits: EffectUnitsContainer?
+    var effectUnits: EffectUnitsContainer?
     
     // Format conversion mixer - used to resolve incompatibility between input format and effect units
-    private var formatConverterMixer: AVAudioMixerNode?
-
+    var formatConverterMixer: AVAudioMixerNode?
 
     // Pre-effects mixer — both guitar and (optionally) backing track feed into this
-    private var fxInputMixer: AVAudioMixerNode?
-
+    var fxInputMixer: AVAudioMixerNode?
 
     // Audition – hear one effect on its own, A/B against the dry riff (Learn tab)
-    private(set) var auditionEffect: EffectType?
-    private(set) var isAuditionBypassed = false
-    @ObservationIgnored private var auditionSnapshot: (chain: [EffectNode], eqBands: [EQBand], startedDemo: Bool, bypassed: Bool)?
+    var auditionEffect: EffectType?
+    var isAuditionBypassed = false
+    @ObservationIgnored var auditionSnapshot: (chain: [EffectNode], eqBands: [EQBand], startedDemo: Bool, bypassed: Bool)?
 
     // Demo source – a clean performance or the original synthesized arpeggio.
-    private let demoRiff = DemoRiffPlayer()
+    let demoRiff = DemoRiffPlayer()
 
     // Visualization
-    private var tapInstalled = false
+    var tapInstalled = false
 
     // Signal Lab – taps on both sides of one pedal
-    @ObservationIgnored private let signalProbe = SignalProbeStore()
-    @ObservationIgnored private let outputLevelStore = OutputLevelStore()
-    @ObservationIgnored private var probedNodes: [AVAudioNode] = []
+    @ObservationIgnored let signalProbe = SignalProbeStore()
+    @ObservationIgnored let outputLevelStore = OutputLevelStore()
+    @ObservationIgnored var probedNodes: [AVAudioNode] = []
     /// The pedal whose input and output the Signal Lab is watching.
-    private(set) var probedEffectType: EffectType?
+    var probedEffectType: EffectType?
     
     // Store processing format for rebuilding audio chain
-    private var processingFormat: AVAudioFormat?
+    var processingFormat: AVAudioFormat?
     
     // Configuration change observer
     private var configurationObserver: Any?
+
+    // MARK: - Visualization & Signal Probe State (see +Visualization, +SignalProbe)
+
+    var audioSampleBuffer: [Float] = []
+    var visualizationTask: Task<Void, Never>?
+    @ObservationIgnored var probeOwner: UUID?
+
+    // MARK: - Amp & Input State (see +AmpAndInput)
+
+    /// The amp at the end of the chain. Every change is heard immediately.
+    var ampSettings = AmpSettings() {
+        didSet { if ampSettings != oldValue { applyAmpSettings() } }
+    }
+    /// Name of the loaded cabinet impulse response.
+    var cabinetIRName: String?
+    @ObservationIgnored var cabinetIR: [Float] = []
+    /// Name of the loaded Neural Amp Modeler capture.
+    var neuralModelName: String?
+    /// Every capture ever loaded stays alive: the audio thread may still be using the previous one.
+    @ObservationIgnored var neuralModels: [NeuralAmpModel] = []
+    /// Pickup & cable, buffer, volume pedal and noise gate.
+    var inputSettings = InputSettings() {
+        didSet { if inputSettings != oldValue { applyInputSettings() } }
+    }
+
+    // MARK: - Latency State (see +Latency)
+
+    /// Pick-to-ear delay: input + output hardware latency plus one buffer each way, in ms.
+    var roundTripLatencyMs: Double = 0
+    /// Buffer size the hardware actually granted, in ms.
+    var bufferDurationMs: Double = 0
+    /// Bluetooth headphones add 100–200 ms – far too much to play along to.
+    var isBluetoothOutput = false
+    /// Mutes the output while tuning; the tuner still hears the guitar.
+    var isTunerMuted = false {
+        didSet { mainMixer?.outputVolume = isTunerMuted ? 0 : 1 }
+    }
 
     // MARK: - Initialization
 
@@ -143,7 +177,7 @@ final class AudioEngineManager: AudioManaging {
     }
     
     private func handleAudioConfigurationChange() {
-        print("🔄 Audio route changed - reinstalling visualization tap")
+        Log.audio.notice("Audio route changed - reinstalling visualization tap")
 
         // Refresh device detection
         detectAudioInputDevices()
@@ -237,7 +271,7 @@ final class AudioEngineManager: AudioManaging {
     }
 
     func setupEngine() async throws {
-        print("setupEngine: START")
+        Log.audio.debug("setupEngine: START")
 
         stopVisualization()
         demoRiff.stop()
@@ -287,7 +321,7 @@ final class AudioEngineManager: AudioManaging {
         
         self.processingFormat = format
 
-        print("setupEngine: Processing format: \(format.sampleRate)Hz, \(format.channelCount)ch")
+        Log.audio.debug("setupEngine: processing format \(format.sampleRate) Hz, \(format.channelCount) ch")
 
         if hasPermission {
             let input = engine.inputNode
@@ -330,7 +364,7 @@ final class AudioEngineManager: AudioManaging {
                               block: OutputLevelStore.tapBlock(for: outputLevelStore))
 
         refreshLatency()
-        print("setupEngine: DONE - audio chain ready")
+        Log.audio.debug("setupEngine: DONE - audio chain ready")
     }
 
     func enableLiveInput() async throws {
@@ -351,7 +385,7 @@ final class AudioEngineManager: AudioManaging {
             throw AudioEngineError.engineNotSetup
         }
 
-        print("Starting audio engine...")
+        Log.audio.debug("Starting audio engine...")
         
         engine.prepare()
         
@@ -359,13 +393,12 @@ final class AudioEngineManager: AudioManaging {
         try engine.start()
         isRunning = true
         errorMessage = nil
-            print("Audio engine started successfully")
-        print("Audio engine running! Play your guitar!")
+            Log.audio.debug("Audio engine started successfully")
             
             // Start real audio visualization with tap
             startRealAudioVisualization()
         } catch {
-            print("Failed to start audio engine: \(error)")
+            Log.audio.error("Failed to start audio engine: \(error.localizedDescription, privacy: .public)")
             throw error
         }
     }
@@ -414,7 +447,7 @@ final class AudioEngineManager: AudioManaging {
         
         // Set bypass directly on the specific effect unit
         units.setBypass(for: effect.type, bypassed: isPedalboardBypassed || !effect.isEnabled)
-        print("toggleEffect: \(effect.type.rawValue) \(effect.isEnabled ? "enabled" : "bypassed")")
+        Log.audio.debug("toggleEffect: \(effect.type.rawValue, privacy: .public) \(effect.isEnabled ? "enabled" : "bypassed", privacy: .public)")
     }
 
     func updateEffectParameter(_ effect: EffectNode, key: String, value: Float) {
@@ -453,7 +486,7 @@ final class AudioEngineManager: AudioManaging {
         parametricEQBands = EQBand.defaultBands
     }
 
-    private func applyParametricEQ() {
+    func applyParametricEQ() {
         guard let eq = effectUnits?.equalizer else { return }
         for (index, band) in parametricEQBands.enumerated() where index < eq.bands.count {
             let unitBand = eq.bands[index]
@@ -489,165 +522,6 @@ final class AudioEngineManager: AudioManaging {
             amp.removeTap(onBus: 0)
             looperTapInstalled = false
         }
-    }
-
-    // MARK: - Tone Sharing
-
-    func makeToneDocument(named name: String) -> ToneDocument {
-        ToneDocument(name: name, chain: effectsChain, amp: ampSettings, eqBands: parametricEQBands)
-    }
-
-    func applyToneDocument(_ document: ToneDocument) {
-        let nodes = document.effectNodes
-        guard !nodes.isEmpty else { return }
-        effectsChain = nodes
-        var amp = document.ampSettings
-        if amp.cabinet == .impulse && cabinetIRName == nil { amp.cabinet = .twoByTwelve }
-        ampSettings = amp
-        var bands = parametricEQBands
-        for (index, gain) in document.eqGains.enumerated() where bands.indices.contains(index) {
-            bands[index].gain = max(-24, min(24, gain))
-        }
-        parametricEQBands = bands
-        rebuildEffectsChain()
-    }
-
-    // MARK: - Latency
-
-    /// Pick-to-ear delay: input + output hardware latency plus one buffer each way, in ms.
-    private(set) var roundTripLatencyMs: Double = 0
-    /// Buffer size the hardware actually granted, in ms.
-    private(set) var bufferDurationMs: Double = 0
-    /// Bluetooth headphones add 100–200 ms – far too much to play along to.
-    private(set) var isBluetoothOutput = false
-
-    func refreshLatency() {
-        #if os(iOS) || targetEnvironment(macCatalyst)
-        let session = AVAudioSession.sharedInstance()
-        bufferDurationMs = session.ioBufferDuration * 1000
-        roundTripLatencyMs = (session.inputLatency + session.outputLatency + 2 * session.ioBufferDuration) * 1000
-        let bluetooth: Set<AVAudioSession.Port> = [.bluetoothA2DP, .bluetoothLE, .bluetoothHFP]
-        isBluetoothOutput = session.currentRoute.outputs.contains { bluetooth.contains($0.portType) }
-        #endif
-    }
-
-    // MARK: - Amp & Cabinet
-
-    /// The amp at the end of the chain. Every change is heard immediately.
-    var ampSettings = AmpSettings() {
-        didSet { if ampSettings != oldValue { applyAmpSettings() } }
-    }
-
-    private func applyAmpSettings() {
-        guard let units = effectUnits else { return }
-        if let format = processingFormat { units.ampKernel.amp.setSampleRate(Float(format.sampleRate)) }
-        units.ampKernel.amp.apply(ampSettings)
-        units.amp.auAudioUnit.shouldBypassEffect = !ampSettings.isEnabled
-    }
-
-    /// Tone stack + cabinet response in dB, for drawing the amp's curve.
-    /// With an impulse response loaded, its measured response is added in.
-    func ampResponse(at frequencies: [Float]) -> [Float] {
-        var designed = ampSettings
-        let usesIR = designed.cabinet == .impulse && !cabinetIR.isEmpty
-        if designed.cabinet == .impulse { designed.cabinet = .direct }
-        var response = AmpDesign.response(for: designed, at: frequencies)
-        if usesIR, let rate = processingFormat?.sampleRate {
-            let ir = cabinetIR
-            for (index, f) in frequencies.enumerated() {
-                let w = 2 * Double.pi * Double(f) / rate
-                var re = 0.0, im = 0.0
-                for (n, h) in ir.enumerated() { re += Double(h) * cos(w * Double(n)); im -= Double(h) * sin(w * Double(n)) }
-                response[index] += Float(10 * log10(max(re * re + im * im, 1e-12)))
-            }
-        }
-        return response
-    }
-
-    /// Name of the loaded cabinet impulse response.
-    private(set) var cabinetIRName: String?
-    @ObservationIgnored private var cabinetIR: [Float] = []
-
-    /// Loads a speaker-cabinet impulse response: first channel, resampled to the engine's
-    /// rate, trimmed to 2048 taps and normalised so it doesn't change the overall level.
-    func loadCabinetIR(from url: URL) async throws {
-        guard let units = effectUnits, let format = processingFormat else { throw AudioEngineError.engineNotSetup }
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-        let file = try AVAudioFile(forReading: url)
-        guard let source = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(min(file.length, 96_000))) else {
-            throw AudioEngineError.bufferCreationFailed
-        }
-        try file.read(into: source, frameCount: source.frameCapacity)
-        guard let mono = AVAudioFormat(standardFormatWithSampleRate: format.sampleRate, channels: 1),
-              let converter = AVAudioConverter(from: source.format, to: mono),
-              let resampled = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: AVAudioFrameCount(Double(source.frameLength) * format.sampleRate / source.format.sampleRate) + 64) else {
-            throw AudioEngineError.bufferCreationFailed
-        }
-        nonisolated(unsafe) var consumed = false
-        var conversionError: NSError?
-        converter.convert(to: resampled, error: &conversionError) { _, status in
-            if consumed { status.pointee = .endOfStream; return nil }
-            consumed = true
-            status.pointee = .haveData
-            return source
-        }
-        if let conversionError { throw conversionError }
-        guard let data = resampled.floatChannelData?[0], resampled.frameLength > 0 else { throw AudioEngineError.bufferCreationFailed }
-        var taps = Array(UnsafeBufferPointer(start: data, count: min(Int(resampled.frameLength), AmpProcessor.maxIRLength)))
-        // Fade out the last 5% so the trim doesn't click; loudest frequency at unity gain
-        let fade = max(1, taps.count / 20)
-        for i in 0..<fade { taps[taps.count - 1 - i] *= Float(i) / Float(fade) }
-        taps = AmpProcessor.normalizedIR(taps, sampleRate: Float(format.sampleRate))
-
-        cabinetIR = taps
-        units.ampKernel.amp.loadIR(taps)
-        cabinetIRName = url.deletingPathExtension().lastPathComponent
-        ampSettings.cabinet = .impulse
-        applyAmpSettings()
-    }
-
-    /// Name of the loaded Neural Amp Modeler capture.
-    private(set) var neuralModelName: String?
-    /// Every capture ever loaded stays alive: the audio thread may still be using the previous one.
-    @ObservationIgnored private var neuralModels: [NeuralAmpModel] = []
-
-    /// Loads a Neural Amp Modeler capture (.nam, standard WaveNet) as the amp.
-    func loadNeuralModel(from url: URL) async throws {
-        guard let units = effectUnits else { throw AudioEngineError.engineNotSetup }
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-        let data = try Data(contentsOf: url)
-        let name = url.deletingPathExtension().lastPathComponent
-        // Parsing and pre-warming take a moment; keep it off the main thread
-        let model = try await Task.detached(priority: .userInitiated) {
-            try NeuralAmpModel(data: data, name: name)
-        }.value
-        neuralModels.append(model)
-        units.ampKernel.amp.setNeuralModel(model)
-        neuralModelName = name
-        ampSettings.model = .captured
-        applyAmpSettings()
-    }
-
-    // MARK: - Input Stage
-
-    /// Pickup & cable, buffer, volume pedal and noise gate.
-    var inputSettings = InputSettings() {
-        didSet { if inputSettings != oldValue { applyInputSettings() } }
-    }
-
-    private func applyInputSettings() {
-        effectUnits?.inputKernel.input.apply(inputSettings)
-    }
-
-    func inputResponse(at frequencies: [Float]) -> [Float] {
-        InputDesign.response(for: inputSettings, at: frequencies)
-    }
-
-    /// Mutes the output while tuning; the tuner still hears the guitar.
-    var isTunerMuted = false {
-        didSet { mainMixer?.outputVolume = isTunerMuted ? 0 : 1 }
     }
 
     // MARK: - Tone Suggestions
@@ -747,7 +621,7 @@ final class AudioEngineManager: AudioManaging {
 
         currentPreset = preset
         presetApplyCount += 1
-        print("applyPreset: Applied preset '\(preset.name)'")
+        Log.audio.debug("applyPreset: \(preset.name, privacy: .public)")
     }
 
     /// Rebuild effects chain with current settings
@@ -757,150 +631,7 @@ final class AudioEngineManager: AudioManaging {
         for effect in effectsChain {
             applyEffectParameters(effect)
         }
-        print("rebuildEffectsChain: Effects chain updated")
-    }
-
-    // MARK: - Audition (Learn tab)
-
-    /// Plays the demo riff through `type` alone, with settings exaggerated enough to hear
-    /// clearly. The player's chain and EQ are saved and restored by `stopAudition()`.
-    func startAudition(_ type: EffectType) {
-        guard canPlayDemoRiff else { return }
-
-        if auditionSnapshot == nil {
-            let savedChain = effectsChain.map {
-                EffectNode(id: $0.id, type: $0.type, isEnabled: $0.isEnabled, parameters: $0.parameters)
-            }
-            auditionSnapshot = (savedChain, parametricEQBands, !isDemoRiffPlaying, isPedalboardBypassed)
-        }
-        isPedalboardBypassed = false
-
-        var parameters = type.defaultParameters
-        for (key, value) in type.auditionParameters { parameters[key] = value }
-        effectsChain = [EffectNode(type: type, isEnabled: true, parameters: parameters)]
-        if type == .equalizer {
-            var bands = EQBand.defaultBands
-            bands[0].gain = parameters["bass"] ?? 0
-            bands[4].gain = parameters["mid"] ?? 0
-            bands[9].gain = parameters["treble"] ?? 0
-            parametricEQBands = bands
-        }
-        if let node = effectsChain.first { applyEffectParameters(node) }
-
-        auditionEffect = type
-        isAuditionBypassed = false
-        startDemoRiff()
-    }
-
-    /// A/B: bypass the auditioned pedal to hear the dry riff, or bring it back.
-    func setAuditionBypassed(_ bypassed: Bool) {
-        guard let type = auditionEffect, let node = effectsChain.first(where: { $0.type == type }) else { return }
-        if node.isEnabled == bypassed { toggleEffect(node) }
-        isAuditionBypassed = bypassed
-    }
-
-    func stopAudition() {
-        guard let snapshot = auditionSnapshot else { return }
-        auditionSnapshot = nil
-        auditionEffect = nil
-        isAuditionBypassed = false
-        if snapshot.startedDemo { stopDemoRiff() }
-        effectsChain = snapshot.chain
-        parametricEQBands = snapshot.eqBands
-        isPedalboardBypassed = snapshot.bypassed
-        for effect in effectsChain { applyEffectParameters(effect) }
-        syncBypassStates()
-    }
-
-    // MARK: - Demo Riff
-
-    var isDemoRiffPlaying: Bool { demoRiff.isPlaying }
-
-    var selectedDemoRiff: DemoRiff {
-        get { demoRiff.riff }
-        set {
-            guard newValue != demoRiff.riff else { return }
-            let wasPlaying = isDemoRiffPlaying
-            if wasPlaying { stopDemoRiff() }
-            demoRiff.riff = newValue
-            if wasPlaying { startDemoRiff() }
-        }
-    }
-
-    var demoRecordings: [String] { demoRiff.recordings.map(Self.recordingName) }
-    var selectedDemoRecording: String? { demoRiff.selectedRecording.map(Self.recordingName) }
-
-    private nonisolated static func recordingName(_ url: URL) -> String {
-        url.deletingPathExtension().lastPathComponent
-    }
-
-    /// Imports clean recordings (the player's own) and plays the first through the pedals.
-    func importDemoRecordings(from urls: [URL]) throws {
-        stopDemoRiff()
-        try demoRiff.importRecordings(from: urls) { url, copy in
-            let accessing = url.startAccessingSecurityScopedResource()
-            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-            try copy()
-        }
-        errorMessage = nil
-        startDemoRiff()
-    }
-
-    func playDemoRecording(named name: String) {
-        guard let url = demoRiff.recordings.first(where: { Self.recordingName($0) == name }) else { return }
-        stopDemoRiff()
-        demoRiff.select(url)
-        startDemoRiff()
-    }
-
-    func removeDemoRecording(named name: String) {
-        guard let url = demoRiff.recordings.first(where: { Self.recordingName($0) == name }) else { return }
-        let wasPlaying = isDemoRiffPlaying && demoRiff.selectedRecording == url
-        if wasPlaying { stopDemoRiff() }
-        demoRiff.removeRecording(url)
-        if wasPlaying { startDemoRiff() }
-    }
-
-    /// True once the effects chain exists, i.e. there is somewhere to send the riff.
-    var canPlayDemoRiff: Bool { demoRiff.isReady }
-
-    func toggleDemoRiff() {
-        isDemoRiffPlaying ? stopDemoRiff() : startDemoRiff()
-    }
-
-    /// Loops the demo riff into the effects chain; the tuner, spectrum and chord detector follow it.
-    func startDemoRiff() {
-        guard !isDemoRiffPlaying, demoRiff.isReady else { return }
-        if !isRunning { try? start() }
-        guard isRunning else { return }
-        inputNode?.removeTap(onBus: 0)   // the analysis tap moves from the mic to the riff
-        tapInstalled = false
-        formatConverterMixer?.outputVolume = 0
-        AudioSampleBuffer.shared.reset()
-        do {
-            try demoRiff.play(analysisTap: audioTapCallback)
-        } catch {
-            errorMessage = "Couldn't load the demo riff: \(error.localizedDescription)"
-            if demoRiff.riff == .recording {
-                // A missing or unreadable recording: fall back to the original riff
-                demoRiff.riff = .originalArpeggio
-                try? demoRiff.play(analysisTap: audioTapCallback)
-            }
-            if !demoRiff.isPlaying {
-                formatConverterMixer?.outputVolume = 1
-                startRealAudioVisualization()
-            }
-        }
-        startVisualizationPolling()
-    }
-
-    func stopDemoRiff() {
-        guard isDemoRiffPlaying else { return }
-        demoRiff.stop()
-        formatConverterMixer?.outputVolume = 1
-        AudioSampleBuffer.shared.reset()
-        // Hand the analysis tap back to the microphone
-        if isRunning { startRealAudioVisualization() }
+        Log.audio.debug("rebuildEffectsChain: Effects chain updated")
     }
 
     // MARK: - Private Helpers
@@ -921,7 +652,7 @@ final class AudioEngineManager: AudioManaging {
             try? session.setPreferredIOBufferDuration(0.005)
             try session.setActive(true)
         }.value
-        print("setupEngine: Audio session configured")
+        Log.audio.debug("setupEngine: Audio session configured")
     }
     #endif
 
@@ -952,13 +683,13 @@ final class AudioEngineManager: AudioManaging {
         engine.attach(units.delay)
         engine.attach(units.reverb)
         
-        print("attachAllEffects: All effect units attached")
+        Log.audio.debug("attachAllEffects: All effect units attached")
     }
 
     /// Wires fxInputMixer through **every** pedal in `effectsChain` (enabled or not) in order.
     /// Enabling or bypassing a pedal then only flips `bypass` – no reconnection, no dropout.
     /// Rewiring happens only when the chain's composition or order actually changes.
-    private func rebuildAudioChain() {
+    func rebuildAudioChain() {
         guard let engine = audioEngine,
               let mixer = mainMixer,
               let fxMixer = fxInputMixer,
@@ -999,7 +730,7 @@ final class AudioEngineManager: AudioManaging {
         // Newly added pedals (AI, presets, Add Pedal) start from their own settings
         for effect in effectsChain { applyEffectParameters(effect) }
         syncBypassStates()
-        print("rebuildAudioChain: Wired \(order.count) pedals: \(order.map(\.abbreviation).joined(separator: " → "))")
+        Log.audio.debug("rebuildAudioChain: wired \(order.map(\.abbreviation).joined(separator: " → "), privacy: .public)")
 
         guard wasRunning else { return }
         engine.prepare()
@@ -1012,460 +743,7 @@ final class AudioEngineManager: AudioManaging {
             if resumeBackingTrack { backingTrack.playBackingTrack() }
         } catch {
             isRunning = false
-            print("rebuildAudioChain: Failed to restart engine: \(error)")
+            Log.audio.error("rebuildAudioChain: failed to restart engine: \(error.localizedDescription, privacy: .public)")
         }
-    }
-
-    // MARK: - Signal Probe
-
-    /// Starts watching the signal just before and just after one pedal.
-    /// `owner` identifies the view asking: views are rebuilt when you switch pedals or a preset
-    /// replaces the chain, and the old view's "stop" can arrive after the new view's "start".
-    func probe(_ type: EffectType, owner: UUID) {
-        probeOwner = owner
-        guard type != probedEffectType else { return }
-        probedEffectType = type
-        installProbeTaps()
-    }
-
-    func probeSnapshot() -> (before: SignalCapture, after: SignalCapture) {
-        signalProbe.snapshot()
-    }
-
-    /// Stops the probe – only if `owner` is still the view that started it.
-    func stopProbe(owner: UUID) {
-        guard probeOwner == owner else { return }
-        probeOwner = nil
-        probedEffectType = nil
-        installProbeTaps()
-    }
-
-    @ObservationIgnored private var probeOwner: UUID?
-
-    /// Taps the node that feeds the probed pedal ("before") and the pedal itself ("after").
-    /// Re-run after every rewire, since the node in front of a pedal can change.
-    private func installProbeTaps() {
-        for node in probedNodes { node.removeTap(onBus: 0) }
-        probedNodes = []
-        signalProbe.reset()
-
-        guard let type = probedEffectType,
-              let units = effectUnits,
-              let fxMixer = fxInputMixer,
-              let order = connectedEffectOrder,
-              let index = order.firstIndex(of: type),
-              let after = units.audioUnit(for: type) else { return }
-        let before: AVAudioNode = index == 0
-            ? units.wah
-            : units.audioUnit(for: order[index - 1]) ?? fxMixer
-
-        before.installTap(onBus: 0, bufferSize: 1024, format: nil,
-                          block: SignalProbeStore.tapBlock(for: signalProbe, side: .before))
-        after.installTap(onBus: 0, bufferSize: 1024, format: nil,
-                         block: SignalProbeStore.tapBlock(for: signalProbe, side: .after))
-        probedNodes = [before, after]
-    }
-
-    /// Coalesces several edits in one turn of the run loop (e.g. append + sort) into one rewire.
-    private func scheduleAudioChainRebuild() {
-        guard !isChainRebuildScheduled else { return }
-        isChainRebuildScheduled = true
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.isChainRebuildScheduled = false
-            self.rebuildAudioChain()
-        }
-    }
-
-    /// Gain pedals: Drive, Tone and Level knobs (0–100) straight onto the waveshaper.
-    private func setDrive(_ kernel: ModulationKernel, _ effect: EffectNode, driveKey: String) {
-        kernel.depth = (effect.parameters[driveKey] ?? 50) / 100
-        kernel.tone = (effect.parameters["tone"] ?? 50) / 100
-        kernel.level = (effect.parameters["level"] ?? 50) / 100
-    }
-
-    private func applyEffectParameters(_ effect: EffectNode) {
-        guard let units = effectUnits else { return }
-
-        switch effect.type {
-        case .compressor:
-            // Apple Dynamics Processor parameters (set via C AU API):
-            //   param 0 = Threshold    (-40 to +20 dB,  default -20)
-            //   param 1 = HeadRoom     (0.1 to 40 dB,   default 5)  — relates to ratio
-            //   param 4 = AttackTime   (0.0001 to 0.2s, default 0.001)
-            //   param 5 = ReleaseTime  (0.01 to 3s,     default 0.024)
-            //   param 6 = MasterGain   (-40 to +40 dB,  default 0)  — makeup gain
-            let threshold = effect.parameters["threshold"] ?? -20
-            let ratio     = effect.parameters["ratio"]     ?? 4
-            let attackMs  = effect.parameters["attack"]    ?? 10
-            let releaseMs = effect.parameters["release"]   ?? 100
-            // Map ratio (1–20) to headRoom (40–2 dB): higher ratio = tighter = less headroom
-            let headRoom  = max(2.0, min(40.0, 40.0 / ratio))
-            let au = units.compressor.audioUnit
-            AudioUnitSetParameter(au, 0, kAudioUnitScope_Global, 0, threshold, 0)
-            AudioUnitSetParameter(au, 1, kAudioUnitScope_Global, 0, headRoom, 0)
-            AudioUnitSetParameter(au, 4, kAudioUnitScope_Global, 0, attackMs / 1000.0, 0)
-            AudioUnitSetParameter(au, 5, kAudioUnitScope_Global, 0, releaseMs / 1000.0, 0)
-
-        case .equalizer:
-            // A graph rebuild must not overwrite edits made on the parametric curve.
-            applyParametricEQ()
-
-        case .overdrive:
-            setDrive(units.overdriveKernel, effect, driveKey: "drive")
-
-        case .distortion:
-            setDrive(units.distortionKernel, effect, driveKey: "drive")
-
-        case .fuzz:
-            setDrive(units.fuzzKernel, effect, driveKey: "fuzz")
-
-        case .chorus:
-            let kernel = units.chorusKernel
-            kernel.rate = effect.parameters["rate"] ?? 1.0          // 0.1–10 Hz
-            kernel.depth = (effect.parameters["depth"] ?? 50) / 100
-            kernel.mix = (effect.parameters["mix"] ?? 50) / 100
-
-        case .phaser:
-            let kernel = units.phaserKernel
-            kernel.rate = effect.parameters["rate"] ?? 0.5          // 0.1–5 Hz
-            kernel.depth = (effect.parameters["depth"] ?? 50) / 100
-            kernel.feedback = (effect.parameters["feedback"] ?? 30) / 100 * 0.9
-
-        case .flanger:
-            let kernel = units.flangerKernel
-            kernel.rate = effect.parameters["rate"] ?? 0.3          // 0.1–2 Hz
-            kernel.depth = (effect.parameters["depth"] ?? 50) / 100
-            kernel.feedback = (effect.parameters["feedback"] ?? 50) / 100 * 0.9
-
-        case .tremolo:
-            let kernel = units.tremoloKernel
-            kernel.rate = effect.parameters["rate"] ?? 5.0          // 0.5–15 Hz
-            kernel.depth = (effect.parameters["depth"] ?? 50) / 100
-
-        case .delay:
-            units.delayKernel.rate = effect.parameters["time"] ?? 0.3
-            units.delayKernel.feedback = (effect.parameters["feedback"] ?? 40) / 100
-            units.delayKernel.mix = (effect.parameters["mix"] ?? 30) / 100
-
-        case .reverb:
-            units.reverb.wetDryMix = effect.parameters["wetDryMix"] ?? 40
-            if let decay = effect.parameters["decay"] {
-                selectReverbPreset(decaySeconds: decay)
-            }
-        }
-    }
-
-    // MARK: - Reverb Preset Selection
-
-    /// Select an appropriate AVAudioUnitReverb preset based on decay time
-    private func selectReverbPreset(decaySeconds: Float) {
-        guard let units = effectUnits else { return }
-        let preset: AVAudioUnitReverbPreset
-        if decaySeconds < 0.8 {
-            preset = .smallRoom
-        } else if decaySeconds < 1.5 {
-            preset = .mediumRoom
-        } else if decaySeconds < 2.5 {
-            preset = .mediumHall
-        } else if decaySeconds < 4.0 {
-            preset = .largeHall
-        } else {
-            preset = .cathedral
-        }
-        units.reverb.loadFactoryPreset(preset)
-    }
-
-    /// Sync bypass state for all effects
-    private func syncBypassStates() {
-        guard let units = effectUnits else { return }
-        
-        // Create a set of enabled effect types
-        var enabledTypes = Set<EffectType>()
-        for effect in effectsChain where effect.isEnabled && !isPedalboardBypassed {
-            enabledTypes.insert(effect.type)
-        }
-        
-        // Set bypass for all effect units
-        units.compressor.bypass = !enabledTypes.contains(.compressor)
-        units.overdrive.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.overdrive)
-        units.distortion.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.distortion)
-        units.fuzz.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.fuzz)
-        for type in [EffectType.chorus, .phaser, .flanger, .tremolo] {
-            units.setBypass(for: type, bypassed: !enabledTypes.contains(type))
-        }
-        units.delay.auAudioUnit.shouldBypassEffect = !enabledTypes.contains(.delay)
-        units.reverb.bypass = !enabledTypes.contains(.reverb)
-        units.equalizer?.bypass = !enabledTypes.contains(.equalizer)
-        units.wah.auAudioUnit.shouldBypassEffect = isPedalboardBypassed || !isWahActive
-        
-        print("syncBypassStates: Bypass states synchronized")
-    }
-
-    // MARK: - Audio Visualization
-
-    private var visualizationPhase: Float = 0
-    private var audioSampleBuffer: [Float] = []
-    private var analysisFrameCounter = 0
-    private let analysisFrameSkip = 3 // Only analyze every Nth frame for performance
-
-    private func startRealAudioVisualization() {
-        stopVisualization()
-        AudioSampleBuffer.shared.reset()
-        startVisualizationPolling()
-
-        guard !isDemoRiffPlaying else { return }
-
-        // Refresh device detection
-        detectAudioInputDevices()
-
-        guard let input = inputNode else {
-            print("⚠️ No input node available - visualization disabled")
-            return
-        }
-
-        // Get and validate input format
-        let inputFormat = input.outputFormat(forBus: 0)
-
-        // Validate format to prevent crashes
-        guard inputFormat.sampleRate > 0,
-              inputFormat.sampleRate.isFinite,
-              inputFormat.sampleRate <= 192000,
-              inputFormat.channelCount > 0,
-              inputFormat.channelCount <= 8 else {
-            print("⚠️ Invalid input format: \(inputFormat.sampleRate)Hz, \(inputFormat.channelCount)ch")
-            return
-        }
-
-        print("📊 Installing audio tap: \(inputFormat.sampleRate)Hz, \(inputFormat.channelCount)ch")
-
-        input.removeTap(onBus: 0)
-
-        // CRITICAL FIX for Swift 6 Strict Concurrency:
-        // Use a nonisolated function reference to completely break MainActor inheritance.
-        // The closure passed to installTap would inherit @MainActor isolation from this class,
-        // causing a crash when the closure executes on the audio thread.
-        // By using a global function reference, we ensure no actor isolation is inherited.
-        input.installTap(onBus: 0, bufferSize: 1024, format: inputFormat, block: audioTapCallback)
-
-        tapInstalled = true
-
-        // Start polling using MainActor-safe async loop
-        startVisualizationPolling()
-
-        print("✅ Audio visualization started successfully")
-    }
-
-    private func startVisualizationPolling() {
-        visualizationTask?.cancel()
-        // Use a simple async loop that's fully MainActor-isolated
-        visualizationTask = Task {
-            await runVisualizationLoop()
-        }
-    }
-
-    private func runVisualizationLoop() async {
-        var frameCounter = 0
-        while !Task.isCancelled && isRunning {
-            let data = AudioSampleBuffer.shared.read()
-
-            inputLevel = data.rms
-            outputLevel = outputLevelStore.rms
-            waveformSamples = data.waveform
-
-            // Feed audio samples to FFT/chord every 3rd frame (~10 Hz at 30fps base rate)
-            // 10fps is more than enough for educational spectrum + pitch display
-            frameCounter += 1
-            if frameCounter >= 3 && !data.samples.isEmpty && data.samples.count >= 2048 {
-                frameCounter = 0
-                latestAudioSamples = data.samples
-
-                if let callback = onAudioSamplesAvailable {
-                    callback(data.samples)
-                }
-            }
-
-            // 33ms = ~30fps — half the @Observable update rate vs 60fps, no perceptible difference
-            try? await Task.sleep(for: .milliseconds(33))
-        }
-    }
-
-    private var visualizationTask: Task<Void, Never>?
-
-
-    private func stopVisualization() {
-        visualizationTask?.cancel()
-        visualizationTask = nil
-        if tapInstalled {
-            inputNode?.removeTap(onBus: 0)
-            tapInstalled = false
-        }
-        audioSampleBuffer.removeAll()
-    }
-}
-
-// MARK: - Audio Input Device Detection Extension
-
-extension AudioEngineManager {
-
-    /// Detect and update available audio input devices
-    /// This method is safe to call from MainActor - updates properties directly
-    func detectAudioInputDevices() {
-        #if os(macOS)
-        let result = AudioEngineManager.collectMacOSInputDevices()
-        #else
-        let result = AudioEngineManager.collectIOSInputDevices()
-        #endif
-
-        // Update properties directly (we're on MainActor)
-        self.availableInputDevices = result.devices
-        self.currentInputDeviceName = result.currentName
-        self.currentInputDeviceType = result.currentType
-
-        print("detectAudioInputDevices: Found \(result.devices.count) devices, current: \(result.currentName)")
-    }
-
-    // MARK: - Static Device Collection (Thread-Safe, No Self Capture)
-
-    /// Result type for device detection - avoids any self capture
-    private struct DeviceDetectionResult {
-        let devices: [AudioInputDevice]
-        let currentName: String
-        let currentType: AudioInputDeviceType
-    }
-
-    #if os(macOS)
-    /// Static function to collect macOS input devices - no MainActor dependency
-    private static func collectMacOSInputDevices() -> DeviceDetectionResult {
-        let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInMicrophone, .externalUnknown],
-            mediaType: .audio,
-            position: .unspecified
-        )
-
-        var devices: [AudioInputDevice] = []
-
-        for device in discoverySession.devices {
-            let deviceType = classifyInputDeviceStatic(name: device.localizedName)
-            devices.append(AudioInputDevice(
-                id: device.uniqueID,
-                name: device.localizedName,
-                type: deviceType
-            ))
-        }
-
-        let currentName: String
-        let currentType: AudioInputDeviceType
-
-        if let defaultDevice = AVCaptureDevice.default(for: .audio) {
-            currentName = defaultDevice.localizedName
-            currentType = classifyInputDeviceStatic(name: defaultDevice.localizedName)
-        } else if let firstDevice = devices.first {
-            currentName = firstDevice.name
-            currentType = firstDevice.type
-        } else {
-            currentName = "No Input"
-            currentType = .none
-        }
-
-        return DeviceDetectionResult(devices: devices, currentName: currentName, currentType: currentType)
-    }
-    #endif
-
-    #if os(iOS) || targetEnvironment(macCatalyst)
-    /// Static function to collect iOS input devices - no MainActor dependency
-    private static func collectIOSInputDevices() -> DeviceDetectionResult {
-        let session = AVAudioSession.sharedInstance()
-        var devices: [AudioInputDevice] = []
-
-        if let availableInputs = session.availableInputs {
-            for input in availableInputs {
-                let deviceType = classifyIOSPortStatic(portType: input.portType)
-                devices.append(AudioInputDevice(
-                    id: input.uid,
-                    name: input.portName,
-                    type: deviceType
-                ))
-            }
-        }
-
-        let currentName: String
-        let currentType: AudioInputDeviceType
-
-        if let currentInput = session.currentRoute.inputs.first {
-            currentName = currentInput.portName
-            currentType = classifyIOSPortStatic(portType: currentInput.portType)
-        } else if let firstDevice = devices.first {
-            currentName = firstDevice.name
-            currentType = firstDevice.type
-        } else {
-            currentName = "No Input"
-            currentType = .none
-        }
-
-        return DeviceDetectionResult(devices: devices, currentName: currentName, currentType: currentType)
-    }
-
-    /// Static port classification - no self dependency
-    private static func classifyIOSPortStatic(portType: AVAudioSession.Port) -> AudioInputDeviceType {
-        switch portType {
-        case .builtInMic:
-            return .builtInMicrophone
-        case .headsetMic:
-            return .headset
-        case .usbAudio:
-            return .usbAudioInterface
-        case .bluetoothHFP, .bluetoothA2DP, .bluetoothLE:
-            return .bluetooth
-        default:
-            return .external
-        }
-    }
-    #endif
-
-    /// Static device classification - no self dependency
-    private static func classifyInputDeviceStatic(name: String) -> AudioInputDeviceType {
-        let lowercaseName = name.lowercased()
-
-        // USB Audio Interfaces
-        if lowercaseName.contains("scarlett") ||
-           lowercaseName.contains("focusrite") ||
-           lowercaseName.contains("steinberg") ||
-           lowercaseName.contains("presonus") ||
-           lowercaseName.contains("behringer") ||
-           lowercaseName.contains("motu") ||
-           lowercaseName.contains("apogee") ||
-           lowercaseName.contains("universal audio") ||
-           lowercaseName.contains("usb audio") ||
-           lowercaseName.contains("audio interface") {
-            return .usbAudioInterface
-        }
-
-        // Built-in microphone
-        if lowercaseName.contains("built-in") ||
-           lowercaseName.contains("internal") ||
-           lowercaseName.contains("macbook") ||
-           lowercaseName.contains("imac") {
-            return .builtInMicrophone
-        }
-
-        // Headsets
-        if lowercaseName.contains("headset") ||
-           lowercaseName.contains("airpods") ||
-           lowercaseName.contains("earbuds") {
-            return .headset
-        }
-
-        // Bluetooth
-        if lowercaseName.contains("bluetooth") {
-            return .bluetooth
-        }
-
-        return .external
-    }
-
-    /// Refresh input device list
-    func refreshInputDevices() {
-        detectAudioInputDevices()
     }
 }

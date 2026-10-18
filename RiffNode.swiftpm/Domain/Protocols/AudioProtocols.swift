@@ -246,6 +246,7 @@ protocol SongAnalyzing: Sendable {
 /// A MIDI foot controller.
 @MainActor
 protocol FootswitchListening: AnyObject {
+    var onEvent: (@MainActor (FootswitchEvent) -> Void)? { get set }
     var sourceNames: [String] { get }
     var lastMessage: String? { get }
     func start()

@@ -4,7 +4,7 @@ import Observation
 // MARK: - Gesture Binding Row View
 
 struct GestureBindingRow: View {
-    let gesture: VisionGestureController.Gesture
+    let gesture: FaceGesture
     @Binding var action: PerformanceGestureAction
 
     var body: some View {

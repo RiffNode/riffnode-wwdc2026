@@ -13,8 +13,8 @@ struct MainInterfaceView: View {
         containerWidth < 1100 ? 320 : 380
     }
 
-    init(engine: any AudioManaging, presetService: PresetProviding) {
-        _viewModel = State(initialValue: MainViewModel(engine: engine, presetService: presetService))
+    init(dependencies: AppDependencies) {
+        _viewModel = State(initialValue: MainViewModel(dependencies: dependencies))
     }
 
     var body: some View {
@@ -42,7 +42,8 @@ struct MainInterfaceView: View {
                             InputSourceCard(engine: engine, chordDetector: viewModel.chordDetector)
 
                             // Play along with a song
-                            BackingTrackView(player: engine.playAlong, metronome: engine.metronomeControls)
+                            BackingTrackView(player: engine.playAlong, metronome: engine.metronomeControls,
+                                             music: viewModel.musicApp, analyzer: viewModel.songAnalyzer)
 
                             // Looper and metronome
                             PracticeCard(looper: engine.looperControls,
@@ -83,7 +84,7 @@ struct MainInterfaceView: View {
                                 .padding()
                             }
                         case .learnEffects:
-                            EffectGuideView(engine: engine)
+                            EffectGuideView(guideService: viewModel.effectGuide, engine: engine)
                         }
                     }
                     .frame(maxHeight: .infinity, alignment: .top)
