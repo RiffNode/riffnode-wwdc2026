@@ -9,12 +9,12 @@ extension AudioEngineManager {
 
     /// Plays the demo riff through `type` alone, with settings exaggerated enough to hear
     /// clearly. The player's chain and EQ are saved and restored by `stopAudition()`.
-    func startAudition(_ type: EffectType) {
+    func startAudition(_ type: EffectType, modelID: String?) {
         guard canPlayDemoRiff else { return }
 
         if auditionSnapshot == nil {
             let savedChain = effectsChain.map {
-                EffectNode(id: $0.id, type: $0.type, isEnabled: $0.isEnabled, parameters: $0.parameters)
+                EffectNode(id: $0.id, type: $0.type, isEnabled: $0.isEnabled, parameters: $0.parameters, modelID: $0.modelID)
             }
             auditionSnapshot = (savedChain, parametricEQBands, !isDemoRiffPlaying, isPedalboardBypassed)
         }
@@ -22,7 +22,7 @@ extension AudioEngineManager {
 
         var parameters = type.defaultParameters
         for (key, value) in type.auditionParameters { parameters[key] = value }
-        effectsChain = [EffectNode(type: type, isEnabled: true, parameters: parameters)]
+        effectsChain = [EffectNode(type: type, isEnabled: true, parameters: parameters, modelID: modelID)]
         if type == .equalizer {
             var bands = EQBand.defaultBands
             bands[0].gain = parameters["bass"] ?? 0
@@ -33,6 +33,7 @@ extension AudioEngineManager {
         if let node = effectsChain.first { applyEffectParameters(node) }
 
         auditionEffect = type
+        auditionModelID = effectsChain.first?.modelID
         isAuditionBypassed = false
         startDemoRiff()
     }
@@ -48,6 +49,7 @@ extension AudioEngineManager {
         guard let snapshot = auditionSnapshot else { return }
         auditionSnapshot = nil
         auditionEffect = nil
+        auditionModelID = nil
         isAuditionBypassed = false
         if snapshot.startedDemo { stopDemoRiff() }
         effectsChain = snapshot.chain

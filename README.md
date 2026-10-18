@@ -147,6 +147,7 @@ Pedal and amp names, panels and enclosures are RiffNode's own – no logos or co
 ### On-device AI
 
 - **Tone Assistant** – chat in plain English. Commands that name a pedal ("more reverb") run instantly and exactly on device; described sounds ("Comfortably Numb solo") go to Foundation Models, which sketches the sound with `@Generable` (style, gain, space, signature pedals) while a recipe book sets the knobs – the model recognises music well but picks poor raw numbers. Output is streamed, so the chat shows what the model is doing.
+- **Learn** – four chapters picked from big cards. *Build a Board* walks round a real pedalboard – guitar cable, tuner, buffer, pedal order, patch cables, power, amp – with a cable-length slider that moves the pickup's cutoff, a current budget for your own pedals and a daisy-chain ground loop you can see. The *Pedal Library* shows the twenty classics as real-looking pedals to hear (A/B against dry) and drop onto your board; *Effect Types* and *Sound Science* explain the families and the physics.
 - **Signal Lab** – taps on both sides of the selected pedal show its waveform, volume envelope and spectrum before and after, plus peakiness, loudness range, brightness and gap measurements.
 - **Play Along** – a built-in groove in any minor key and tempo with chord highlighting and the scale to solo with, your own songs, or Apple Music (controlled in-app on iPad) and Spotify playing alongside.
 - **Honest fallback** – RiffNode checks `SystemLanguageModel.availability`. Without Apple Intelligence an offline tone matcher answers instead, and every reply is labelled with which one responded.
@@ -188,8 +189,11 @@ Pedal and amp names, panels and enclosures are RiffNode's own – no logos or co
     <td><img src="screenshots/mac_cable.jpg" alt="Guitar input panel on Mac: 40 ft of cable, buffer, volume pedal and noise gate, with the pickup and cable response rolling off above 2.8 kHz"><br><sub><b>Guitar &amp; cable</b> – tone suck, measured: f = 1/(2π√LC)</sub></td>
   </tr>
   <tr>
-    <td><img src="screenshots/mac_learn.jpg" alt="Learn tab on Mac auditioning Overdrive with the live Signal Lab showing the input and the rounded, clipped output"><br><sub><b>Learn</b> – hear a pedal on its own and watch what it does to the wave</sub></td>
+    <td><img src="screenshots/mac_learn.jpg" alt="Learn tab on Mac: the Pedal Library, a wall of twenty classic stompboxes with the Tube Steamer open – what its circuit does, its gain, clipping and current draw, Hear it and Use on my board"><br><sub><b>Pedal Library</b> – twenty classics: see the circuit, hear it, put it on your board</sub></td>
     <td><img src="screenshots/mac_stage.jpg" alt="Stage Mode on Mac: a realistic pedalboard on aluminium rails with a tuner first, nine classic pedals joined by patch cables and power leads, guitar in on the right and the amp on the left"><br><sub><b>Stage Mode</b> – a real board: tuner first, patch cables, power, one tap to stomp</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="screenshots/mac_board_guide.jpg" alt="Learn tab on Mac: Build a Board, a small pedalboard diagram with numbered spots on the guitar cable, tuner, buffer, pedals, patch cable, power brick and amp, and the Guitar and Cable step with its cable-length explorer"><br><sub><b>Build a Board</b> – a real pedalboard, one numbered part at a time</sub></td>
   </tr>
 </table>
 

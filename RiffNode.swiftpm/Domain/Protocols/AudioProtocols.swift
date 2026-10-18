@@ -137,8 +137,11 @@ protocol DemoRiffPlaying: AnyObject {
 @MainActor
 protocol EffectAuditioning: AnyObject {
     var auditionEffect: EffectType? { get }
+    /// The classic pedal being auditioned, when one was asked for.
+    var auditionModelID: String? { get }
     var isAuditionBypassed: Bool { get }
-    func startAudition(_ type: EffectType)
+    /// Plays the demo riff through this pedal alone – as a particular classic model if given.
+    func startAudition(_ type: EffectType, modelID: String?)
     func setAuditionBypassed(_ bypassed: Bool)
     func stopAudition()
 }
@@ -158,6 +161,10 @@ protocol ExpressionControlling: AnyObject {
     /// nil turns the wah off; 0…1 is the pedal position (heel → toe).
     func setWah(_ position: Float?)
     func setExpressionValue(_ value: Float, for effectType: EffectType)
+}
+
+extension EffectAuditioning {
+    func startAudition(_ type: EffectType) { startAudition(type, modelID: nil) }
 }
 
 // MARK: - Play Along

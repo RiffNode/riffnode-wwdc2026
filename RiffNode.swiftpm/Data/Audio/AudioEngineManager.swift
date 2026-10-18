@@ -94,6 +94,7 @@ final class AudioEngineManager: AudioManaging {
     // Audition – hear one effect on its own, A/B against the dry riff (Learn tab)
     var auditionEffect: EffectType?
     var isAuditionBypassed = false
+    var auditionModelID: String?
     @ObservationIgnored var auditionSnapshot: (chain: [EffectNode], eqBands: [EQBand], startedDemo: Bool, bypassed: Bool)?
 
     // Demo source – a clean performance or the original synthesized arpeggio.

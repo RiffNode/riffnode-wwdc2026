@@ -149,6 +149,7 @@
 ### 裝置上的 AI 與分析
 
 - **Tone Assistant** —— 用一般英文聊天。點名踏板的指令（「more reverb」）在本機即時、精準處理；描述性的請求（「Comfortably Numb solo」）交給 Foundation Models，以 `@Generable` 描繪出聲音的輪廓（風格、gain、空間感、代表性踏板），再由「食譜」設定旋鈕 —— 實測模型很會辨認音樂，但直接給數字並不可靠。輸出採串流，聊天畫面會顯示模型正在做什麼。
+- **Learn** —— 四個章節，從大卡片挑選。*組一塊踏板盤* 帶你走過真實踏板盤的每個部分：吉他導線、調音器、buffer、踏板順序、跳線、電源、音箱；可以拖動導線長度看拾音器截止頻率變化、計算你自己踏板的耗電，並看到串接電源造成的接地迴路雜音。*踏板圖鑑* 把二十顆經典做成擬真踏板，可以試聽（與乾聲 A/B）並放上踏板盤；*效果器類型* 與 *聲音科學* 解說各家族與背後的物理。
 - **Signal Lab** —— 在選取的踏板前後各裝一個 tap，顯示處理前後的波形、音量包絡和頻譜，並量測 peakiness、音量範圍、亮度和音符間的空隙。
 - **Play Along** —— 內建 groove 可選任意小調與速度，會標示目前的和弦和適合 solo 的音階；也可以播自己的歌，或讓 Apple Music（iPad 上可直接控制）與 Spotify 一起播放。
 - **誠實的備援** —— RiffNode 會檢查 `SystemLanguageModel.availability`。沒有 Apple Intelligence 時改由離線的音色比對回答，每則回覆都會標示是哪一個引擎回答的。
@@ -190,8 +191,11 @@
     <td><img src="screenshots/mac_cable.jpg" alt="Mac 上的吉他輸入面板：40 英尺導線、buffer、音量踏板與 noise gate，頻率響應在 2.8 kHz 以上滾降"><br><sub><b>吉他與導線</b> —— 量得到的 tone suck：f = 1/(2π√LC)</sub></td>
   </tr>
   <tr>
-    <td><img src="screenshots/mac_learn.jpg" alt="Mac 上的 Learn 分頁：試聽 Overdrive，即時 Signal Lab 顯示輸入與被圓滑削波的輸出"><br><sub><b>Learn</b> —— 單獨聽一顆踏板，同時看它對波形做了什麼</sub></td>
+    <td><img src="screenshots/mac_learn.jpg" alt="Mac 上的 Learn 分頁：踏板圖鑑，二十顆經典踏板排成一面牆，打開 Tube Steamer 顯示電路原理、增益、削波方式與耗電，以及試聽與放到踏板盤的按鈕"><br><sub><b>踏板圖鑑</b> —— 二十顆經典：看電路、聽聲音、放上你的踏板盤</sub></td>
     <td><img src="screenshots/mac_stage.jpg" alt="Mac 上的 Stage Mode：鋁條板面上的擬真踏板盤，第一顆是調音器，九顆經典踏板以跳線和電源線相連，右邊接吉他、左邊接音箱"><br><sub><b>Stage Mode</b> —— 真的踏板盤：調音器在前、跳線、電源，點一下就踩</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="screenshots/mac_board_guide.jpg" alt="Mac 上的 Learn 分頁：組一塊踏板盤，小型踏板盤示意圖在吉他導線、調音器、buffer、踏板、跳線、電源與音箱上標有編號，下方是導線長度的互動說明"><br><sub><b>組一塊踏板盤</b> —— 真實的踏板盤，一次認識一個部分</sub></td>
   </tr>
 </table>
 
