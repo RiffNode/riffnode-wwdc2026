@@ -93,6 +93,9 @@ final class NeuralAmpModel: @unchecked Sendable {
     private var headOutputs: [UnsafeMutablePointer<Float>] = []  // per array: headSize × block
     private var arrayOutputs: [UnsafeMutablePointer<Float>] = [] // per array: channels × block
     private var condition: UnsafeMutablePointer<Float>  // 1 × block
+    /// gemm scratch: a contiguous copy of a strided B, and C before it's added or strided out.
+    private var gemmB: UnsafeMutablePointer<Float>
+    private var gemmC: UnsafeMutablePointer<Float>
 
     // MARK: Loading
 
@@ -185,6 +188,12 @@ final class NeuralAmpModel: @unchecked Sendable {
         z = .allocate(capacity: maxZ * block)
         activated = .allocate(capacity: maxChannels * block)
         condition = .allocate(capacity: block)
+        let maxDim = arrays.flatMap { array in
+            [array.channels, array.headSize, array.inputSize, array.conditionSize]
+                + array.layers.flatMap { [$0.conv[0].rows, $0.conv[0].cols, $0.mixin.cols, $0.output.rows] }
+        }.max() ?? 1
+        gemmB = .allocate(capacity: max(maxDim, maxZ) * block)
+        gemmC = .allocate(capacity: max(maxDim, maxZ) * block)
         for array in arrays {
             for layer in array.layers {
                 let width = layer.lookback + block
@@ -217,6 +226,7 @@ final class NeuralAmpModel: @unchecked Sendable {
 
     deinit {
         z.deallocate(); activated.deallocate(); condition.deallocate()
+        gemmB.deallocate(); gemmC.deallocate()
         histories.forEach { $0.deallocate() }
         heads.forEach { $0.deallocate() }
         headOutputs.forEach { $0.deallocate() }
@@ -235,15 +245,30 @@ final class NeuralAmpModel: @unchecked Sendable {
         }
     }
 
-    /// C (row stride ldc) = A (m×k) · B (k×n, row stride ldb) [+ C when accumulate]
+    /// C (row stride ldc) = A (m×k) · B (k×n, row stride ldb) [+ C when accumulate].
+    /// vDSP_mmul wants contiguous rows and overwrites C, so a strided B is packed first and
+    /// an accumulated or strided C goes through scratch – a small copy next to the multiply.
     private func gemm(_ a: Matrix, _ b: UnsafePointer<Float>, ldb: Int, _ c: UnsafeMutablePointer<Float>,
                       ldc: Int? = nil, n: Int, accumulate: Bool) {
+        let m = a.rows, k = a.cols, ldc = ldc ?? n
+        var packedB = b
+        if ldb != n {
+            for row in 0..<k { (gemmB + row * n).update(from: b + row * ldb, count: n) }
+            packedB = UnsafePointer(gemmB)
+        }
+        let direct = !accumulate && ldc == n
+        let product = direct ? c : gemmC
         a.values.withUnsafeBufferPointer { weights in
-            cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                        Int32(a.rows), Int32(n), Int32(a.cols),
-                        1, weights.baseAddress!, Int32(a.cols),
-                        b, Int32(ldb),
-                        accumulate ? 1 : 0, c, Int32(ldc ?? n))
+            vDSP_mmul(weights.baseAddress!, 1, packedB, 1, product, 1, vDSP_Length(m), vDSP_Length(n), vDSP_Length(k))
+        }
+        guard !direct else { return }
+        for row in 0..<m {
+            let target = c + row * ldc, source = gemmC + row * n
+            if accumulate {
+                vDSP_vadd(target, 1, source, 1, target, 1, vDSP_Length(n))
+            } else {
+                target.update(from: source, count: n)
+            }
         }
     }
 

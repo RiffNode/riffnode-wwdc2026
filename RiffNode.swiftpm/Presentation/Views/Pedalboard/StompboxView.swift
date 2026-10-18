@@ -23,7 +23,7 @@ struct StompboxView: View {
     private var knobCount: Int { model.map { $0.look.knobLabels.count } ?? effect.type.knobCount }
 
     /// Footprint at scale 1, by shape.
-    static func size(for shape: PedalLook.Shape) -> CGSize {
+    nonisolated static func size(for shape: PedalLook.Shape) -> CGSize {
         switch shape {
         case .mini: CGSize(width: 70, height: 128)
         case .wide: CGSize(width: 124, height: 132)

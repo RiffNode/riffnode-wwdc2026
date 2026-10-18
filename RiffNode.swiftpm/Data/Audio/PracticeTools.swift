@@ -157,7 +157,8 @@ final class Looper: LooperControlling {
     /// The looper's one footswitch.
     func press() {
         switch state {
-        case .empty, .stopped where loop == nil: startRecording()
+        case .empty: startRecording()
+        case .stopped where loop == nil: startRecording()
         case .recording: finishRecording()
         case .playing: startOverdub()
         case .overdubbing: finishOverdub()
