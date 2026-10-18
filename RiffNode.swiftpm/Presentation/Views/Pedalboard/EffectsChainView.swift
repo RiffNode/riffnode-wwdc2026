@@ -270,6 +270,25 @@ struct GlassSignalChainView: View {
         .dropDestination(for: String.self) { items, _ in
             return handleDrop(items: items, targetIndex: index)
         }
+        // Right-click on Mac, long-press on iPad: the things you'd do to a pedal
+        .contextMenu {
+            Button(effect.isEnabled ? "Switch Off" : "Switch On",
+                   systemImage: effect.isEnabled ? "power.circle" : "power.circle.fill") { engine.toggleEffect(effect) }
+            let models = PedalModel.models(for: effect.type)
+            if models.count > 1 {
+                Menu("Pedal", systemImage: "square.stack") {
+                    ForEach(models) { model in
+                        Button {
+                            engine.setPedalModel(effect, modelID: model.id)
+                        } label: {
+                            if model.id == effect.modelID { Label(model.name, systemImage: "checkmark") } else { Text(model.name) }
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("Remove from Board", systemImage: "trash", role: .destructive) { handleDelete(effect: effect, index: index) }
+        }
     }
 
     private func handleTap(effect: EffectNode) {

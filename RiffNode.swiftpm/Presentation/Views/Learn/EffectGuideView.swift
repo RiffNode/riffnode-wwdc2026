@@ -200,6 +200,7 @@ struct EffectGuideView: View {
 struct GlassSoundScienceView: View {
     @State private var selectedTopic: SoundTopic = .waveforms
     @State private var animationPhase: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum SoundTopic: String, CaseIterable {
         case waveforms = "Waves"
@@ -257,6 +258,7 @@ struct GlassSoundScienceView: View {
             .padding(.horizontal)
         }
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.linear(duration: 2).repeatForever(autoreverses: false)) {
                 animationPhase = .pi * 2
             }

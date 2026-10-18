@@ -598,6 +598,7 @@ struct EffectBadge: View {
 
 struct TypingIndicator: View {
     @State private var phase: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 5) {
@@ -612,6 +613,7 @@ struct TypingIndicator: View {
         .padding(.vertical, 11)
         .glassEffect(.regular.tint(.purple.opacity(0.12)), in: RoundedRectangle(cornerRadius: 16))
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.linear(duration: 0.9).repeatForever(autoreverses: false)) {
                 phase = .pi * 2
             }

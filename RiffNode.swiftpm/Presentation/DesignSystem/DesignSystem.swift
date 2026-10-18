@@ -101,6 +101,7 @@ enum Typography {
 /// High-contrast animated orbs to showcase glass lensing and refraction
 struct AdaptiveBackground: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -114,7 +115,9 @@ struct AdaptiveBackground: View {
             )
 
             // Animated floating orbs - more vibrant for glass testing
-            TimelineView(.animation(minimumInterval: 0.03)) { timeline in
+            // Slow drifting orbs need ~15 fps, not 30 – the GPU time goes to the audio views
+            // instead; with Reduce Motion they hold still.
+            TimelineView(.animation(minimumInterval: 1.0 / 15, paused: reduceMotion)) { timeline in
                 let time = timeline.date.timeIntervalSinceReferenceDate
 
                 Canvas { context, size in
