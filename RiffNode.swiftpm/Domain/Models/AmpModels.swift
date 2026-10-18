@@ -8,7 +8,7 @@ import Foundation
 
 struct AmpSettings: Equatable, Sendable {
     var isEnabled = true
-    var model: AmpModel = .clean
+    var model: AmpModel = .twain
     var cabinet: CabinetType = .twoByTwelve
     /// 0…1 for every knob, like the panel of a real amp.
     var gain: Float = 0.35
@@ -18,27 +18,130 @@ struct AmpSettings: Equatable, Sendable {
     var master: Float = 0.5
 }
 
-/// Three classic amp voicings – described by how they behave, not by brand.
+/// Classic amps, voiced after how their circuits behave. The names and panels are
+/// RiffNode's own – no logos or copied graphics; `inspiredBy` names the original only to
+/// describe the sound (all trademarks belong to their owners; no affiliation).
 enum AmpModel: String, CaseIterable, Identifiable, Sendable {
-    /// American clean: lots of headroom, scooped mids, sparkly highs
-    case clean = "Clean"
-    /// British crunch: breaks up early, pushy upper mids
-    case crunch = "Crunch"
-    /// Modern high gain: tight lows, heavy saturation
-    case lead = "Lead"
+    /// American blackface clean
+    case twain = "Twain '65"
+    /// American tweed
+    case tweedle = "Tweedle '59"
+    /// British class-A chime
+    case topBoost = "Top Boost 30"
+    /// British plexi-panel crunch
+    case plexus = "Plexus 100"
+    /// British master-volume rock
+    case brit800 = "Brit 800"
+    /// Modern high gain
+    case modern = "Modern Lead"
     /// A Neural Amp Modeler capture: a neural network trained on a real amp
     case captured = "NAM"
 
     var id: String { rawValue }
 
+    /// Tone files saved before the classic amps existed used three generic voicings.
+    init?(legacy name: String) {
+        switch name {
+        case "Clean": self = .twain
+        case "Crunch": self = .plexus
+        case "Lead": self = .modern
+        default: self.init(rawValue: name)
+        }
+    }
+
+    var inspiredBy: String {
+        switch self {
+        case .twain: "Fender Twin Reverb (blackface)"
+        case .tweedle: "Fender Bassman 5F6-A (tweed)"
+        case .topBoost: "Vox AC30 Top Boost"
+        case .plexus: "Marshall 1959 Super Lead (plexi)"
+        case .brit800: "Marshall JCM800 2203"
+        case .modern: "modern high-gain heads"
+        case .captured: "any amp, captured by Neural Amp Modeler"
+        }
+    }
+
     var summary: String {
         switch self {
-        case .clean: "Lots of headroom and sparkle – pedals sound like themselves."
-        case .crunch: "Breaks up as you dig in, with pushy upper mids."
-        case .lead: "Tight lows and thick saturation for solos and riffs."
+        case .twain: "Huge headroom, scooped mids, sparkly highs – pedals sound like themselves."
+        case .tweedle: "Fat and mid-forward; breaks up early and sags when you dig in."
+        case .topBoost: "Chimey class-A upper mids that compress sweetly as they crunch."
+        case .plexus: "Bright, punchy crunch that roars as the gain goes up."
+        case .brit800: "Cascaded preamp: the tight, aggressive rock rhythm of the 80s."
+        case .modern: "Tight lows and thick saturation for solos and riffs."
         case .captured: "A neural network trained on recordings of a real amp (.nam capture)."
         }
     }
+
+    /// How the circuit sounds, in plain words – for the Learn text.
+    var about: String {
+        switch self {
+        case .twain: "Its tone controls sit before the tubes clip and scoop the mids around 400 Hz; a bright capacitor adds sparkle at low volume. It stays clean very loud."
+        case .tweedle: "Two low-gain triode stages and a tone stack with less scoop than later amps: thick mids, a loose low end and early, singing breakup."
+        case .topBoost: "No negative feedback and class-A power tubes: chimey upper mids around 1–2 kHz and a soft compression when pushed."
+        case .plexus: "A tweed-style circuit with a hotter first tube; the tone stack comes after the preamp clips, so the mids push forward through the grit."
+        case .brit800: "Three gain stages in a row and a master volume – the birth of high gain: tight, upper-mid aggression."
+        case .modern: "Even more gain stages and a deep cut below the guitar's lowest notes, so palm mutes stay tight."
+        case .captured: "A WaveNet trained on the real amp's input and output – it learns the whole circuit."
+        }
+    }
+
+    var voice: AmpVoice {
+        switch self {
+        case .twain:
+            AmpVoice(preampGainDB: 0...16, midHz: 420, midBiasDB: -5, midQ: 0.7, toneStackFirst: true,
+                     tightHz: 40, brightDB: 4, defaultCabinet: .twoByTwelve,
+                     look: AmpLook(style: .blackPanel, tolex: 0x161616, panel: 0x1C1C1C, grille: 0xB9BCC0, ink: 0xF2F2F2))
+        case .tweedle:
+            AmpVoice(preampGainDB: 8...34, midHz: 700, midBiasDB: 2, midQ: 0.6, toneStackFirst: false,
+                     tightHz: 50, brightDB: 0, defaultCabinet: .oneByTwelve,
+                     look: AmpLook(style: .tweed, tolex: 0xC9A66B, panel: 0x9C7A44, grille: 0x6B4A2B, ink: 0x2B1A0E))
+        case .topBoost:
+            AmpVoice(preampGainDB: 6...30, midHz: 1_400, midBiasDB: 3, midQ: 0.8, toneStackFirst: true,
+                     tightHz: 80, brightDB: 2, defaultCabinet: .twoByTwelve,
+                     look: AmpLook(style: .copperPanel, tolex: 0x1A1A1A, panel: 0x8C5A2B, grille: 0x5B2A1E, ink: 0xF2E6D0))
+        case .plexus:
+            AmpVoice(preampGainDB: 12...38, midHz: 650, midBiasDB: 3, midQ: 0.8, toneStackFirst: false,
+                     tightHz: 90, brightDB: 1, defaultCabinet: .fourByTwelve,
+                     look: AmpLook(style: .goldPanel, tolex: 0x141414, panel: 0xC9A646, grille: 0x3A3326, ink: 0x1A1A1A))
+        case .brit800:
+            AmpVoice(preampGainDB: 18...46, midHz: 750, midBiasDB: 4, midQ: 0.9, toneStackFirst: false,
+                     tightHz: 120, brightDB: 0, defaultCabinet: .fourByTwelve,
+                     look: AmpLook(style: .goldPanel, tolex: 0x101010, panel: 0xB8A15A, grille: 0x2A2A2A, ink: 0x101010))
+        case .modern, .captured:
+            AmpVoice(preampGainDB: 20...50, midHz: 650, midBiasDB: -2, midQ: 0.8, toneStackFirst: false,
+                     tightHz: 160, brightDB: 0, defaultCabinet: .fourByTwelve,
+                     look: AmpLook(style: .modern, tolex: 0x121212, panel: 0x2B2D30, grille: 0x1E1E1E, ink: 0xD0D4D8))
+        }
+    }
+}
+
+/// How an amp's circuit is voiced, for the DSP and the response plot.
+struct AmpVoice: Equatable, Sendable {
+    var preampGainDB: ClosedRange<Float>
+    /// Where the mid knob works, and the circuit's own mid push (+) or scoop (−).
+    var midHz: Float
+    var midBiasDB: Float
+    var midQ: Float
+    /// Fender and Vox tone stacks sit before the tubes clip; Marshall's after the preamp.
+    var toneStackFirst: Bool
+    /// Bass cut before the preamp, so palm mutes stay tight.
+    var tightHz: Float
+    /// A bright capacitor's treble lift, strongest at low gain.
+    var brightDB: Float
+    var defaultCabinet: CabinetType
+    var look: AmpLook
+}
+
+/// The amp's panel, drawn without logos.
+struct AmpLook: Equatable, Sendable {
+    enum Style: Equatable, Sendable { case blackPanel, tweed, copperPanel, goldPanel, modern }
+    let style: Style
+    /// 0xRRGGBB
+    let tolex: UInt32
+    let panel: UInt32
+    let grille: UInt32
+    let ink: UInt32
 }
 
 /// The speaker cabinet – the biggest single difference between "direct" and "real".

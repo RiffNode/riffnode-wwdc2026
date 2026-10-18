@@ -24,6 +24,7 @@ final class TestEngine: EffectsChainManaging, AudioEngineControlling {
     func moveEffect(from source: IndexSet, to destination: Int) {}
     func toggleEffect(_ effect: EffectNode) { effect.isEnabled.toggle() }
     func updateEffectParameter(_ effect: EffectNode, key: String, value: Float) { effect.parameters[key] = value }
+    func setPedalModel(_ effect: EffectNode, modelID: String) { effect.modelID = modelID }
     func clearEffects() { effectsChain = [] }
     func resetEffectsToDefaults() { effectsChain = []; isPedalboardBypassed = false }
     func applyPreset(_ preset: EffectPreset) {

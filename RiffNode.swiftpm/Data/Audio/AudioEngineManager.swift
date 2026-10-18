@@ -458,6 +458,12 @@ final class AudioEngineManager: AudioManaging {
         applyEffectParameters(effect)
     }
 
+    func setPedalModel(_ effect: EffectNode, modelID: String) {
+        guard let model = PedalModel.model(id: modelID), model.fits(effect.type) else { return }
+        effect.modelID = model.id
+        applyEffectParameters(effect)
+    }
+
     func clearEffects() {
         effectsChain.removeAll()
         rebuildAudioChain()

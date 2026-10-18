@@ -135,6 +135,7 @@ struct MainInterfaceView: View {
             PerformanceModeView(
                 engine: engine,
                 looper: engine.looperControls,
+                tuner: viewModel.chordDetector,
                 gestureController: viewModel.gestureController,
                 controller: viewModel.performanceController,
                 presets: viewModel.presetService.presets,

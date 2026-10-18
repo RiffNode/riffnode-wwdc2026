@@ -117,6 +117,38 @@ struct AudioGraphRegressionTests {
             print("PASS \(riff.title) -> stereo at \(Int(rate)) Hz; distortion mean difference \(difference)")
             }
         }
+        // Every classic drive voicing renders a finite, audible signal through the shared processor
+        for model in PedalModel.all {
+            guard case .drive = model.voicing else { continue }
+            let engine = AVAudioEngine()
+            let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
+            let (unit, kernel) = try await ModulationAudioUnit.make(.distortion)
+            kernel.setVoicing(model.voicing)
+            kernel.depth = 0.6; kernel.tone = 0.5; kernel.level = 0.6
+            engine.attach(unit)
+            engine.connect(unit, to: engine.mainMixerNode, format: format)
+            let player = DemoRiffPlayer()
+            player.riff = .originalArpeggio
+            player.attach(to: engine, output: unit, format: format)
+            try engine.enableManualRenderingMode(.offline, format: format, maximumFrameCount: 4096)
+            try engine.start()
+            try player.play(analysisTap: discardTap)
+            let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4096)!
+            var peak: Float = 0
+            for _ in 0..<12 {
+                _ = try engine.renderOffline(4096, to: buffer)
+                let data = buffer.floatChannelData![0]
+                for i in 0..<Int(buffer.frameLength) {
+                    guard data[i].isFinite else { throw Failure.missingAudio }
+                    peak = max(peak, abs(data[i]))
+                }
+            }
+            player.stop(); engine.stop()
+            guard peak > 0.01, peak < 8 else { throw Failure.missingAudio }
+        }
+        count += 1
+        print("PASS all \(PedalModel.all.filter { if case .drive = $0.voicing { true } else { false } }.count) classic drive voicings render cleanly")
+
         try checkBankHandshake()
         count += 1
         print("PASS coefficient banks are never read half-written (200 000 swaps)")

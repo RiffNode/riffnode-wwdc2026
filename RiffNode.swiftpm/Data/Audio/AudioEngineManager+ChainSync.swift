@@ -50,6 +50,10 @@ extension AudioEngineManager {
     }
     func applyEffectParameters(_ effect: EffectNode) {
         guard let units = effectUnits else { return }
+        // Which classic pedal it is: its circuit's voicing goes to the DSP first
+        if let voicing = effect.model?.voicing, let kernel = units.kernel(for: effect.type) {
+            kernel.setVoicing(voicing)
+        }
 
         switch effect.type {
         case .compressor:

@@ -115,6 +115,18 @@ final class ModulationAudioUnit: AUAudioUnit {
     }
 }
 
+// MARK: - Atomic Float
+
+/// A Float shared between the main thread (writes) and the audio thread (reads), lock-free.
+struct AtomicFloat: ~Copyable {
+    private let bits: Atomic<UInt32>
+    init(_ value: Float) { bits = Atomic(value.bitPattern) }
+    var value: Float {
+        get { Float(bitPattern: bits.load(ordering: .relaxed)) }
+        nonmutating set { bits.store(newValue.bitPattern, ordering: .relaxed) }
+    }
+}
+
 // MARK: - Modulation Kernel
 
 final class ModulationKernel: @unchecked Sendable {
@@ -126,10 +138,27 @@ final class ModulationKernel: @unchecked Sendable {
         case amp
         case input
         case analogDelay
+
+        /// The pedal family a mode plays, for its standard voicing.
+        var effectType: EffectType? {
+            switch self {
+            case .tremolo: .tremolo
+            case .chorus: .chorus
+            case .flanger: .flanger
+            case .phaser: .phaser
+            case .overdrive: .overdrive
+            case .distortion: .distortion
+            case .fuzz: .fuzz
+            case .analogDelay: .delay
+            case .wah, .amp, .input: nil
+            }
+        }
     }
 
-    /// Set once, before the unit starts rendering.
-    var mode: Mode = .tremolo
+    /// Set once, before the unit starts rendering. Loads the mode's standard voicing.
+    var mode: Mode = .tremolo {
+        didSet { if let type = mode.effectType, let model = PedalModel.standard(for: type) { setVoicing(model.voicing) } }
+    }
 
     /// The amp and cabinet (mode .amp only).
     let amp = AmpProcessor()
@@ -181,6 +210,61 @@ final class ModulationKernel: @unchecked Sendable {
         set { bypassFlag.store(newValue, ordering: .relaxed) }
     }
 
+    // MARK: Voicing (which classic pedal this is – written on the main thread)
+
+    // Gain pedals
+    private let gainMinDB = AtomicFloat(21.5)
+    private let gainMaxDB = AtomicFloat(41.5)
+    private let splitHz = AtomicFloat(720)
+    private let clipping = AtomicFloat(0)
+    private let cleanBlend = AtomicFloat(1)
+    private let toneKind = AtomicFloat(0)
+    private let toneMinHz = AtomicFloat(1_200)
+    private let toneMaxHz = AtomicFloat(9_000)
+    private let outputTrim = AtomicFloat(1)
+    // Modulation
+    private let baseDelayMs = AtomicFloat(12)
+    private let sweepMs = AtomicFloat(12)
+    private let phaserStageCount = AtomicFloat(6)
+    private let sweepLowHz = AtomicFloat(300)
+    private let sweepDecades = AtomicFloat(1)
+    private let stageSpread = AtomicFloat(1)
+    private let lfoShape = AtomicFloat(0)
+    // Echo
+    private let darkenHz = AtomicFloat(2_400)
+    private let wowMs = AtomicFloat(0.9)
+    private let saturation = AtomicFloat(1)
+
+    /// Makes this unit sound like a particular classic pedal.
+    func setVoicing(_ voicing: PedalVoicing) {
+        switch voicing {
+        case .drive(let d):
+            gainMinDB.value = d.gainDB.lowerBound
+            gainMaxDB.value = d.gainDB.upperBound
+            splitHz.value = d.preHighPassHz
+            clipping.value = Float(d.clipping.rawValue)
+            cleanBlend.value = d.cleanBlend
+            toneKind.value = Float(d.tone.rawValue)
+            toneMinHz.value = d.toneRangeHz.lowerBound
+            toneMaxHz.value = d.toneRangeHz.upperBound
+            outputTrim.value = d.outputTrim
+        case .modulation(let m):
+            baseDelayMs.value = m.baseDelayMs
+            sweepMs.value = m.sweepMs
+            phaserStageCount.value = Float(min(max(m.stages, 1), Self.phaserStages))
+            sweepLowHz.value = m.sweepLowHz
+            sweepDecades.value = m.sweepDecades
+            stageSpread.value = m.stageSpread
+            lfoShape.value = m.shape
+        case .echo(let e):
+            darkenHz.value = e.darkenHz
+            wowMs.value = e.wowMs
+            saturation.value = e.saturation
+        case .standard:
+            break
+        }
+    }
+
     // MARK: Render state (audio thread)
 
     private static let maxChannels = 2
@@ -200,6 +284,7 @@ final class ModulationKernel: @unchecked Sendable {
     /// Gain pedals: one-pole filter states (bass cut before, tone after the clipper).
     private let highPassState = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
     private let lowPassState = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
+    private let scoopHighState = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
     private let dcBlockIn = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
     private let dcBlockOut = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
     private let oversamplePrevious = UnsafeMutablePointer<Float>.allocate(capacity: maxChannels)
@@ -224,6 +309,7 @@ final class ModulationKernel: @unchecked Sendable {
         phaserFeedbackSample.deallocate()
         highPassState.deallocate()
         lowPassState.deallocate()
+        scoopHighState.deallocate()
         dcBlockIn.deallocate()
         dcBlockOut.deallocate()
         oversamplePrevious.deallocate()
@@ -251,6 +337,7 @@ final class ModulationKernel: @unchecked Sendable {
         phaserFeedbackSample.initialize(repeating: 0, count: Self.maxChannels)
         highPassState.initialize(repeating: 0, count: Self.maxChannels)
         lowPassState.initialize(repeating: 0, count: Self.maxChannels)
+        scoopHighState.initialize(repeating: 0, count: Self.maxChannels)
         dcBlockIn.initialize(repeating: 0, count: Self.maxChannels)
         dcBlockOut.initialize(repeating: 0, count: Self.maxChannels)
         oversamplePrevious.initialize(repeating: 0, count: Self.maxChannels)
@@ -329,6 +416,12 @@ final class ModulationKernel: @unchecked Sendable {
         let rate = self.rate, depth = self.depth, mix = self.mix, feedback = self.feedback
         let phaseIncrement = rate / sampleRate
         let twoPi = 2 * Float.pi
+        let baseDelay = baseDelayMs.value / 1000, sweep = sweepMs.value / 1000
+        let stages = Int(phaserStageCount.value)
+        let lowHz = sweepLowHz.value, decades = sweepDecades.value, spread = stageSpread.value
+        let shape = lfoShape.value
+        let squareness = 1 + 9 * shape
+        let squareNorm = tanh(squareness)
 
         for frame in 0..<frameCount {
             for channel in 0..<channels {
@@ -337,7 +430,13 @@ final class ModulationKernel: @unchecked Sendable {
 
                 // Right channel runs a quarter cycle ahead for stereo width
                 let stereoOffset: Float = channel == 1 ? 0.25 : 0
-                let lfo = sin(twoPi * (lfoPhase + stereoOffset))  // −1…1
+                let sine = sin(twoPi * (lfoPhase + stereoOffset))  // −1…1
+                // Tremolo squares the wave off; a vibe lingers low and swells up like a lamp
+                let lfo: Float = switch mode {
+                case .tremolo: shape > 0 ? tanh(sine * squareness) / squareNorm : sine
+                case .phaser: shape > 0 ? 2 * pow(0.5 + 0.5 * sine, 1 + 2 * shape) - 1 : sine
+                default: sine
+                }
                 let dry = source[frame]
                 let wet: Float
 
@@ -348,26 +447,33 @@ final class ModulationKernel: @unchecked Sendable {
                     continue
 
                 case .chorus:
-                    let delaySeconds = 0.012 + 0.012 * depth * (0.5 + 0.5 * lfo)
+                    let delaySeconds = baseDelay + sweep * depth * (0.5 + 0.5 * lfo)
                     wet = readDelay(channel: channel, delaySamples: delaySeconds * sampleRate)
                     writeDelay(channel: channel, value: dry)
                     destination[frame] = dry * (1 - 0.5 * mix) + wet * mix
 
                 case .flanger:
-                    let delaySeconds = 0.001 + 0.004 * depth * (0.5 + 0.5 * lfo)
+                    let delaySeconds = baseDelay + sweep * depth * (0.5 + 0.5 * lfo)
                     wet = readDelay(channel: channel, delaySamples: delaySeconds * sampleRate)
                     writeDelay(channel: channel, value: dry + feedback * wet)
                     destination[frame] = 0.5 * (dry + wet)
 
                 case .phaser:
-                    // Exponential sweep 300 Hz → 300 Hz · 10^depth (up to 3 kHz)
-                    let sweep = 0.5 + 0.5 * lfo
-                    let frequency = 300 * pow(10, depth * sweep)
+                    // Exponential sweep: lowest notch → lowest · 10^(depth · decades)
+                    let position = 0.5 + 0.5 * lfo
+                    let frequency = lowHz * pow(10, depth * decades * position)
                     let t = tan(Float.pi * min(frequency, sampleRate * 0.45) / sampleRate)
-                    let coefficient = (t - 1) / (t + 1)
+                    var coefficient = (t - 1) / (t + 1)
 
                     var signal = dry + feedback * phaserFeedbackSample[channel]
-                    for stage in 0..<Self.phaserStages {
+                    for stage in 0..<stages {
+                        if spread != 1 && stages > 1 {
+                            // Mismatched stages: each one centred a little higher than the last
+                            let offset = Float(stage) / Float(stages - 1) - 0.5
+                            let f = frequency * pow(spread, offset)
+                            let ts = tan(Float.pi * min(f, sampleRate * 0.45) / sampleRate)
+                            coefficient = (ts - 1) / (ts + 1)
+                        }
                         let index = channel * Self.phaserStages + stage
                         let out = coefficient * signal + allpassInput[index] - coefficient * allpassOutput[index]
                         allpassInput[index] = signal
@@ -391,46 +497,36 @@ final class ModulationKernel: @unchecked Sendable {
     }
 
     // MARK: Gain pedals
-    // Modelled on how the classic circuits work (not component-level emulations):
-    //  • Overdrive – Tube Screamer: an op-amp stage with diodes in its feedback loop, 21.5–41.5 dB
-    //    of gain applied only above ~720 Hz. The output is the clean signal plus the soft-clipped
-    //    part, so the bass stays clean and the mids push forward.
-    //  • Distortion – ProCo RAT: up to ~60 dB of op-amp gain, then diodes to ground clip the
-    //    wave flat at a fixed ceiling (hard clipping), then a low-pass "filter" control.
-    //  • Fuzz – Fuzz Face: two transistors with huge gain and different headroom on each half of
-    //    the wave – soft, asymmetric clipping that turns hard as the fuzz goes up.
+    // One processor for every gain pedal, voiced by how the classic circuits work (not
+    // component-level emulations): a bass cut before the clipper, gain, a clipping curve,
+    // an optional clean blend, then a tone control. See `PedalVoicing.Drive`.
 
     private func processDrive(input: UnsafeMutableAudioBufferListPointer,
                               output: UnsafeMutableAudioBufferListPointer,
                               frameCount: Int, channels: Int) {
         let drive = depth, tone = self.tone, level = self.level
-
-        let gainDB: Float = switch mode {
-        case .overdrive: 21.5 + drive * 20     // TS808: ×12 … ×118
-        case .distortion: 6 + drive * 54       // RAT: up to ~60 dB
-        default: 20 + drive * 34               // Fuzz Face
-        }
-        let gain = pow(10, gainDB / 20)
-
-        // Overdrive clips only what's above 720 Hz; the RAT trims rumble; the fuzz keeps it all
-        let splitHz: Float = switch mode {
-        case .overdrive: 720
-        case .distortion: 60
-        default: 20
-        }
-        let splitCoefficient = exp(-2 * Float.pi * splitHz / sampleRate)
-        // Tone: low-pass from 1.2 kHz (dark) to 9 kHz (bright), exponential
-        let lowPassHz = 1_200 * pow(7.5, tone)
+        let gain = pow(10, (gainMinDB.value + drive * (gainMaxDB.value - gainMinDB.value)) / 20)
+        let splitCoefficient = exp(-2 * Float.pi * splitHz.value / sampleRate)
+        let clip = Int(clipping.value)
+        let blend = cleanBlend.value
+        let toneMode = Int(toneKind.value)
+        let lowHz = toneMinHz.value, highHz = toneMaxHz.value
+        // Low-pass tone: opens exponentially from lowHz to highHz. Mid-scoop: a low-pass at
+        // lowHz blended with a high-pass at highHz. Fixed: a low-pass at lowHz.
+        let lowPassHz = toneMode == 0 ? lowHz * pow(highHz / lowHz, tone) : lowHz
         let lowPassCoefficient = exp(-2 * Float.pi * lowPassHz / sampleRate)
-        // DC blocker after the asymmetric fuzz (the output capacitor's job in the real pedal)
+        let scoopCoefficient = exp(-2 * Float.pi * highHz / sampleRate)
+        // Asymmetric clipping leaves DC behind: block it (the output capacitor's job)
+        let needsDCBlock = clip == 2 || clip == 6 || clip == 3
         let dcCoefficient: Float = 0.995
-        let outputGain = level * level * 1.6
+        let outputGain = level * level * 1.6 * outputTrim.value
 
         for channel in 0..<channels {
             guard let source = input[channel].mData?.assumingMemoryBound(to: Float.self),
                   let destination = output[channel].mData?.assumingMemoryBound(to: Float.self) else { continue }
             var lowState = highPassState[channel]   // the part below the split frequency
             var toneState = lowPassState[channel]
+            var scoopState = scoopHighState[channel]
             var dcIn = dcBlockIn[channel], dcOut = dcBlockOut[channel]
 
             for frame in 0..<frameCount {
@@ -439,46 +535,51 @@ final class ModulationKernel: @unchecked Sendable {
                 let x = (dry - lowState) * gain
 
                 // 4× oversampling: clipping creates harmonics above Nyquist that would fold back
-                // as harsh, unmusical "aliasing". Clip four interpolated points per sample and
-                // average them (a simple anti-alias decimation).
+                // as harsh aliasing. Clip four interpolated points per sample and average them.
                 let previous = oversamplePrevious[channel]
                 var clipped: Float = 0
                 for step in 1...4 {
-                    let xi = previous + (x - previous) * Float(step) * 0.25
-                    switch mode {
-                    case .overdrive:
-                        // Diodes in the feedback loop limit the clipped part to about ±0.5
-                        clipped += 0.5 * tanh(xi / 0.5)
-                    case .distortion:
-                        clipped += min(max(xi, -0.6), 0.6) / 0.6        // diodes to ground: flat tops
-                    default:
-                        // Different headroom on each half; tanh turns hard as the gain rises
-                        clipped += xi >= 0 ? 0.6 * tanh(xi / 0.6) : tanh(xi)
-                    }
+                    clipped += Self.clip(previous + (x - previous) * Float(step) * 0.25, kind: clip)
                 }
                 oversamplePrevious[channel] = x
                 clipped *= 0.25
 
-                var shaped: Float
-                switch mode {
-                case .overdrive:
-                    shaped = dry + clipped     // the clean signal passes straight through alongside it
-                case .distortion:
-                    shaped = clipped
-                default:
+                if needsDCBlock {
                     let blocked = clipped - dcIn + dcCoefficient * dcOut
                     dcIn = clipped
                     dcOut = blocked
-                    shaped = blocked * 1.3
+                    clipped = blocked * 1.3
                 }
+                let shaped = blend * dry + clipped
 
                 toneState = (1 - lowPassCoefficient) * shaped + lowPassCoefficient * toneState
-                destination[frame] = toneState * outputGain
+                var y = toneState
+                if toneMode == 1 {
+                    scoopState = (1 - scoopCoefficient) * shaped + scoopCoefficient * scoopState
+                    let highPassed = shaped - scoopState
+                    y = (1 - tone) * toneState + tone * highPassed * 1.6
+                }
+                destination[frame] = y * outputGain
             }
             highPassState[channel] = lowState
             lowPassState[channel] = toneState
+            scoopHighState[channel] = scoopState
             dcBlockIn[channel] = dcIn
             dcBlockOut[channel] = dcOut
+        }
+    }
+
+    /// The clipping curves, by `PedalVoicing.Drive.Clipping` raw value.
+    @inline(__always)
+    private static func clip(_ x: Float, kind: Int) -> Float {
+        switch kind {
+        case 0: return 0.5 * tanh(x / 0.5)                                   // diodes in feedback
+        case 1: return min(max(x, -0.6), 0.6) / 0.6                          // diodes to ground
+        case 2: return x >= 0 ? 0.6 * tanh(x / 0.6) : tanh(x)                // two-transistor fuzz
+        case 3: return x >= 0 ? x / pow(1 + pow(x, 2.5), 0.4) : tanh(x)      // MOSFET soft knee
+        case 4: return 0.6 * tanh(x / 0.35)                                  // germanium, low threshold
+        case 5: return tanh(2.5 * tanh(x))                                   // two stages in a row
+        default: return x >= 0 ? 0.5 * tanh(x / 0.5) : 0.7 * tanh(x / 0.7)  // asymmetric soft
         }
     }
 
@@ -494,9 +595,11 @@ final class ModulationKernel: @unchecked Sendable {
         let time = min(max(rate, 0.02), 2.5)
         let feedback = self.feedback, mix = self.mix
         let mask = Self.longDelayLength - 1
-        let darken = 1 - exp(-2 * Float.pi * 2_400 / sampleRate)   // 2.4 kHz per pass
+        let darkenFrequency = darkenHz.value
+        let darken = darkenFrequency > 0 ? 1 - exp(-2 * Float.pi * darkenFrequency / sampleRate) : 1   // 1 = clean
+        let warmth = saturation.value
         let wowIncrement: Float = 0.55 / sampleRate
-        let wowDepth = 0.0009 * sampleRate
+        let wowDepth = wowMs.value / 1000 * sampleRate
 
         for frame in 0..<frameCount {
             let wow = sin(2 * Float.pi * lfoPhase) * wowDepth
@@ -515,7 +618,8 @@ final class ModulationKernel: @unchecked Sendable {
                 delayFilterState[channel] += (echo - delayFilterState[channel]) * darken
                 let warm = delayFilterState[channel]
                 let dry = src[frame]
-                base[longWriteIndex] = dry + tanh(warm * feedback * 1.1) / 1.1
+                let echoBack = warm * feedback
+                base[longWriteIndex] = dry + (warmth > 0 ? tanh(echoBack * 1.1) / 1.1 : echoBack)
                 dst[frame] = dry + warm * mix
             }
             longWriteIndex = (longWriteIndex + 1) & mask

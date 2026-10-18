@@ -105,28 +105,36 @@ enum AmpDesign {
         let gainDB: Float
     }
 
-    /// Preamp gain range in dB for each voicing.
+    /// Preamp gain in dB for the amp's voice.
     static func preampGainDB(model: AmpModel, gain: Float) -> Float {
-        switch model {
-        case .clean: 0 + gain * 18
-        case .crunch: 10 + gain * 26
-        case .lead, .captured: 20 + gain * 30
-        }
+        let range = model.voice.preampGainDB
+        return range.lowerBound + gain * (range.upperBound - range.lowerBound)
     }
 
-    /// Tone stack + voicing + cabinet, in signal order after the preamp.
-    static func stages(for s: AmpSettings) -> [Stage] {
-        var stages: [Stage] = []
+    /// The tone stack: bass, the voice's mid, treble – plus a bright cap at low gain.
+    static func toneStackStages(for s: AmpSettings) -> [Stage] {
         // A neural capture already contains the amp's EQ: only the cabinet follows
-        if s.model != .captured {
-        // Tone stack: ±12 dB, centred on each voicing's character
-        let midCentre: Float = s.model == .clean ? 500 : (s.model == .crunch ? 800 : 650)
-        let midBias: Float = s.model == .clean ? -3 : (s.model == .crunch ? 2 : -2)   // clean scoop, British push
-        stages.append(Stage(kind: .lowShelf, frequency: 120, q: 0.7, gainDB: (s.bass - 0.5) * 24))
-        stages.append(Stage(kind: .peak, frequency: midCentre, q: 0.8, gainDB: (s.mid - 0.5) * 20 + midBias))
-        stages.append(Stage(kind: .highShelf, frequency: 3_200, q: 0.7, gainDB: (s.treble - 0.5) * 24))
+        guard s.model != .captured else { return [] }
+        let voice = s.model.voice
+        var stages = [
+            Stage(kind: .lowShelf, frequency: 120, q: 0.7, gainDB: (s.bass - 0.5) * 24),
+            Stage(kind: .peak, frequency: voice.midHz, q: voice.midQ, gainDB: (s.mid - 0.5) * 20 + voice.midBiasDB),
+            Stage(kind: .highShelf, frequency: 3_200, q: 0.7, gainDB: (s.treble - 0.5) * 24),
+        ]
+        if voice.brightDB > 0 {
+            stages.append(Stage(kind: .highShelf, frequency: 2_500, q: 0.7, gainDB: voice.brightDB * (1 - s.gain)))
         }
+        return stages
+    }
 
+    /// Tone stack + cabinet, for the response plot.
+    static func stages(for s: AmpSettings) -> [Stage] {
+        toneStackStages(for: s) + cabinetStages(for: s)
+    }
+
+    /// The speaker cabinet model.
+    static func cabinetStages(for s: AmpSettings) -> [Stage] {
+        var stages: [Stage] = []
         switch s.cabinet {
         case .direct, .impulse:
             break   // no speaker model (an IR, when loaded, is convolved separately)
@@ -207,10 +215,11 @@ struct BankHandshake: ~Copyable {
 /// two pre-allocated banks and a handshake – the audio thread never allocates or locks.
 final class AmpProcessor: @unchecked Sendable {
 
-    static let maxStages = 9
+    static let maxStages = 12   // tone stack (≤ 4) + cabinet (≤ 6), with room to spare
     static let maxIRLength = 2048
-    // Bank layout: [stageCount, preGain, tightCoefficient, masterDrive, postGain, useIR, useNeural, b0 b1 b2 a1 a2 × maxStages]
-    private static let header = 7
+    // Bank layout: [stageCount, preGain, tightCoefficient, masterDrive, postGain, useIR, useNeural,
+    //               toneStackCount, toneStackFirst, b0 b1 b2 a1 a2 × maxStages]
+    private static let header = 9
     private static let bankSize = header + maxStages * 5
 
     private let banks = UnsafeMutablePointer<Float>.allocate(capacity: 2 * bankSize)
@@ -263,18 +272,20 @@ final class AmpProcessor: @unchecked Sendable {
         let useIR = s.cabinet == .impulse && irLengths[irHandshake.activeBank] > 0
         var designed = s
         if s.cabinet == .impulse { designed.cabinet = .direct }   // the IR replaces the filter model
-        let stages = AmpDesign.stages(for: designed).prefix(Self.maxStages)
+        let toneStack = AmpDesign.toneStackStages(for: designed)
+        let stages = (toneStack + AmpDesign.cabinetStages(for: designed)).prefix(Self.maxStages)
 
         base[0] = Float(stages.count)
         base[1] = pow(10, AmpDesign.preampGainDB(model: s.model, gain: s.gain) / 20)
         // High-gain amps cut lows before the tubes so palm mutes stay tight
-        let tightHz: Float = s.model == .lead ? 160 : (s.model == .crunch ? 100 : 40)
-        base[2] = exp(-2 * Float.pi * tightHz / sampleRate)
+        base[2] = exp(-2 * Float.pi * s.model.voice.tightHz / sampleRate)
         base[3] = 0.6 + s.master * 2.4
         // Keep loudness roughly steady across gain settings
         base[4] = (0.25 + s.master * 0.5) / max(0.6, min(1.6, 0.9 + s.gain * 0.4))
         base[5] = useIR ? 1 : 0
         base[6] = s.model == .captured && neuralModel.load(ordering: .acquiring) != nil ? 1 : 0
+        base[7] = Float(min(toneStack.count, Self.maxStages))
+        base[8] = s.model.voice.toneStackFirst ? 1 : 0
         for (i, stage) in stages.enumerated() {
             let c = Biquad.coefficients(stage.kind, frequency: stage.frequency, q: stage.q, gainDB: stage.gainDB, sampleRate: sampleRate)
             let o = Self.header + i * 5
@@ -318,6 +329,8 @@ final class AmpProcessor: @unchecked Sendable {
     private var preGain: Float = 1, tightCoefficient: Float = 0, masterDrive: Float = 1, postGain: Float = 1
     private var useIR = false
     private var useNeural = false
+    private var toneStackCount = 0
+    private var toneStackFirst = false
     private var inputHighPass: (Float, Float) = (0, 0)
 
     /// Per-channel input history for the convolution: the last (maxIRLength − 1) samples, then the block.
@@ -343,6 +356,8 @@ final class AmpProcessor: @unchecked Sendable {
         preGain = base[1]; tightCoefficient = base[2]; masterDrive = base[3]; postGain = base[4]
         useIR = base[5] > 0.5
         useNeural = base[6] > 0.5
+        toneStackCount = min(Int(base[7]), stageCount)
+        toneStackFirst = base[8] > 0.5
         for i in 0..<stageCount {
             let o = Self.header + i * 5
             // Coefficients change; the filter's memory stays, so knob turns don't click
@@ -375,12 +390,16 @@ final class AmpProcessor: @unchecked Sendable {
         for i in 0..<frames {
             let x = data[i]
             low = (1 - tightCoefficient) * x + tightCoefficient * low
+            var input = x - low
+            // Fender and Vox: the tone stack shapes the signal before the tubes clip
+            let firstAfterPreamp = toneStackFirst ? toneStackCount : 0
+            for s in 0..<firstAfterPreamp { input = filters[s].process(input, channel: channel) }
             // Preamp: asymmetric tube-style soft clip (the negative half saturates later)
-            let driven = (x - low) * preGain
+            let driven = input * preGain
             let pre = driven >= 0 ? tanh(driven) : tanh(driven * 0.8) / 0.8
-            // Tone stack (+ cabinet model when no IR)
+            // Marshall-style tone stack after the preamp, then the cabinet model (when no IR)
             var y = pre
-            for s in 0..<stageCount { y = filters[s].process(y, channel: channel) }
+            for s in firstAfterPreamp..<stageCount { y = filters[s].process(y, channel: channel) }
             // Power amp: soft saturation as the master goes up
             y = tanh(y * masterDrive) / masterDrive * 1.6
             data[i] = y * postGain

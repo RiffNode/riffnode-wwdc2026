@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <img src="screenshots/mac_board.jpg" width="900" alt="Mac 上的 RiffNode：從吉他輸入到音箱的一排彩色效果器、Distortion 的旋鈕，以及 Signal Lab 顯示被削平的波形">
+  <img src="screenshots/mac_board.jpg" width="900" alt="Mac 上的 RiffNode：從吉他輸入經過壓縮、綠色 Tube Steamer、藍色 Blue Diver、合唱、類比延遲與殘響，接到金色面板的 Plexus 100 音箱，下方是 Signal Lab">
 </p>
 
 吉他效果器通常被一堆術語包圍，而且一顆就要好幾千元。RiffNode 把它變成幾分鐘內就能**看見、摸到、聽到**的東西：把踏板拖進訊號鏈、邊彈邊看波形和頻譜變化、用一句話請裝置上的 AI 調出音色，雙手不離吉他也能點頭切換 preset。
@@ -87,7 +87,7 @@
 | --- | --- |
 | 吉他與導線 | 拾音器（約 2.5 H）與導線（每英尺約 30 pF）形成共振低通，f = 1/(2π√LC)：3 英尺在 7.3 kHz 以上滾降，60 英尺降到 2.3 kHz。效果器盤前端的 buffer 可以保住高頻；另有音量踏板與 noise gate |
 | 踏板 | 可拖曳排序；遇到不尋常的順序（時間類效果放在破音前、fuzz 不在第一顆……）會提示並解釋對聲音的影響，一鍵排回標準順序 |
-| 音箱 | Clean、Crunch、Lead：不對稱的真空管前級、Bass／Mid／Treble 音色控制、後級飽和 |
+| 音箱 | 五台經典音箱，加上現代高增益與 Neural Amp Modeler：不對稱的真空管前級、依原電路放在前級之前或之後的 Bass／Mid／Treble 音色控制、後級飽和 |
 | 喇叭箱 | 1×12、2×12、4×12 喇叭模型 —— 5 kHz 以上的滾降讓刺耳的破音變成吉他音色 —— 也可以載入自己的 **IR 檔**（.wav），即時卷積 |
 
 | 類別 | 效果器 |
@@ -98,7 +98,44 @@
 | 調變 | Chorus · Phaser · Flanger · Tremolo |
 | 時間與空間 | Delay · Reverb |
 
-**14 組內建 preset**，涵蓋 Clean、Crunch、Heavy、Ambient —— 從 *Slapback Echo* 到 *Djent Machine* 和 *Shoegaze*。**Stage Mode** 是現場演出用的踏板：所有踏板一次排滿畫面、變成大型腳踏開關（點一下就踩），preset 名稱遠遠就看得清楚，還有 Looper、整組旁通與調音靜音；觸控、鍵盤、MIDI 腳踏或頭部手勢都能控制，演出時螢幕不會變暗。
+**14 組內建 preset**，涵蓋 Clean、Crunch、Heavy、Ambient —— 從 *Slapback Echo* 到 *Djent Machine* 和 *Shoegaze*。**Stage Mode** 是現場演出用的踏板盤，配置照真的來：鋁條板面、吉他從右邊接入、左邊接到音箱、第一顆是調音器（調音時靜音）、直角插頭的跳線、從板子下方電源拉上來的 9V 線 —— 所有踏板一次排滿畫面，點一下就踩。preset 名稱遠遠就看得清楚，下方有 Looper、整組旁通與調音靜音；觸控、鍵盤、MIDI 腳踏或頭部手勢都能控制，演出時螢幕不會變暗。
+
+### 經典效果器與音箱
+
+20 顆經典踏板與 5 台經典音箱，依原版電路的運作方式調出聲音：Tube Screamer 式的中頻隆起、Blues Driver 開闊又不對稱的削波、Big Muff 挖空中頻的厚重 fuzz。點踏板名稱就能換成同類的其他經典款；三個破音位置可以放任何一顆破音，像真的踏板盤一樣疊兩顆 overdrive。
+
+| RiffNode 踏板 | 參考的原版 | 電路的作用 |
+| --- | --- | --- |
+| Tube Steamer | Ibanez TS808 Tube Screamer | 約 720 Hz 以上軟削波、低頻乾聲混回：中頻推力 |
+| Blue Diver | Boss BD-2 Blues Driver | 不對稱的分離式削波、低頻切得少：開闊、像音箱的破音 |
+| Copper Pegasus | Klon Centaur | 乾聲與鍺二極體削波路徑混合：透明的推升，越推越毛 |
+| Compulsive Drive | Fulltone OCD | MOSFET 柔和膝點，保留撥弦起音 |
+| Sunny Drive | Boss SD-1 | 不對稱二極體：較亮的 Tube Screamer 近親 |
+| The Mouse | ProCo RAT | 約 60 dB 運放增益、硬削波、反向的 filter |
+| Dirt Station | Boss DS-1 | 硬削波加上挖空中頻的音色控制 |
+| Plus Sign | MXR Distortion+ | 鍺二極體、沒有音色旋鈕 |
+| Heavy Mettle | Boss HM-2 | 兩級增益與挖空中頻的 EQ：「電鋸」聲 |
+| Fuzz Grin | Arbiter Fuzz Face | 兩顆電晶體、不對稱削波，吉他音量轉小就變乾淨 |
+| Big Fluff | Electro-Harmonix Big Muff Pi | 兩級削波與挖中頻的音色 |
+| Dino Comp | MXR Dyna Comp | 快速起音的壓縮，鄉村 chicken-pickin' |
+| Cloud Ensemble | Boss CE-2 | BBD 合唱 |
+| Orange Ninety | MXR Phase 90 | 四級 all-pass、一顆速度旋鈕 |
+| Uni-Wave | Shin-ei Uni-Vibe | 不一致的相位級與像燈泡般起伏的掃動 |
+| Electric Mystery | Electro-Harmonix Electric Mistress | 慢速、短延遲的鑲邊 |
+| Tremor Two | Boss TR-2 | 從正弦到方波的音量顫動 |
+| Carbon Paper | MXR Carbon Copy | 類比延遲：每次重複更暗更暖 |
+| Digital Dee | Boss DD-3 | 乾淨穩定的數位重複 |
+| Holy Pail | Electro-Harmonix Holy Grail | 一顆旋鈕的殘響 |
+
+| RiffNode 音箱 | 參考的原版 | 個性 |
+| --- | --- | --- |
+| Twain '65 | Fender Twin Reverb（blackface） | 音色控制在破音前、中頻凹陷、bright 電容、超大動態空間 |
+| Tweedle '59 | Fender Bassman 5F6-A（tweed） | 中頻飽滿、很早開始破 |
+| Top Boost 30 | Vox AC30 Top Boost | 清脆的 A 類中高頻 |
+| Plexus 100 | Marshall 1959 Super Lead（plexi） | 音色控制在前級之後：中頻穿透破音 |
+| Brit 800 | Marshall JCM800 2203 | 串接前級：緊實的 80 年代搖滾 |
+
+踏板與音箱的名稱、面板與外殼都是 RiffNode 原創，沒有使用任何 Logo 或複製圖案。提到原版型號只是為了說明聲音；所有商標屬於其擁有者，RiffNode 與它們沒有任何關係，也未獲得背書。
 
 ### 免手 Vision 控制
 
@@ -154,7 +191,7 @@
   </tr>
   <tr>
     <td><img src="screenshots/mac_learn.jpg" alt="Mac 上的 Learn 分頁：試聽 Overdrive，即時 Signal Lab 顯示輸入與被圓滑削波的輸出"><br><sub><b>Learn</b> —— 單獨聽一顆踏板，同時看它對波形做了什麼</sub></td>
-    <td><img src="screenshots/mac_stage.jpg" alt="Mac 上的 Stage Mode：七顆踏板變成彩色大型腳踏開關，顯示 preset 名稱、Looper、整組旁通、調音靜音與 preset 列"><br><sub><b>Stage Mode</b> —— 每顆踏板都是腳踏開關，點一下就踩</sub></td>
+    <td><img src="screenshots/mac_stage.jpg" alt="Mac 上的 Stage Mode：鋁條板面上的擬真踏板盤，第一顆是調音器，九顆經典踏板以跳線和電源線相連，右邊接吉他、左邊接音箱"><br><sub><b>Stage Mode</b> —— 真的踏板盤：調音器在前、跳線、電源，點一下就踩</sub></td>
   </tr>
 </table>
 

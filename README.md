@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <img src="screenshots/mac_board.jpg" width="900" alt="RiffNode on Mac: a pedalboard of painted stompboxes from the guitar input to the amp, the Distortion knobs and the Signal Lab showing the flattened waveform">
+  <img src="screenshots/mac_board.jpg" width="900" alt="RiffNode on Mac: a pedalboard from the guitar input through a compressor, a green Tube Steamer, a blue Blue Diver, chorus, analog delay and reverb into a gold-panelled Plexus 100 amp, with the Signal Lab below">
 </p>
 
 Guitar effects are usually explained with jargon and sold as expensive boxes. RiffNode turns them into something you can **see, touch and hear** in a few minutes: drag pedals into a signal chain, watch the waveform and spectrum change as you play, ask the on-device AI for a tone in plain English, and switch presets with a nod of your head while both hands stay on the guitar.
@@ -85,7 +85,7 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
 | --- | --- |
 | Guitar & cable | The pickup (≈2.5 H) and cable (≈30 pF per foot) form a resonant low-pass, f = 1/(2π√LC): 3 ft rolls off above 7.3 kHz, 60 ft above 2.3 kHz. A front-of-board buffer saves the highs. Plus a volume pedal and a noise gate |
 | Pedals | Drag to reorder; RiffNode flags unusual orders (time effects before drive, fuzz not first…), explains the sound, and restores the standard order in one tap |
-| Amp | Clean, Crunch or Lead: asymmetric tube-style preamp, bass / mid / treble tone stack, power-amp saturation |
+| Amp | Five classic amps plus a modern lead and Neural Amp Modeler: asymmetric tube-style preamp, a bass / mid / treble tone stack placed before or after the preamp like the original circuit, power-amp saturation |
 | Cabinet | 1×12, 2×12 or 4×12 speaker models – the roll-off above ~5 kHz that turns fizzy distortion into a guitar tone – or load your own **impulse response** (.wav), convolved in real time |
 
 | Category | Effects |
@@ -96,7 +96,44 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
 | Modulation | Chorus · Phaser · Flanger · Tremolo |
 | Time & Ambience | Delay · Reverb |
 
-**14 built-in presets** across Clean, Crunch, Heavy and Ambient – from *Slapback Echo* to *Djent Machine* and *Shoegaze*. **Stage Mode** is the board for playing live: every pedal on screen at once as a big footswitch (one tap stomps it), the preset name readable from across the room, the looper, a board-wide bypass and tuner mute – driven by touch, the keyboard, a MIDI foot controller or your head. The screen never dims while it is up.
+**14 built-in presets** across Clean, Crunch, Heavy and Ambient – from *Slapback Echo* to *Djent Machine* and *Shoegaze*. **Stage Mode** is the board for playing live, laid out like a real one: aluminium rails, the guitar plugging in on the right and the amp on the left, a tuner first that mutes while you tune, patch cables with right-angle plugs, 9 V leads coming up from the power brick under the rails – and every pedal on screen at once, one tap to stomp it. The preset name reads from across the room, with the looper, a board-wide bypass and tuner mute along the bottom – driven by touch, the keyboard, a MIDI foot controller or your head. The screen never dims while it is up.
+
+### Classic pedals and amps
+
+Twenty classic stompboxes and five classic amps, voiced after how their circuits work – a Tube Screamer-style mid hump, a Blues Driver's open, uneven clipping, a Big Muff's scooped wall of fuzz. Tap a pedal's name to swap it for another classic of its kind; any drive slot takes any drive, so you can stack two overdrives like on a real board.
+
+| RiffNode pedal | Voiced after | What the circuit does |
+| --- | --- | --- |
+| Tube Steamer | Ibanez TS808 Tube Screamer | Soft clipping above ~720 Hz, clean bass blended back: the mid-hump push |
+| Blue Diver | Boss BD-2 Blues Driver | Uneven discrete clipping, low bass cut: open, amp-like breakup |
+| Copper Pegasus | Klon Centaur | Clean and germanium-clipped paths mixed: a transparent boost that grows hair |
+| Compulsive Drive | Fulltone OCD | MOSFET soft knee that keeps the pick attack |
+| Sunny Drive | Boss SD-1 | Asymmetric diodes: a brighter Tube Screamer cousin |
+| The Mouse | ProCo RAT | ~60 dB of op-amp gain, hard clipping, a backwards filter |
+| Dirt Station | Boss DS-1 | Hard clipping and a mid-scooping tone control |
+| Plus Sign | MXR Distortion+ | Germanium diodes, no tone knob |
+| Heavy Mettle | Boss HM-2 | Two gain stages and a scooped EQ: the "chainsaw" |
+| Fuzz Grin | Arbiter Fuzz Face | Two transistors, asymmetric clipping, cleans up with the guitar's volume |
+| Big Fluff | Electro-Harmonix Big Muff Pi | Two clipping stages and a mid-scoop tone |
+| Dino Comp | MXR Dyna Comp | Fast-attack squash for country chicken-pickin' |
+| Cloud Ensemble | Boss CE-2 | Bucket-brigade chorus |
+| Orange Ninety | MXR Phase 90 | Four all-pass stages, one speed knob |
+| Uni-Wave | Shin-ei Uni-Vibe | Mismatched stages and a throbbing lamp-like sweep |
+| Electric Mystery | Electro-Harmonix Electric Mistress | Slow, short-delay flanging |
+| Tremor Two | Boss TR-2 | Volume LFO from sine to choppy square |
+| Carbon Paper | MXR Carbon Copy | Analog delay: each repeat darker and warmer |
+| Digital Dee | Boss DD-3 | Clean, steady digital repeats |
+| Holy Pail | Electro-Harmonix Holy Grail | One-knob reverb |
+
+| RiffNode amp | Voiced after | Character |
+| --- | --- | --- |
+| Twain '65 | Fender Twin Reverb (blackface) | Tone stack before the tubes, scooped mids, bright cap, huge headroom |
+| Tweedle '59 | Fender Bassman 5F6-A (tweed) | Mid-forward, early breakup |
+| Top Boost 30 | Vox AC30 Top Boost | Chimey class-A upper mids |
+| Plexus 100 | Marshall 1959 Super Lead (plexi) | Tone stack after the preamp: mids push through the crunch |
+| Brit 800 | Marshall JCM800 2203 | Cascaded preamp: tight 80s rock |
+
+Pedal and amp names, panels and enclosures are RiffNode's own – no logos or copied graphics. The originals are named only to describe the sound; all trademarks belong to their owners, and RiffNode is not affiliated with or endorsed by them.
 
 ### Hands-free Vision control
 
@@ -152,7 +189,7 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
   </tr>
   <tr>
     <td><img src="screenshots/mac_learn.jpg" alt="Learn tab on Mac auditioning Overdrive with the live Signal Lab showing the input and the rounded, clipped output"><br><sub><b>Learn</b> – hear a pedal on its own and watch what it does to the wave</sub></td>
-    <td><img src="screenshots/mac_stage.jpg" alt="Stage Mode on Mac: seven pedals as large colored footswitches with on lights, the preset name Clean and Clear, looper, bypass board, tuner mute and the preset bar"><br><sub><b>Stage Mode</b> – every pedal a footswitch, one tap to stomp</sub></td>
+    <td><img src="screenshots/mac_stage.jpg" alt="Stage Mode on Mac: a realistic pedalboard on aluminium rails with a tuner first, nine classic pedals joined by patch cables and power leads, guitar in on the right and the amp on the left"><br><sub><b>Stage Mode</b> – a real board: tuner first, patch cables, power, one tap to stomp</sub></td>
   </tr>
 </table>
 

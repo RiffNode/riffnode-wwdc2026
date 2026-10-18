@@ -512,9 +512,8 @@ struct GlassDivider: View {
 
 // MARK: - Effect Pedal Card
 
-/// A realistic dark pedal enclosure with an LED and effect icon.
-/// Only the selected-state overlay uses glass; the body itself is solid dark
-/// so the pedalboard reads as hardware, not UI.
+/// A pedal on the board: the classic stompbox it's modelled on (see `StompboxView`), plus
+/// selection, hover-to-delete and the tap / double-tap gestures.
 struct GlassEffectPedal: View {
     let effect: EffectNode
     var isSelected: Bool = false
@@ -524,67 +523,8 @@ struct GlassEffectPedal: View {
 
     @State private var isHovering = false
 
-    private var ink: Color { effect.type.enclosureIsLight ? Color(white: 0.12) : Color(white: 0.96) }
-
     var body: some View {
-        VStack(spacing: 7) {
-            // Mini knobs across the top, like a real stompbox
-            HStack(spacing: 6) {
-                ForEach(0..<effect.type.knobCount, id: \.self) { _ in
-                    Circle()
-                        .fill(LinearGradient(colors: [Color(white: 0.28), Color(white: 0.06)],
-                                             startPoint: .top, endPoint: .bottom))
-                        .frame(width: 16, height: 16)
-                        .overlay(Rectangle().fill(Color.white.opacity(0.85)).frame(width: 1.5, height: 6).offset(y: -4))
-                        .shadow(color: .black.opacity(0.35), radius: 1, y: 1)
-                }
-            }
-            .padding(.top, 10)
-
-            // Name plate
-            VStack(spacing: 1) {
-                Text(effect.type.abbreviation)
-                    .font(.system(size: 15, weight: .heavy, design: .rounded))
-                Text(effect.type.rawValue.uppercased())
-                    .font(.system(size: 7.5, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .opacity(0.75)
-            }
-            .foregroundStyle(ink)
-
-            Spacer(minLength: 0)
-
-            // Status LED
-            Circle()
-                .fill(effect.isEnabled ? Color.red : Color(white: 0.25))
-                .frame(width: 7, height: 7)
-                .shadow(color: effect.isEnabled ? .red.opacity(0.9) : .clear, radius: 4)
-
-            // Metal footswitch
-            Circle()
-                .fill(LinearGradient(colors: [Color(white: 0.92), Color(white: 0.55)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 26, height: 26)
-                .overlay(Circle().strokeBorder(Color(white: 0.4), lineWidth: 1))
-                .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
-                .padding(.bottom, 10)
-        }
-        .frame(width: 84, height: 132)
-        // Painted metal enclosure
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(LinearGradient(colors: [effect.type.enclosureColor.opacity(1), effect.type.enclosureColor.opacity(0.78)],
-                                     startPoint: .top, endPoint: .bottom))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.45), Color.black.opacity(0.35)],
-                                             startPoint: .top, endPoint: .bottom), lineWidth: 1.2)
-        )
-        // A bypassed pedal looks switched off
-        .saturation(effect.isEnabled ? 1 : 0.45)
-        .brightness(effect.isEnabled ? 0 : -0.12)
+        StompboxView(effect: effect, isLive: effect.isEnabled)
         // Selected state: a glass-coloured ring around the pedal
         .overlay {
             if isSelected {

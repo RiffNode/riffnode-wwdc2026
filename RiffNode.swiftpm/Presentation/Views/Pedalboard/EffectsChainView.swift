@@ -398,8 +398,7 @@ struct GlassPedalControlsView: View {
                             .font(.system(size: 16, weight: .medium))
                             .foregroundStyle(effect.type.color)
 
-                        Text(effect.type.rawValue)
-                            .font(.headline)
+                        PedalModelMenu(effect: effect, engine: engine)
                     }
 
                     Spacer()
@@ -428,6 +427,9 @@ struct GlassPedalControlsView: View {
 
                 // Educational content
                 if showingInfo {
+                    if let model = effect.model {
+                        PedalModelAbout(model: model)
+                    }
                     GlassEffectEducationView(effectType: effect.type)
                         .transition(.asymmetric(
                             insertion: .move(edge: .top).combined(with: .opacity),

@@ -9,50 +9,57 @@ struct AmpHeadTile: View {
     let isSelected: Bool
     let onTap: () -> Void
 
-    var body: some View {
-        VStack(spacing: 6) {
-            // Control panel strip with a pilot light
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(settings.isEnabled ? Color.red : Color(white: 0.3))
-                    .frame(width: 8, height: 8)
-                    .shadow(color: settings.isEnabled ? .red.opacity(0.8) : .clear, radius: 4)
-                Text("AMP")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Color(red: 0.86, green: 0.76, blue: 0.52))
-            }
-            .padding(.top, 10)
+    private var look: AmpLook { settings.model.voice.look }
+    private var ink: Color { Color(hex: look.ink) }
 
-            // Speaker grille
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color(red: 0.2, green: 0.18, blue: 0.15))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(Color(red: 0.55, green: 0.48, blue: 0.33).opacity(0.5), lineWidth: 1)
-                )
-                .overlay {
-                    VStack(spacing: 2) {
-                        Text(settings.model.rawValue)
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color(red: 0.86, green: 0.76, blue: 0.52))
-                        Text(settings.cabinet.rawValue)
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .foregroundStyle(Color(red: 0.86, green: 0.76, blue: 0.52).opacity(0.7))
+    var body: some View {
+        VStack(spacing: 5) {
+            // Control panel: pilot light, the amp's own name, a row of knobs
+            VStack(spacing: 3) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(settings.isEnabled ? Color.red : Color(white: 0.3))
+                        .frame(width: 7, height: 7)
+                        .shadow(color: settings.isEnabled ? .red.opacity(0.8) : .clear, radius: 4)
+                    Text(settings.model.rawValue)
+                        .font(.system(size: 10, weight: .heavy, design: look.style == .tweed ? .serif : .rounded))
+                        .italic(look.style == .blackPanel || look.style == .tweed)
+                        .foregroundStyle(ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                HStack(spacing: 4) {
+                    ForEach(0..<5, id: \.self) { _ in
+                        Circle().fill(knobColor).frame(width: 7, height: 7)
+                            .overlay(Circle().strokeBorder(.black.opacity(0.3), lineWidth: 0.5))
                     }
                 }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 10)
+            }
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background(RoundedRectangle(cornerRadius: 3).fill(Color(hex: look.panel)))
+            .padding(.horizontal, 7)
+            .padding(.top, 7)
+
+            // Speaker grille, in the amp's own cloth
+            AmpGrille(look: look)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .overlay(alignment: .bottom) {
+                    Text(settings.cabinet.rawValue)
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .shadow(color: .black, radius: 1)
+                        .padding(.bottom, 4)
+                }
+                .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(piping, lineWidth: look.style == .goldPanel ? 1.5 : 0.5))
+                .padding(.horizontal, 7)
+                .padding(.bottom, 7)
         }
         .frame(width: 104, height: 132)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(LinearGradient(colors: [Color(white: 0.16), Color(white: 0.07)],
-                                     startPoint: .top, endPoint: .bottom))
-        )
+        .background(tolex)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(isSelected ? Color.riffPrimary : Color(red: 0.55, green: 0.48, blue: 0.33).opacity(0.7),
-                              lineWidth: isSelected ? 2.5 : 1.5)
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(isSelected ? Color.riffPrimary : .black.opacity(0.5), lineWidth: isSelected ? 2.5 : 1)
         )
         .shadow(color: .black.opacity(0.35), radius: 6, x: 0, y: 3)
         .opacity(settings.isEnabled ? 1 : 0.55)
@@ -62,6 +69,92 @@ struct AmpHeadTile: View {
         .accessibilityLabel("Amp, \(settings.model.rawValue), \(settings.cabinet.rawValue) cabinet")
         .accessibilityAddTraits(.isButton)
         .accessibilityHint("Shows the amp's controls")
+    }
+
+    private var knobColor: Color {
+        switch look.style {
+        case .blackPanel, .modern: Color(white: 0.85)          // chrome / silver
+        case .tweed: Color(red: 0.25, green: 0.15, blue: 0.08)   // brown pointers
+        case .copperPanel: Color(red: 0.95, green: 0.9, blue: 0.8)
+        case .goldPanel: Color(red: 0.12, green: 0.1, blue: 0.08)
+        }
+    }
+
+    private var piping: Color { look.style == .goldPanel ? .white.opacity(0.85) : .black.opacity(0.4) }
+
+    /// The covering: plain tolex, or diagonal-striped tweed.
+    @ViewBuilder private var tolex: some View {
+        let shape = RoundedRectangle(cornerRadius: 10)
+        if look.style == .tweed {
+            shape.fill(Color(hex: look.tolex))
+                .overlay(
+                    Canvas { context, size in
+                        var path = Path()
+                        var x: CGFloat = -size.height
+                        while x < size.width {
+                            path.move(to: CGPoint(x: x, y: size.height))
+                            path.addLine(to: CGPoint(x: x + size.height, y: 0))
+                            x += 4
+                        }
+                        context.stroke(path, with: .color(.black.opacity(0.12)), lineWidth: 1)
+                    }
+                    .clipShape(shape)
+                )
+        } else {
+            shape.fill(LinearGradient(colors: [Color(hex: look.tolex).mix(with: .white, by: 0.08), Color(hex: look.tolex)],
+                                      startPoint: .top, endPoint: .bottom))
+        }
+    }
+}
+
+/// Speaker cloth: sparkly silver, a woven check, vertical slats or a fine mesh.
+private struct AmpGrille: View {
+    let look: AmpLook
+
+    var body: some View {
+        Canvas { context, size in
+            context.fill(Path(CGRect(origin: .zero, size: size)), with: .color(Color(hex: look.grille)))
+            var path = Path()
+            switch look.style {
+            case .blackPanel:
+                // Silver cloth with a fine diagonal sparkle
+                var x: CGFloat = -size.height
+                while x < size.width {
+                    path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x + size.height, y: size.height))
+                    x += 3
+                }
+                context.stroke(path, with: .color(.white.opacity(0.18)), lineWidth: 0.6)
+            case .goldPanel, .tweed:
+                // Woven check
+                var v: CGFloat = 0
+                while v < max(size.width, size.height) {
+                    path.move(to: CGPoint(x: v, y: 0)); path.addLine(to: CGPoint(x: v, y: size.height))
+                    path.move(to: CGPoint(x: 0, y: v)); path.addLine(to: CGPoint(x: size.width, y: v))
+                    v += 3
+                }
+                context.stroke(path, with: .color(.white.opacity(look.style == .tweed ? 0.12 : 0.08)), lineWidth: 1)
+            case .copperPanel:
+                // Vertical slats
+                var x: CGFloat = 2
+                while x < size.width {
+                    path.move(to: CGPoint(x: x, y: 0)); path.addLine(to: CGPoint(x: x, y: size.height))
+                    x += 4
+                }
+                context.stroke(path, with: .color(.black.opacity(0.35)), lineWidth: 1.5)
+            case .modern:
+                // Fine metal mesh
+                var y: CGFloat = 1
+                while y < size.height {
+                    var x: CGFloat = (Int(y) / 3) % 2 == 0 ? 1 : 2.5
+                    while x < size.width {
+                        path.addEllipse(in: CGRect(x: x, y: y, width: 1.2, height: 1.2))
+                        x += 3
+                    }
+                    y += 3
+                }
+                context.fill(path, with: .color(.white.opacity(0.12)))
+            }
+        }
     }
 }
 
@@ -114,14 +207,23 @@ struct AmpPanelView: View {
                             if model == .captured && engine.neuralModelName == nil {
                                 importKind = .neuralCapture
                             } else {
-                                engine.ampSettings.model = model
+                                // Each classic amp comes with the cabinet it's usually played through
+                                var next = engine.ampSettings
+                                next.model = model
+                                if next.cabinet != .impulse && model != .captured { next.cabinet = model.voice.defaultCabinet }
+                                engine.ampSettings = next
                             }
                         }
                     )) {
                         ForEach(AmpModel.allCases) { Text($0.rawValue).tag($0) }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                     Text(settings.model.summary).font(.caption).foregroundStyle(.secondary)
+                    if settings.model != .captured {
+                        Text("Voiced after the \(settings.model.inspiredBy). \(settings.model.about)")
+                            .font(.caption2).foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     HStack(spacing: 8) {
                         Button(engine.neuralModelName == nil ? "Load a NAM capture…" : "Change capture…", systemImage: "brain") {
                             importKind = .neuralCapture

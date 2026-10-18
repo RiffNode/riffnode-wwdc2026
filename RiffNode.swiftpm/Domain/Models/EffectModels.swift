@@ -338,17 +338,25 @@ final class EffectNode: Identifiable, @unchecked Sendable {
     let type: EffectType
     var isEnabled: Bool
     var parameters: [String: Float]
+    /// Which classic pedal this one is (its look and voicing); see `PedalModel`.
+    var modelID: String?
 
-    init(id: UUID = UUID(), type: EffectType, isEnabled: Bool = true, parameters: [String: Float]? = nil) {
+    init(id: UUID = UUID(), type: EffectType, isEnabled: Bool = true, parameters: [String: Float]? = nil,
+         modelID: String? = nil) {
         self.id = id
         self.type = type
         self.isEnabled = isEnabled
-        self.parameters = parameters ?? type.defaultParameters
+        let model = PedalModel.model(id: modelID).flatMap { $0.fits(type) ? $0 : nil } ?? PedalModel.standard(for: type)
+        self.modelID = model?.id
+        self.parameters = parameters ?? model?.defaultParameters ?? type.defaultParameters
     }
+
+    /// The classic pedal this one is voiced and drawn after.
+    var model: PedalModel? { PedalModel.model(id: modelID) }
 
     /// Creates a copy of this effect node
     func copy() -> EffectNode {
-        EffectNode(type: type, isEnabled: isEnabled, parameters: parameters)
+        EffectNode(type: type, isEnabled: isEnabled, parameters: parameters, modelID: modelID)
     }
 }
 

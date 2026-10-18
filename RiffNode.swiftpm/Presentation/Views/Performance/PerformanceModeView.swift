@@ -1,14 +1,16 @@
 import SwiftUI
 
 // MARK: - Performance Mode View
-// The board for playing live: every pedal visible at once as a big footswitch (one tap
-// stomps it, like the real thing), the preset name readable from across the room, the
-// looper, tuner mute and a board-wide bypass. Hardware keys, a MIDI foot controller and
+// The board for playing live, laid out like a real one (see StagePedalboardView): a tuner
+// first, patch cables, power leads, every pedal on screen and one tap to stomp it. The
+// preset name is readable from across the room; the looper, tuner mute and a board-wide
+// bypass sit along the bottom. Hardware keys, a MIDI foot controller and
 // head gestures all drive the same controls.
 
 struct PerformanceModeView: View {
     let engine: any PerformanceEngine
     let looper: any LooperControlling
+    let tuner: any ChordDetecting
     let gestureController: any GestureControlling
     @Bindable var controller: PerformanceModeController
     let presets: [EffectPreset]
@@ -24,7 +26,7 @@ struct PerformanceModeView: View {
             VStack(spacing: Spacing.lg) {
                 topBar
                 presetHeader
-                PerformanceFootswitchGrid(engine: engine)
+                StagePedalboardView(engine: engine, tuner: tuner)
                     .frame(maxHeight: .infinity)
                 bottomBar
             }
@@ -172,60 +174,10 @@ struct PerformanceModeView: View {
     }
 }
 
-// MARK: - Footswitch Grid
-// Every pedal on screen at once – no scrolling mid-song – on the same dark board as the
-// Pedalboard tab. Its own view, so the pedals don't redraw each time a level meter moves.
-
-private struct PerformanceFootswitchGrid: View {
-    let engine: any PerformanceEngine
-
-    /// The Pedalboard tab's stompbox is 84 × 132 pt; here it's scaled up to fill the stage.
-    private static let pedalSize = CGSize(width: 84, height: 132)
-    private static let spacing: CGFloat = 18
-
-    var body: some View {
-        GeometryReader { geo in
-            let count = max(engine.effectsChain.count, 1)
-            let layout = Self.bestLayout(count: count, in: CGSize(width: geo.size.width - 48, height: geo.size.height - 48))
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.pedalSize.width * layout.scale), spacing: Self.spacing),
-                                     count: layout.columns),
-                      spacing: Self.spacing) {
-                ForEach(Array(engine.effectsChain.enumerated()), id: \.element.id) { index, effect in
-                    PerformanceStompbox(effect: effect, number: index + 1, scale: layout.scale,
-                                        isBoardBypassed: engine.isPedalboardBypassed) {
-                        engine.toggleEffect(effect)
-                    }
-                }
-            }
-            .padding(24)
-            .background(
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(LinearGradient(colors: [Color(white: 0.13), Color(white: 0.06)], startPoint: .top, endPoint: .bottom))
-                    .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    /// The column count that lets the pedals grow the most while all of them fit.
-    private static func bestLayout(count: Int, in size: CGSize) -> (columns: Int, scale: CGFloat) {
-        var best = (columns: count, scale: CGFloat(0.5))
-        for columns in 1...count {
-            let rows = Int(ceil(Double(count) / Double(columns)))
-            let widthScale = (size.width - CGFloat(columns - 1) * spacing) / (pedalSize.width * CGFloat(columns))
-            let heightScale = (size.height - CGFloat(rows - 1) * spacing) / (pedalSize.height * CGFloat(rows))
-            let scale = min(widthScale, heightScale, 2.2)
-            if scale > best.scale { best = (columns, scale) }
-        }
-        return best
-    }
-}
-
 // MARK: - Stompbox
 
-/// The Pedalboard tab's stompbox, scaled up – same painted enclosure, knobs, name plate, LED
-/// and metal footswitch – but one tap stomps it, like on stage.
-private struct PerformanceStompbox: View {
+/// The board's stompbox, scaled up – one tap stomps it, like on stage.
+struct PerformanceStompbox: View {
     let effect: EffectNode
     let number: Int
     let scale: CGFloat
@@ -233,90 +185,31 @@ private struct PerformanceStompbox: View {
     let onStomp: () -> Void
 
     private var isLive: Bool { effect.isEnabled && !isBoardBypassed }
-    private var ink: Color { effect.type.enclosureIsLight ? Color(white: 0.12) : Color(white: 0.96) }
 
     var body: some View {
         Button(action: onStomp) {
-            VStack(spacing: 7 * scale) {
-                // Mini knobs across the top
-                HStack(spacing: 6 * scale) {
-                    ForEach(0..<effect.type.knobCount, id: \.self) { _ in
-                        Circle()
-                            .fill(LinearGradient(colors: [Color(white: 0.28), Color(white: 0.06)],
-                                                 startPoint: .top, endPoint: .bottom))
-                            .frame(width: 16 * scale, height: 16 * scale)
-                            .overlay(Rectangle().fill(Color.white.opacity(0.85))
-                                .frame(width: 1.5 * scale, height: 6 * scale).offset(y: -4 * scale))
-                            .shadow(color: .black.opacity(0.35), radius: 1, y: 1)
+            StompboxView(effect: effect, isLive: isLive, scale: scale)
+                // Its number, for the 1–9 keys – on the board just below the pedal
+                .overlay(alignment: .bottom) {
+                    if number <= 9 {
+                        Text("\(number)")
+                            .font(.system(size: 9 * scale, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .offset(y: 13 * scale)
                     }
                 }
-                .padding(.top, 10 * scale)
-
-                // Name plate
-                VStack(spacing: 1) {
-                    Text(effect.type.abbreviation)
-                        .font(.system(size: 15 * scale, weight: .heavy, design: .rounded))
-                    Text(effect.type.rawValue.uppercased())
-                        .font(.system(size: 7.5 * scale, weight: .bold, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .opacity(0.75)
-                }
-                .foregroundStyle(ink)
-
-                Spacer(minLength: 0)
-
-                // Status LED
-                Circle()
-                    .fill(isLive ? Color.red : Color(white: 0.25))
-                    .frame(width: 7 * scale, height: 7 * scale)
-                    .shadow(color: isLive ? .red.opacity(0.9) : .clear, radius: 4 * scale)
-
-                // Metal footswitch
-                Circle()
-                    .fill(LinearGradient(colors: [Color(white: 0.92), Color(white: 0.55)],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 26 * scale, height: 26 * scale)
-                    .overlay(Circle().strokeBorder(Color(white: 0.4), lineWidth: 1))
-                    .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
-                    .padding(.bottom, 10 * scale)
-            }
-            .frame(width: 84 * scale, height: 132 * scale)
-            .background(
-                RoundedRectangle(cornerRadius: 10 * scale)
-                    .fill(LinearGradient(colors: [effect.type.enclosureColor, effect.type.enclosureColor.opacity(0.78)],
-                                         startPoint: .top, endPoint: .bottom))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10 * scale)
-                    .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.45), Color.black.opacity(0.35)],
-                                                 startPoint: .top, endPoint: .bottom), lineWidth: 1.2)
-            )
-            // A bypassed pedal looks switched off, as on the Pedalboard tab
-            .saturation(isLive ? 1 : 0.45)
-            .brightness(isLive ? 0 : -0.12)
-            // Its number, for the 1–9 keys
-            .overlay(alignment: .topLeading) {
-                if number <= 9 {
-                    Text("\(number)")
-                        .font(.system(size: 9 * scale, weight: .bold, design: .monospaced))
-                        .foregroundStyle(ink.opacity(0.55))
-                        .padding(5 * scale)
-                }
-            }
-            .shadow(color: .black.opacity(0.35), radius: 8, y: 4)
-            .contentShape(RoundedRectangle(cornerRadius: 10 * scale))
+                .contentShape(Rectangle())
         }
         .buttonStyle(StompButtonStyle())
         .animation(.snappy(duration: 0.15), value: isLive)
-        .accessibilityLabel("\(effect.type.rawValue), \(isLive ? "on" : "off")")
+        .accessibilityLabel("\(effect.model?.name ?? effect.type.rawValue), \(effect.type.rawValue), \(isLive ? "on" : "off")")
         .accessibilityHint("Stomps the pedal on or off")
         .help(number <= 9 ? "Press \(number)" : effect.type.rawValue)
     }
 }
 
 /// Presses down like a metal footswitch.
-private struct StompButtonStyle: ButtonStyle {
+struct StompButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.96 : 1)

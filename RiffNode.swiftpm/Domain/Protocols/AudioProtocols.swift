@@ -65,6 +65,8 @@ protocol EffectsChainManaging: AnyObject {
     func moveEffect(from source: IndexSet, to destination: Int)
     func toggleEffect(_ effect: EffectNode)
     func updateEffectParameter(_ effect: EffectNode, key: String, value: Float)
+    /// Swaps which classic pedal this one is (look and voicing); the knobs stay where they are.
+    func setPedalModel(_ effect: EffectNode, modelID: String)
     func clearEffects()
     func resetEffectsToDefaults()
     func applyPreset(_ preset: EffectPreset)

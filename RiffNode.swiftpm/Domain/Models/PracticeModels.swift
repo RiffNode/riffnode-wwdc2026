@@ -51,6 +51,8 @@ struct ToneDocument: Codable, Equatable, Sendable {
         var type: String
         var isEnabled: Bool
         var parameters: [String: Float]
+        /// The pedal model (absent in files from before models existed).
+        var model: String?
     }
     struct Amp: Codable, Equatable, Sendable {
         var isEnabled: Bool
@@ -68,7 +70,7 @@ struct ToneDocument: Codable, Equatable, Sendable {
 
     init(name: String, chain: [EffectNode], amp: AmpSettings, eqBands: [EQBand]) {
         self.name = name
-        pedals = chain.map { Pedal(type: $0.type.rawValue, isEnabled: $0.isEnabled, parameters: $0.parameters) }
+        pedals = chain.map { Pedal(type: $0.type.rawValue, isEnabled: $0.isEnabled, parameters: $0.parameters, model: $0.modelID) }
         self.amp = Amp(isEnabled: amp.isEnabled, model: amp.model.rawValue,
                        cabinet: amp.cabinet == .impulse ? CabinetType.twoByTwelve.rawValue : amp.cabinet.rawValue,
                        gain: amp.gain, bass: amp.bass, mid: amp.mid, treble: amp.treble, master: amp.master)
@@ -78,13 +80,13 @@ struct ToneDocument: Codable, Equatable, Sendable {
     /// The pedals this document describes (unknown types are skipped).
     var effectNodes: [EffectNode] {
         pedals.compactMap { pedal in
-            EffectType(rawValue: pedal.type).map { EffectNode(type: $0, isEnabled: pedal.isEnabled, parameters: pedal.parameters) }
+            EffectType(rawValue: pedal.type).map { EffectNode(type: $0, isEnabled: pedal.isEnabled, parameters: pedal.parameters, modelID: pedal.model) }
         }
     }
 
     var ampSettings: AmpSettings {
         AmpSettings(isEnabled: amp.isEnabled,
-                    model: AmpModel(rawValue: amp.model) ?? .clean,
+                    model: AmpModel(legacy: amp.model) ?? .twain,
                     cabinet: CabinetType(rawValue: amp.cabinet) ?? .twoByTwelve,
                     gain: amp.gain, bass: amp.bass, mid: amp.mid, treble: amp.treble, master: amp.master)
     }

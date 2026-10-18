@@ -152,6 +152,21 @@ final class EffectUnitsContainer {
         }
     }
     
+    /// The custom DSP kernel playing this effect type (nil for Apple's own units).
+    func kernel(for type: EffectType) -> ModulationKernel? {
+        switch type {
+        case .overdrive: overdriveKernel
+        case .distortion: distortionKernel
+        case .fuzz: fuzzKernel
+        case .chorus: chorusKernel
+        case .phaser: phaserKernel
+        case .flanger: flangerKernel
+        case .tremolo: tremoloKernel
+        case .delay: delayKernel
+        case .compressor, .equalizer, .reverb: nil
+        }
+    }
+
     /// Set bypass state for a specific effect type
     /// AVAudioUnit base class doesn't have bypass, so we access concrete types directly
     func setBypass(for type: EffectType, bypassed: Bool) {
