@@ -162,10 +162,49 @@ enum AmpDesign {
     }
 }
 
+// MARK: - Bank Handshake
+
+/// Two pre-allocated banks, one being read by the audio thread and one the main thread may
+/// rewrite. The reader says which bank it is reading, and re-checks that it is still the
+/// active one, so the writer never rewrites a bank that is mid-read – even when settings
+/// change twice within one audio block. Lock-free on the audio thread.
+struct BankHandshake: ~Copyable {
+    private let active = Atomic<Int>(0)
+    private let reading = Atomic<Int>(-1)
+
+    /// Audio thread: the bank to read; call `endRead()` when done.
+    func beginRead() -> Int {
+        while true {
+            let bank = active.load(ordering: .sequentiallyConsistent)
+            reading.store(bank, ordering: .sequentiallyConsistent)
+            // A flip in between means the writer may already be rewriting `bank`: take the new one
+            if active.load(ordering: .sequentiallyConsistent) == bank { return bank }
+        }
+    }
+
+    func endRead() { reading.store(-1, ordering: .sequentiallyConsistent) }
+
+    /// Main thread: the inactive bank, once no reader is still on it (a block at most).
+    func writableBank() -> Int {
+        let bank = 1 - active.load(ordering: .sequentiallyConsistent)
+        var spins = 0
+        while reading.load(ordering: .sequentiallyConsistent) == bank {
+            spins += 1
+            if spins > 64 { usleep(100) }
+        }
+        return bank
+    }
+
+    /// Main thread: makes the freshly written bank the active one.
+    func publish(_ bank: Int) { active.store(bank, ordering: .sequentiallyConsistent) }
+
+    var activeBank: Int { active.load(ordering: .sequentiallyConsistent) }
+}
+
 // MARK: - Amp Processor (audio thread)
 
 /// Everything the audio thread needs, computed on the main thread and handed over through
-/// two pre-allocated banks and an atomic index – the audio thread never allocates or locks.
+/// two pre-allocated banks and a handshake – the audio thread never allocates or locks.
 final class AmpProcessor: @unchecked Sendable {
 
     static let maxStages = 9
@@ -175,14 +214,13 @@ final class AmpProcessor: @unchecked Sendable {
     private static let bankSize = header + maxStages * 5
 
     private let banks = UnsafeMutablePointer<Float>.allocate(capacity: 2 * bankSize)
-    private let activeBank = Atomic<Int>(0)
+    private let coefficientBanks = BankHandshake()
     private let generation = Atomic<Int>(0)
 
-    // Impulse response: two banks of taps (stored reversed for convolution), atomic switch
+    // Impulse response: two banks of taps (stored reversed for convolution), each with its length
     private let irBanks = UnsafeMutablePointer<Float>.allocate(capacity: 2 * maxIRLength)
-    private let irActive = Atomic<Int>(0)
-    private let irLength = Atomic<Int>(0)
-    private var irWriteBank = 1
+    private let irLengths = UnsafeMutablePointer<Int>.allocate(capacity: 2)
+    private let irHandshake = BankHandshake()
 
     /// The loaded neural capture, handed to the audio thread as a retained pointer
     /// (the engine keeps every model it ever loaded alive, so a swap never frees one in use).
@@ -200,6 +238,7 @@ final class AmpProcessor: @unchecked Sendable {
     init() {
         banks.initialize(repeating: 0, count: 2 * Self.bankSize)
         irBanks.initialize(repeating: 0, count: 2 * Self.maxIRLength)
+        irLengths.initialize(repeating: 0, count: 2)
         history.initialize(repeating: 0, count: 2 * Self.historyLength)
         scratch.initialize(repeating: 0, count: 4096)
         apply(AmpSettings())
@@ -208,6 +247,7 @@ final class AmpProcessor: @unchecked Sendable {
     deinit {
         banks.deallocate()
         irBanks.deallocate()
+        irLengths.deallocate()
         history.deallocate()
         scratch.deallocate()
     }
@@ -218,9 +258,9 @@ final class AmpProcessor: @unchecked Sendable {
     func setSampleRate(_ rate: Float) { sampleRate = rate }
 
     func apply(_ s: AmpSettings) {
-        let bank = 1 - activeBank.load(ordering: .acquiring)
+        let bank = coefficientBanks.writableBank()
         let base = banks + bank * Self.bankSize
-        let useIR = s.cabinet == .impulse && irLength.load(ordering: .relaxed) > 0
+        let useIR = s.cabinet == .impulse && irLengths[irHandshake.activeBank] > 0
         var designed = s
         if s.cabinet == .impulse { designed.cabinet = .direct }   // the IR replaces the filter model
         let stages = AmpDesign.stages(for: designed).prefix(Self.maxStages)
@@ -240,7 +280,7 @@ final class AmpProcessor: @unchecked Sendable {
             let o = Self.header + i * 5
             (base[o], base[o + 1], base[o + 2], base[o + 3], base[o + 4]) = c
         }
-        activeBank.store(bank, ordering: .releasing)
+        coefficientBanks.publish(bank)
         generation.add(1, ordering: .releasing)
     }
 
@@ -262,12 +302,12 @@ final class AmpProcessor: @unchecked Sendable {
     /// Installs an impulse response (already at the engine's sample rate, normalised).
     func loadIR(_ taps: [Float]) {
         let count = min(taps.count, Self.maxIRLength)
-        let base = irBanks + irWriteBank * Self.maxIRLength
+        let bank = irHandshake.writableBank()
+        let base = irBanks + bank * Self.maxIRLength
         // Stored reversed so a forward correlation computes the convolution
         for i in 0..<count { base[i] = taps[count - 1 - i] }
-        irLength.store(count, ordering: .relaxed)
-        irActive.store(irWriteBank, ordering: .releasing)
-        irWriteBank = 1 - irWriteBank
+        irLengths[bank] = count
+        irHandshake.publish(bank)
     }
 
     // MARK: Audio thread
@@ -296,7 +336,9 @@ final class AmpProcessor: @unchecked Sendable {
         let current = generation.load(ordering: .acquiring)
         guard current != seenGeneration else { return }
         seenGeneration = current
-        let base = banks + activeBank.load(ordering: .acquiring) * Self.bankSize
+        let bank = coefficientBanks.beginRead()
+        defer { coefficientBanks.endRead() }
+        let base = banks + bank * Self.bankSize
         stageCount = min(Int(base[0]), Self.maxStages)
         preGain = base[1]; tightCoefficient = base[2]; masterDrive = base[3]; postGain = base[4]
         useIR = base[5] > 0.5
@@ -350,9 +392,11 @@ final class AmpProcessor: @unchecked Sendable {
 
     /// Direct-form FIR with the loaded impulse response (a real speaker + microphone).
     private func convolve(_ data: UnsafeMutablePointer<Float>, frames: Int, channel: Int) {
-        let taps = irLength.load(ordering: .relaxed)
+        let bank = irHandshake.beginRead()
+        defer { irHandshake.endRead() }
+        let taps = irLengths[bank]
         guard taps > 0 else { return }
-        let ir = irBanks + irActive.load(ordering: .acquiring) * Self.maxIRLength
+        let ir = irBanks + bank * Self.maxIRLength
         let h = history + channel * Self.historyLength
         let keep = Self.maxIRLength - 1
         // history = [last keep samples][this block]

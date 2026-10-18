@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Synchronization
 
 
 @main
@@ -69,7 +70,40 @@ struct AudioGraphRegressionTests {
         return samples
     }
 
-    enum Failure: Error { case missingAudio, stereoMismatch, noPedalDifference }
+    enum Failure: Error { case missingAudio, stereoMismatch, noPedalDifference, tornBank }
+
+    /// A writer rewriting banks as fast as it can while a reader copies them: every copy the
+    /// reader takes must be whole (all slots from one write), never half old, half new.
+    final class HandshakeRig: @unchecked Sendable {
+        let handshake = BankHandshake()
+        let banks = UnsafeMutablePointer<Int>.allocate(capacity: 2 * 64)
+        init() { banks.initialize(repeating: 0, count: 128) }
+    }
+
+    static func checkBankHandshake() throws {
+        let rig = HandshakeRig()
+        let done = Atomic<Bool>(false)
+        let torn = Atomic<Int>(0)
+        let reader = Thread {
+            while !done.load(ordering: .relaxed) {
+                let bank = rig.handshake.beginRead()
+                let base = rig.banks + bank * 64
+                let first = base[0]
+                for i in 1..<64 where base[i] != first { torn.add(1, ordering: .relaxed); break }
+                rig.handshake.endRead()
+            }
+        }
+        reader.start()
+        for value in 1...200_000 {
+            let bank = rig.handshake.writableBank()
+            let base = rig.banks + bank * 64
+            for i in 0..<64 { base[i] = value }
+            rig.handshake.publish(bank)
+        }
+        done.store(true, ordering: .relaxed)
+        Thread.sleep(forTimeInterval: 0.05)
+        guard torn.load(ordering: .relaxed) == 0 else { throw Failure.tornBank }
+    }
 
     @MainActor static func main() async throws {
         var count = 0
@@ -83,6 +117,9 @@ struct AudioGraphRegressionTests {
             print("PASS \(riff.title) -> stereo at \(Int(rate)) Hz; distortion mean difference \(difference)")
             }
         }
+        try checkBankHandshake()
+        count += 1
+        print("PASS coefficient banks are never read half-written (200 000 swaps)")
         _ = try await render(rate: 48000, bypassed: true, riff: .originalArpeggio)
         count += 1
         print("PASS original synthesized riff remains playable")

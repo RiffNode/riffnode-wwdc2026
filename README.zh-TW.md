@@ -54,7 +54,7 @@
 | --- | --- | --- |
 | 1 | 點 **Try the Demo Riff**，或用 **Connect a Guitar** 接實體吉他 | 引擎啟動；只有實體輸入會要求麥克風權限 |
 | 2 | 點 **Take the Tour**（或略過） | 簡短的訊號鏈導覽 |
-| 3 | Input 選 Demo：原創分散和弦，或用 **Import a Recording…** 匯入自己的錄音（`⌘D` 播放／停止） | 開一顆踏板，再用 **Bypass pedals to compare** 比較同一段演奏 |
+| 3 | Input 選 Demo：原創分散和弦，或用 **Import Recordings…** 匯入自己的錄音（`⌘D` 播放／停止） | 開一顆踏板，再用 **Bypass pedals to compare** 比較同一段演奏 |
 | 4 | 點一顆踏板，或雙擊來開關 | 聲音和頻譜立刻改變，Notch 會顯示變化 |
 | 5 | 打開 **Tone Assistant**（`⌘J`），點 *Ambient pad* | 看它一步步挑踏板、設參數，再重建訊號鏈 |
 | 6 | 在 Play Along 按 **Groove** 播放 | 任意小調的鼓與貝斯；目前的和弦會亮起 |
@@ -174,8 +174,10 @@
 
 - **Swift 6 的音訊 tap** —— tap block 是全域、非隔離的函式，寫入有鎖保護的緩衝區，所以音訊執行緒上永遠不會跑到 `@MainActor` 的 closure。
 - **啟動不卡頓** —— `AVAudioSession` 的啟用放在主執行緒之外。
-- **Demo riff 與 groove** —— Karplus–Strong 撥弦合成（all-pass 校正音準、濾波過的撥弦雜訊、悶音 ghost note），加上合成的大鼓、小鼓、hi-hat 和貝斯，都用固定種子在裝置上產生；另有兩段各一分鐘的 clean 吉他錄音。Demo 錄音與匯入歌曲會用 `AVAudioConverter` 轉成引擎的取樣率。
-- **即時 DSP** —— 自製的 `AUAudioUnit` 在音訊執行緒上原地處理，不配置記憶體、不用鎖；旋鈕數值透過 `Synchronization.Atomic` 跨執行緒傳遞，音箱的濾波器係數在主執行緒設計好，再用雙緩衝區交給音訊執行緒。
+- **Demo riff 與 groove** —— Karplus–Strong 撥弦合成（all-pass 校正音準、濾波過的撥弦雜訊、悶音 ghost note），加上合成的大鼓、小鼓、hi-hat 和貝斯，都用固定種子在裝置上產生；App 不內含任何音檔；Demo 匯入的 clean 錄音與 Play Along 的歌曲會用 `AVAudioConverter` 轉成引擎的取樣率。
+- **即時 DSP** —— 自製的 `AUAudioUnit` 在音訊執行緒上原地處理，不配置記憶體、不用鎖；旋鈕數值透過 `Synchronization.Atomic` 跨執行緒傳遞。音箱的濾波器係數與喇叭箱 IR 在主執行緒寫進兩組緩衝區的其中一組；音訊執行緒會先標記自己正在讀哪一組、再確認它仍是目前那組，所以主執行緒不會改寫正在被讀的那組，即使同一個音訊區塊內連續改兩次設定也一樣。壓力測試在讀取端同時運作下切換 20 萬次，確認沒有任何一次讀到寫到一半的資料。
+- **低延遲** —— I/O buffer 約 5 ms（48 kHz 下 256 個取樣）；Settings 顯示實測的來回延遲（輸入＋輸出延遲＋兩個 buffer），輸出為藍牙時提醒會多 100–200 ms。踏板一直接在圖上，以 `shouldBypassEffect` 切換，開關時不重建音訊圖。
+- **主執行緒保持空閒** —— 音高與和弦偵測在 main actor 之外執行（以 `vDSP_dotpr` 向量化）；每次結果帶有世代編號，重設或切換音源後才完成的舊結果會被丟棄，不會覆蓋新狀態。FFT 緩衝區只配置一次，不是每一幀配置。
 - **乾淨的削波** —— overdrive、distortion、fuzz 的削波以 4 倍 oversampling 運算，超過 Nyquist 的諧波不會折回成刺耳的 aliasing。
 - **喇叭箱 IR** —— 載入的檔案用 `AVAudioConverter` 重新取樣、截成 2048 tap、依峰值正規化，再用 `vDSP_conv` 卷積。
 - **快速的裝置端 AI** —— 模型只填一個小小的 `@Generable` 輪廓（風格、gain、空間感、最多三顆代表性踏板），而不是直接給旋鈕數值；每次請求使用預熱過的新 session，在 macOS 27 的模型上約 3.5 秒回應，且不會超出 4K 的 context window。
@@ -298,7 +300,7 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
 
 | 規則 | RiffNode |
 | --- | --- |
-| 個人作品，**App Playground**（`.swiftpm`）壓縮後 **25 MB 以內** | 原始投稿使用單一 `.swiftpm`，riff、伴奏、鼓聲皆即時合成，沒有模型；目前版本另含短 clean 錄音 |
+| 個人作品，**App Playground**（`.swiftpm`）壓縮後 **25 MB 以內** | 原始投稿使用單一 `.swiftpm`，riff、伴奏、鼓聲皆即時合成，沒有模型；目前版本仍不內含音檔，Demo 錄音由使用者自行匯入 |
 | **完全離線**（評審時網路關閉） | 沒有網路請求；Apple Intelligence 在裝置上執行，並有離線備援 |
 | **三分鐘內**可以體驗完 | 第一個畫面就能使用 demo riff、Signal Lab 與 Tone Assistant |
 | 使用 **Swift Playgrounds 4.6+ 或 Xcode 26+** 製作 | Swift 6、SwiftUI、iPadOS / macOS 26 |
@@ -324,7 +326,6 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
 
 - 音訊路由變更與中斷（拔掉錄音介面、來電）後完整恢復
 - 分析 tap 與介面之間改用無鎖 ring buffer
-- 切換音箱係數 bank 時更嚴謹的交接
 - 手勢（Vision）相機在不同畫面間的生命週期
 - 儲存整組設定（踏板、音箱、輸入、EQ）並支援 Undo
 - EQ 曲線依實際濾波器響應繪製
@@ -346,4 +347,4 @@ RiffNode 原始碼以 [MIT 授權](LICENSE) 釋出。App 不內含任何第三�
 
 ## 核心回歸驗證
 
-在裝有 Xcode 的 Mac 執行 `scripts/test-core.sh`，驗證音高、FFT、電平、AI 參數修改、舊訊息快照與免麥克風 setup。`scripts/test-audio.sh` 以離線音訊圖驗證 44.1／48 kHz 的 clean／加踏板差異，以及原創合成 riff。
+在裝有 Xcode 的 Mac 執行 `scripts/test-core.sh`，驗證音高、FFT、電平、AI 參數修改、舊訊息快照與免麥克風 setup。`scripts/test-audio.sh` 以離線音訊圖驗證 44.1／48 kHz 的 clean／加踏板差異、原創合成 riff，以及高競爭下的係數緩衝區交接。設定 `RIFFNODE_TEST_RECORDING` 為自己的 WAV，就能用自己的錄音跑音訊檢查。

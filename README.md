@@ -52,7 +52,7 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 | --- | --- | --- |
 | 1 | Tap **Try the Demo Riff**, or **Connect a Guitar** for live input | The engine starts; only live input requests microphone access |
 | 2 | Tap **Take the Tour** (or skip it) | A short walkthrough of the signal chain |
-| 3 | Choose Demo in the Input card – the original arpeggio or **Import a Recording…** of your own (`⌘D` starts/stops Demo) | Enable a pedal, then use **Bypass pedals to compare** on the same performance |
+| 3 | Choose Demo in the Input card – the original arpeggio or **Import Recordings…** of your own (`⌘D` starts/stops Demo) | Enable a pedal, then use **Bypass pedals to compare** on the same performance |
 | 4 | Tap a pedal, or double-tap to bypass it | The sound and the spectrum change instantly; the notch announces the change |
 | 5 | Open the **Tone Assistant** (`⌘J`) and tap *Ambient pad* | Watch it pick pedals and settings step by step, then rebuild the chain |
 | 6 | Press play on **Groove** in Play Along | Drums and bass in any minor key; the current chord lights up |
@@ -172,8 +172,10 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
 
 - **Swift 6 audio taps** – tap blocks are global, non-isolated functions writing into a lock-protected buffer, so no `@MainActor` closure ever runs on the audio thread.
 - **Responsive start-up** – `AVAudioSession` activation runs off the main thread.
-- **Demo riff and groove** – Karplus–Strong plucked strings (all-pass tuned, with filtered pick noise and ghost-note mutes), plus synthesized kick, snare, hi-hat and bass, render on device with seeded generators. Two one-minute clean guitar excerpts are also bundled; Demo recordings and imported songs are converted to the engine's sample rate with `AVAudioConverter`.
-- **Real-time DSP** – a custom `AUAudioUnit` processes in place on the audio thread with no allocation or locks; knob values cross threads through `Synchronization.Atomic`, and the amp's filter coefficients are designed on the main thread and handed over in double-buffered banks.
+- **Demo riff and groove** – Karplus–Strong plucked strings (all-pass tuned, with filtered pick noise and ghost-note mutes), plus synthesized kick, snare, hi-hat and bass, render on device with seeded generators. No audio files are bundled; clean recordings you import for Demo, and songs for Play Along, are converted to the engine's sample rate with `AVAudioConverter`.
+- **Real-time DSP** – a custom `AUAudioUnit` processes in place on the audio thread with no allocation or locks; knob values cross threads through `Synchronization.Atomic`. The amp's filter coefficients and cabinet IRs are prepared on the main thread in one of two banks; the audio thread announces which bank it is reading and re-checks it is still current, so the main thread never rewrites a bank mid-read – even when settings change twice within one audio block. A stress test swaps banks 200 000 times against a concurrent reader and checks no copy is ever torn.
+- **Low latency** – a ~5 ms I/O buffer (256 frames at 48 kHz); Settings shows the measured round trip (input + output latency + two buffers) and warns when Bluetooth output adds 100–200 ms. Pedals stay wired and switch with `shouldBypassEffect`, so toggling never rebuilds the graph.
+- **A free main thread** – pitch and chord detection run off the main actor (vectorised with `vDSP_dotpr`); each result carries a generation number, so a result that finishes after a reset or a source switch is dropped instead of overwriting newer state. FFT buffers are allocated once, not per frame.
 - **Clean clipping** – the overdrive, distortion and fuzz clippers run 4× oversampled, so harmonics above Nyquist don't fold back as harsh aliasing.
 - **Cabinet IRs** – loaded files are resampled with `AVAudioConverter`, trimmed to 2048 taps, peak-normalised and convolved with `vDSP_conv`.
 - **Fast on-device AI** – the model fills a small `@Generable` sketch (style, gain, space, up to three signature pedals) instead of raw knob values; a prewarmed session per request answers in about 3.5 seconds on the macOS 27 model and never overflows the 4K context window.
@@ -296,7 +298,7 @@ Every 2026 winner received:
 
 | Rule | RiffNode |
 | --- | --- |
-| An individual **App Playground** (`.swiftpm`) in a ZIP of **25 MB or less** | The original submission used one `.swiftpm` with synthesized audio and no bundled models; the current demo also includes a short clean recording |
+| An individual **App Playground** (`.swiftpm`) in a ZIP of **25 MB or less** | The original submission used one `.swiftpm` with synthesized audio and no bundled models; the current version still bundles no audio – Demo recordings are imported by the player |
 | Runs **fully offline** (network access is disabled during judging) | No network calls; Apple Intelligence runs on device, with an offline fallback |
 | An experience of **three minutes or less** | Demo riff, Signal Lab and Tone Assistant all reachable from the first screen |
 | Built with **Swift Playgrounds 4.6+ or Xcode 26+** | Swift 6, SwiftUI, iPadOS / macOS 26 |
@@ -322,7 +324,6 @@ It brings low-level signal processing, computer vision and on-device AI together
 
 - Full recovery from audio route changes and interruptions (unplugging an interface, phone calls)
 - A lock-free ring buffer between the analysis taps and the UI
-- A stricter handshake when swapping amp coefficient banks
 - Hand-gesture (Vision) camera lifecycle across scenes
 - Saving the whole rig – pedals, amp, input, EQ – with Undo
 - An EQ curve drawn from the exact filter response
@@ -344,4 +345,4 @@ RiffNode source code is released under the [MIT License](LICENSE). No third-part
 
 ## Core regression checks
 
-Run `scripts/test-core.sh` for pitch, FFT calibration, metering, AI edits, chat snapshots and permission-free setup. Run `scripts/test-audio.sh` for offline clean/processed audio at 44.1/48 kHz and the original synth source. Both require Xcode on macOS.
+Run `scripts/test-core.sh` for pitch, FFT calibration, metering, AI edits, chat snapshots and permission-free setup. Run `scripts/test-audio.sh` for offline clean/processed audio at 44.1/48 kHz, the original synth source and the coefficient-bank handshake under contention. Set `RIFFNODE_TEST_RECORDING` to a WAV of your own to run the audio checks on it. Both require Xcode on macOS.
