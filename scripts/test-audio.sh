@@ -5,7 +5,7 @@ riff_test_dir=$(mktemp -d "${TMPDIR:-/tmp}/riffnode-audio-tests.XXXXXX")
 trap 'rm -rf "$riff_test_dir"' EXIT
 xcrun swiftc -swift-version 6 -parse-as-library \
   RiffNode.swiftpm/Domain/Models/*.swift \
-  RiffNode.swiftpm/Domain/Protocols/AudioProtocols.swift \
+  RiffNode.swiftpm/Domain/Protocols/*.swift \
   RiffNode.swiftpm/Data/Audio/DSP/*.swift \
   RiffNode.swiftpm/Data/Audio/DemoRiffSynthesizer.swift \
   RiffNode.swiftpm/Data/Audio/DemoRiffPlayer.swift \

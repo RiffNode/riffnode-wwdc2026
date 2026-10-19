@@ -79,7 +79,8 @@ struct MainInterfaceView: View {
                     Group {
                         switch viewModel.selectedTab {
                         case .pedalboard:
-                            EffectsChainView(engine: engine, history: viewModel.history)
+                            EffectsChainView(engine: engine, history: viewModel.history,
+                                             onEnterStageMode: { viewModel.showingPerformanceMode = true })
                         case .parametricEQ:
                             ScrollView {
                                 VStack(spacing: Spacing.md) {
@@ -147,12 +148,7 @@ struct MainInterfaceView: View {
                 presets: viewModel.presetService.presets,
                 onToggleGestures: { viewModel.gestureControlEnabled.toggle() },
                 onStepPreset: { viewModel.stepPreset(by: $0) },
-                onSelectPreset: { index in
-                    let presets = viewModel.presetService.presets
-                    guard presets.indices.contains(index) else { return }
-                    viewModel.performanceController.currentPresetIndex = index
-                    engine.applyPreset(presets[index])
-                },
+                onSelectPreset: { viewModel.selectPreset(at: $0) },
                 onExit: { viewModel.showingPerformanceMode = false }
             )
         }
@@ -175,9 +171,6 @@ struct MainInterfaceView: View {
             viewModel.demoRiffDidChange(isPlaying)
         }
         .background { MainKeyboardShortcuts(viewModel: viewModel) }
-        .onReceive(NotificationCenter.default.publisher(for: .enterPerformanceMode)) { _ in
-            viewModel.showingPerformanceMode = true
-        }
         .onChange(of: viewModel.boardDocument) { _, document in
             if let document { viewModel.history.record(document) }
         }

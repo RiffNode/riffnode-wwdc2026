@@ -91,8 +91,6 @@ enum Typography {
     /// Numeric values (monospaced)
     static func mono() -> Font { .system(.body, design: .monospaced).weight(.medium) }
     
-    /// Small numeric values
-    static func monoSmall() -> Font { .system(.caption, design: .monospaced).weight(.semibold) }
 }
 
 // MARK: - Adaptive Background

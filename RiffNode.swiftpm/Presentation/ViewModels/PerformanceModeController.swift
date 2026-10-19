@@ -1,13 +1,6 @@
 import SwiftUI
 import Observation
 
-// MARK: - Notification Names
-
-extension Notification.Name {
-    static let enterPerformanceMode = Notification.Name("enterPerformanceMode")
-    static let exitPerformanceMode = Notification.Name("exitPerformanceMode")
-}
-
 // MARK: - Performance Gesture Action
 
 /// Defines an action that can be bound to a gesture

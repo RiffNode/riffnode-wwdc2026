@@ -7,6 +7,8 @@ struct EffectsChainView: View {
     let engine: any PedalboardEngine
     /// Undo / redo for the board (absent in previews).
     var history: BoardHistory? = nil
+    /// Opens Stage Mode (absent: no Stage Mode button).
+    var onEnterStageMode: (() -> Void)? = nil
     /// Selection is kept by ID and resolved against the live chain: presets and the AI
     /// replace every node, and editing a stale node would change nothing you can hear.
     @State private var selectedEffectID: UUID?
@@ -89,20 +91,20 @@ struct EffectsChainView: View {
                 .buttonStyle(.plain)
 
                 // Stage Mode button
-                Button {
-                    NotificationCenter.default.post(name: .enterPerformanceMode, object: nil)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "rectangle.expand.vertical")
-                        Text("Stage Mode")
+                if let onEnterStageMode {
+                    Button(action: onEnterStageMode) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "rectangle.expand.vertical")
+                            Text("Stage Mode")
+                        }
+                        .font(.system(.footnote, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .glassEffect(.regular, in: Capsule())
                     }
-                    .font(.system(.footnote, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 16)
-                    .glassEffect(.regular, in: Capsule())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.horizontal)
 

@@ -725,24 +725,6 @@ final class SemanticCommandProcessor: ToneAssisting {
 
     // MARK: - Effect Name Canonicalization
 
-    /// Maps any string the model might generate to one of our 11 canonical effect names.
-    /// Returns nil if the string clearly isn't an effect (e.g. "bass +4", "mid scoop").
-    private func canonicalEffectName(_ raw: String) -> String? {
-        let s = raw.lowercased()
-        if s.contains("reverb") || s.contains("room") || s.contains("hall") || s.contains("cathedral") || s.contains("plate") { return "reverb" }
-        if s.contains("delay") || s.contains("echo") || s.contains("slapback") { return "delay" }
-        if s.contains("fuzz") { return "fuzz" }                                   // before distortion (fuzz contains no 'distort')
-        if s.contains("distort") || s.contains("hi-gain") || s.contains("high gain") || s.contains("metal") { return "distortion" }
-        if s.contains("overdrive") || s.contains("over drive") || s.contains("crunch") { return "overdrive" }
-        if s.contains("flanger") || s.contains("flange") { return "flanger" }    // before chorus
-        if s.contains("chorus") || s.contains("doubl") { return "chorus" }
-        if s.contains("phaser") || s.contains("phase") { return "phaser" }
-        if s.contains("tremolo") || s.contains("trem") { return "tremolo" }
-        if s.contains("compress") || s.contains("limiter") { return "compressor" }
-        if s.contains("equaliz") || s.contains(" eq") || s == "eq" || s.contains("parametric") { return "equalizer" }
-        return nil  // "bass +4", "mid scoop", numbers, etc. — discard
-    }
-
     private func effectTypeFromName(_ name: String) -> EffectType? {
         switch name {
         case "reverb":      return .reverb
@@ -836,20 +818,6 @@ final class SemanticCommandProcessor: ToneAssisting {
 
     // MARK: - Reset Conversation
 
-    func resetConversation() {
-        pendingParameterEdit = nil
-        // Sessions are per request, so there is no history to clear – just re-check the model
-        refreshAvailability()
-        lastCommand = ""
-        lastEnabledEffects = []
-        lastDisabledEffects = []
-        lastDeletedEffects = []
-        lastParameterOverrides = [:]
-        lastCommandMode = "preset"
-        lastParameters = nil
-        lastExplanation = ""
-        errorMessage = nil
-    }
 }
 
 // MARK: - Array Helper

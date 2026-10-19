@@ -31,14 +31,6 @@ final class PresetService: PresetProviding {
 
     // MARK: - Preset Management
 
-    func addPreset(_ preset: EffectPreset) {
-        presets.append(preset)
-    }
-
-    func removePreset(id: UUID) {
-        presets.removeAll { $0.id == id }
-    }
-
     // MARK: - Built-in Presets
     // Following Factory Pattern for preset creation
 
@@ -206,31 +198,3 @@ final class PresetService: PresetProviding {
 
 // MARK: - Preset Factory
 // Following Factory Pattern for creating presets from effect chains
-
-extension PresetService {
-
-    /// Creates a preset from the current effects chain
-    static func createPreset(
-        name: String,
-        description: String,
-        icon: String,
-        category: EffectPreset.PresetCategory,
-        from effectsChain: [EffectNode]
-    ) -> EffectPreset {
-        let presetEffects = effectsChain.map { node in
-            EffectPreset.PresetEffect(
-                type: node.type,
-                isEnabled: node.isEnabled,
-                parameters: node.parameters
-            )
-        }
-
-        return EffectPreset(
-            name: name,
-            icon: icon,
-            description: description,
-            effects: presetEffects,
-            category: category
-        )
-    }
-}

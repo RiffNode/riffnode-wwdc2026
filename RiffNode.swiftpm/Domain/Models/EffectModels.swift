@@ -125,7 +125,6 @@ enum EffectType: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
-
     var defaultParameters: [String: Float] {
         switch self {
         case .compressor:
@@ -309,13 +308,8 @@ enum EffectType: String, CaseIterable, Identifiable, Codable, Sendable {
     }
 }
 
-// MARK: - Effect Type Provider Protocol
+// MARK: - Effect Type Provider
 // Following Dependency Inversion: Provide effect types through abstraction
-
-protocol EffectTypeProviding {
-    static var allEffectTypes: [EffectType] { get }
-    static func effectTypes(for category: EffectCategory) -> [EffectType]
-}
 
 extension EffectType: EffectTypeProviding {
     static var allEffectTypes: [EffectType] {

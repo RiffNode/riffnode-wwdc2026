@@ -17,8 +17,8 @@ extension AudioEngineManager {
         installProbeTaps()
     }
 
-    func probeSnapshot() -> (before: SignalCapture, after: SignalCapture) {
-        signalProbe.snapshot()
+    func probeAnalysis() -> SignalAnalysis {
+        signalAnalyzer.analyze(signalProbe.snapshot())
     }
 
     /// Stops the probe – only if `owner` is still the view that started it.

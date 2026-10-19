@@ -37,7 +37,7 @@ struct SignalLabView: View {
             engine.probe(effect, owner: probeID)
             model.clear()
             while !Task.isCancelled {
-                model.update(from: engine.probeSnapshot())
+                model.update(from: engine.probeAnalysis())
                 try? await Task.sleep(for: .milliseconds(66))
             }
         }
