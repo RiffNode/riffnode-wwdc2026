@@ -324,7 +324,7 @@ RiffNode was selected by Apple as a **2026 Swift Student Challenge Winner** – 
 </p>
 
 <p align="center">
-  <img src="screenshots/wwdc26-apple-park-stage.jpg" width="860" alt="In the audience at Apple Park for WWDC26: the full wall of 2026 Swift Student Challenge winners on stage">
+  <img src="screenshots/wwdc26-apple-park-stage.jpg" width="860" alt="The stage at Apple Park for WWDC26: the full wall of 2026 Swift Student Challenge winners on stage">
   <br><sub>Apple Park, Cupertino, California · WWDC26, June 8, 2026 – the full wall of this year's winners</sub>
 </p>
 
@@ -347,7 +347,7 @@ Every 2026 winner received:
 - A **personalised certificate** from Apple
 - **One year** of individual membership in the **Apple Developer Program**
 - **AirPods Max 2**
-- An invitation to apply for the **special event at Apple Park** that kicked off WWDC26 on June 8 – I was there
+- An invitation to apply for the **special event at Apple Park** that kicked off WWDC26 on June 8
 
 <br clear="right">
 
