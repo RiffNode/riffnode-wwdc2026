@@ -52,6 +52,7 @@ struct GlassEQGridView: View {
                 }
             }
         }
+        .accessibilityHidden(true)
     }
 
     private func formatFrequency(_ freq: Float) -> String {
@@ -158,6 +159,23 @@ struct GlassEQCurveView: View {
                 .stroke(band.type.color.opacity(0.6), style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
             }
         }
+        .audioGraph(chart)
+    }
+
+    /// The curve for VoiceOver: the response at 48 points from 20 Hz to 20 kHz.
+    private var chart: AudioGraphChart {
+        let points = (0..<48).map { i -> (x: Double, y: Double) in
+            let frequency = 20 * pow(1000, Float(i) / 47)
+            return (Double(frequency), Double(calculateTotalGain(at: frequency)))
+        }
+        let moves = bands.filter { $0.isEnabled && abs($0.gain) >= 0.5 && ($0.type != .highPass && $0.type != .lowPass) }
+            .map { "\($0.gain > 0 ? "boost" : "cut") \(AudioGraphChart.decibels(Double(abs($0.gain)))) at \(AudioGraphChart.hertz(Double($0.frequency)))" }
+        return AudioGraphChart(
+            title: "EQ curve",
+            summary: moves.isEmpty ? "Flat" : moves.joined(separator: ", "),
+            x: .frequency(20...20_000),
+            y: .decibels(-24...24, title: "Gain"),
+            series: [.init(name: "EQ", points: points)])
     }
 
     private func calculateTotalGain(at frequency: Float) -> Float {
@@ -288,8 +306,26 @@ struct GlassEQBandNodes: View {
                         selectedBand = selectedBand == index ? nil : index
                     }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Band \(index + 1), \(band.type.rawValue)")
+                .accessibilityValue("\(AudioGraphChart.hertz(Double(band.frequency))), \(AudioGraphChart.decibels(Double(band.gain), signed: true))")
+                .accessibilityHint("Swipe up or down to change the gain")
+                .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+                .accessibilityAdjustableAction { direction in
+                    selectedBand = index
+                    let step: Float = direction == .increment ? 1 : -1
+                    bands[index].gain = max(-24, min(24, (bands[index].gain + step).rounded()))
+                }
+                .accessibilityAction(named: "Raise frequency") { shiftFrequency(of: index, by: 1) }
+                .accessibilityAction(named: "Lower frequency") { shiftFrequency(of: index, by: -1) }
             }
         }
+    }
+
+    /// Moves a band a third of an octave, the step of a graphic EQ.
+    private func shiftFrequency(of index: Int, by thirds: Float) {
+        selectedBand = index
+        bands[index].frequency = max(20, min(20_000, bands[index].frequency * pow(2, thirds / 3)))
     }
 
     private func frequencyToX(_ freq: Float, width: CGFloat) -> CGFloat {

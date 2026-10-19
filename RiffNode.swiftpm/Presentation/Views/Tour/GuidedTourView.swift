@@ -383,6 +383,7 @@ struct GlassEffectDemoView: View {
 
             // Waveform visualization - cleaner
             GlassWaveformDemo(isActive: isActive, color: effectType.color)
+                .accessibilityHidden(true)
                 .frame(height: 50)
                 .padding(.horizontal, 30)
         }

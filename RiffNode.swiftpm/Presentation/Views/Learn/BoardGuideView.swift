@@ -274,6 +274,8 @@ private struct CableExplorer: View {
                 Toggle("Buffer", isOn: $isBuffered).toggleStyle(.switch).fixedSize()
             }
             Slider(value: $feet, in: 3...60, step: 1)
+                .accessibilityLabel("Cable length")
+                .accessibilityValue("\(Int(feet)) feet")
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(String(format: "%.1f kHz", settings.pickupResonanceHz / 1000))
                     .font(.system(size: 34, weight: .bold, design: .rounded).monospacedDigit())
@@ -293,7 +295,9 @@ private struct CableExplorer: View {
                 .clipShape(Capsule())
             }
             .frame(height: 12)
+            .accessibilityHidden(true)
             HStack { Text("20 Hz"); Spacer(); Text("20 kHz") }.font(.caption2).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.05)))
@@ -353,6 +357,8 @@ private struct PowerExplorer: View {
             }
             .frame(height: 60)
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.85)))
+            .accessibilityElement()
+            .accessibilityLabel(isolated ? "Output: a clean wave" : "Output: the wave with mains hum riding on it")
 
             Text(isolated
                  ? "Each pedal has its own winding and ground: a clean note."

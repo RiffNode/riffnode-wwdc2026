@@ -36,6 +36,7 @@ struct GlassEffectPedal: View {
                 }
                 .buttonStyle(.plain)
                 .offset(x: 6, y: -6)
+                .accessibilityLabel("Remove pedal")
             }
         }
         .scaleEffect(isHovering ? 1.03 : 1.0)

@@ -9,7 +9,7 @@ struct ContentView: View {
 
     /// Built once, here – the only place that names the concrete Data types.
     @State private var dependencies = AppDependencies.live()
-    private var engine: AudioEngineManager { dependencies.engine }
+    private var engine: any AudioManaging { dependencies.engine }
 
     // MARK: - State
 
