@@ -60,6 +60,14 @@ struct ToneDocument: Codable, Equatable, Sendable {
         var cabinet: String
         var gain, bass, mid, treble, master: Float
     }
+    /// The cable, buffer and noise gate in front of the board. The volume pedal is left out:
+    /// it's played, not set.
+    struct Input: Codable, Equatable, Sendable {
+        var cableFeet: Float
+        var isBuffered: Bool
+        var isGateOn: Bool
+        var gateThresholdDB: Float
+    }
 
     var format = "riffnode.tone"
     var version = 1
@@ -67,9 +75,13 @@ struct ToneDocument: Codable, Equatable, Sendable {
     var pedals: [Pedal]
     var amp: Amp
     var eqGains: [Float]
+    /// Absent in files from before the input stage was saved.
+    var input: Input?
 
-    init(name: String, chain: [EffectNode], amp: AmpSettings, eqBands: [EQBand]) {
+    init(name: String, chain: [EffectNode], amp: AmpSettings, eqBands: [EQBand], input: InputSettings? = nil) {
         self.name = name
+        self.input = input.map { Input(cableFeet: $0.cableFeet, isBuffered: $0.isBuffered,
+                                       isGateOn: $0.isGateOn, gateThresholdDB: $0.gateThresholdDB) }
         pedals = chain.map { Pedal(type: $0.type.rawValue, isEnabled: $0.isEnabled, parameters: $0.parameters, model: $0.modelID) }
         self.amp = Amp(isEnabled: amp.isEnabled, model: amp.model.rawValue,
                        cabinet: amp.cabinet == .impulse ? CabinetType.twoByTwelve.rawValue : amp.cabinet.rawValue,
@@ -89,6 +101,18 @@ struct ToneDocument: Codable, Equatable, Sendable {
                     model: AmpModel(legacy: amp.model) ?? .twain,
                     cabinet: CabinetType(rawValue: amp.cabinet) ?? .twoByTwelve,
                     gain: amp.gain, bass: amp.bass, mid: amp.mid, treble: amp.treble, master: amp.master)
+    }
+
+    /// These input settings with the saved cable, buffer and gate laid over them
+    /// (unchanged when the document has none).
+    func inputSettings(over current: InputSettings) -> InputSettings {
+        guard let input else { return current }
+        var settings = current
+        settings.cableFeet = max(3, min(60, input.cableFeet))
+        settings.isBuffered = input.isBuffered
+        settings.isGateOn = input.isGateOn
+        settings.gateThresholdDB = max(-80, min(-30, input.gateThresholdDB))
+        return settings
     }
 }
 

@@ -177,6 +177,17 @@ struct CoreRegressionTests {
         restored.restoreSavedBoard()
         check(board.drive == 90, "The saved board is restored at launch")
 
+        // The cable, buffer and gate travel with the board; older files leave them alone
+        var input = InputSettings(); input.cableFeet = 40; input.isBuffered = true; input.isGateOn = true; input.volume = 0.3
+        let withInput = ToneDocument(name: "Input", chain: [], amp: AmpSettings(), eqBands: [], input: input)
+        let decoded = try? JSONDecoder().decode(ToneDocument.self, from: JSONEncoder().encode(withInput))
+        let applied = decoded?.inputSettings(over: InputSettings())
+        check(applied?.cableFeet == 40 && applied?.isBuffered == true && applied?.isGateOn == true,
+              "Input settings round-trip through a tone file")
+        check(applied?.volume == 1, "The volume pedal position is not saved with the board")
+        let legacy = try? JSONDecoder().decode(ToneDocument.self, from: Data(#"{"format":"riffnode.tone","version":1,"name":"Old","pedals":[],"amp":{"isEnabled":true,"model":"twain","cabinet":"2x12","gain":5,"bass":5,"mid":5,"treble":5,"master":5},"eqGains":[]}"#.utf8))
+        check(legacy != nil && legacy?.inputSettings(over: input) == input, "Older tone files keep the current input settings")
+
         // Putting a classic pedal on the board: it takes over the pedal of its type, switched on…
         let board2 = TestEngine()
         board2.effectsChain = [EffectNode(type: .overdrive, isEnabled: false)]
