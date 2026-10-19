@@ -570,8 +570,6 @@ struct GlassSignalChainDiagram: View {
     }
 }
 
-// MARK: - Legacy Button Styles (for compatibility)
-
 // MARK: - Preview
 
 #Preview {

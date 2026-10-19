@@ -239,20 +239,20 @@ RiffNode follows **MVVM** inside a **Clean Architecture** layout. Dependencies p
 graph TD
     subgraph Presentation
         V[SwiftUI Views]
-        VM[View Models<br/>MainViewModel · PlayAlongViewModel · ToneBalanceViewModel<br/>SignalLabModel · AIChatbotController · RiffNotchController]
+        VM[View Models<br/>MainViewModel · BoardHistory · PlayAlongViewModel · ToneBalanceViewModel<br/>SignalLabModel · AIChatbotController · PerformanceModeController · RiffNotchController]
     end
 
     subgraph Domain
-        M[Models<br/>EffectType · EffectNode · EQBand · SignalCapture · ToneSuggestion]
-        P[Protocols<br/>AudioEngineControlling · EffectsChainManaging · EqualizerControlling<br/>DemoRiffPlaying · SignalProbing · BackingTrackManaging · ChordDetecting …]
+        M[Models<br/>EffectType · EffectNode · PedalModel · AmpModel · EQBand<br/>SignalAnalysis · ToneDocument · BoardGuideStop · FaceGesture]
+        P[Protocols<br/>AudioEngineControlling · EffectsChainManaging · SignalProbing · ToneSharing<br/>ToneStoring · SpectrumAnalyzing · ChordAnalyzing · GestureControlling · ToneAssisting …]
     end
 
     subgraph Data
         AE[AudioEngineManager]
         BT[BackingTrackPlayer · DemoRiffPlayer · EffectUnitsContainer · DSP]
-        AN[FFTAnalyzer · ChordDetector]
-        AI[SemanticCommandProcessor · ToneRecipeBook]
-        SV[SystemMusicService · PresetService · VisionGestureController]
+        AN[FFTAnalyzer · ChordDetector · SignalAnalyzer · SongAnalyzer]
+        AI[SemanticCommandProcessor · OfflineToneMatcher · ToneRecipeBook]
+        SV[SystemMusicService · PresetService · ToneAutosaveStore · VisionGestureController · MIDIFootswitch]
     end
 
     V --> VM
@@ -268,28 +268,31 @@ graph TD
 
 ```
 RiffNode.swiftpm/
-├── App/                    Composition root: creates the engine, routes Welcome → Tour → Main
+├── App/                    AppDependencies – the composition root, the only place that names
+│                           concrete Data types – and ContentView (Welcome → Tour → Main)
 ├── Domain/                 Pure Swift (Foundation only)
-│   ├── Models/             Effects, presets, EQ, signal captures, input devices, learning content
-│   └── Protocols/          One protocol per capability (engine, chain, EQ, demo riff, probe, play-along …)
+│   ├── Models/             Effects, classic pedals & amps, presets, EQ, signal analysis, tone files,
+│   │                       the board guide, gestures – plus small pure rules (pedal order, use a model)
+│   └── Protocols/          One protocol per capability: audio (engine, chain, EQ, probe, sharing …),
+│                           interaction (analysis, gestures, Tone Assistant) and learning
 ├── Data/
-│   ├── Audio/              AudioEngineManager (graph) · BackingTrackPlayer · DemoRiffPlayer
-│   │                       EffectUnitsContainer · synthesizers · DSP/ (custom Audio Unit)
-│   ├── Analysis/           FFTAnalyzer, ChordDetector, SignalProbe
-│   ├── AI/                 SemanticCommandProcessor, ToneRecipeBook
-│   ├── Playback/           SystemMusicService (Apple Music)
-│   ├── Vision/ · Presets/ · Learning/
+│   ├── Audio/              AudioEngineManager (graph) split by concern (+AmpAndInput, +ChainSync,
+│   │                       +PedalUnits, +SignalProbe …) · players · EffectUnitsContainer · DSP/
+│   ├── Analysis/           FFTAnalyzer, ChordDetector, SignalProbe, SignalAnalyzer, SongAnalyzer
+│   ├── AI/                 SemanticCommandProcessor, OfflineToneMatcher, ToneRecipeBook, ToneModels
+│   ├── Playback/ · MIDI/ · Vision/ · Presets/ (incl. autosave) · Learning/ · Logging
 ├── Presentation/
 │   ├── ViewModels/         Feature view models + EngineRequirements (what each screen may use)
-│   ├── Views/              One folder per feature: Main, Pedalboard, EQ, Learn, AI, Notch …
-│   └── DesignSystem/       Tokens, glass components, NotchShape, DomainColors
+│   ├── Views/              One folder per feature: Main, Pedalboard, Performance, EQ, Learn, AI …
+│   └── DesignSystem/       Tokens, glass card, buttons, knob, tab bar, background, layout, DomainColors
 └── Core/Extensions/
 ```
 
 - **Interface segregation** – the engine is exposed as small capability protocols. Each screen declares what it needs in `EngineRequirements` (for example `SignalLabEngine = AudioEngineControlling & DemoRiffPlaying & SignalProbing & EffectsChainManaging`), so a view can't reach anything else.
-- **Dependency inversion** – views and view models hold `any …` protocol types; only `ContentView`, the composition root, creates `AudioEngineManager`.
+- **Dependency inversion** – views and view models hold `any …` protocol types; only `AppDependencies`, the composition root, names concrete Data types (previews borrow it too). Even `BoardHistory` sees the board only as `ToneSharing` and its store as `ToneStoring`, so both are swapped for fakes in the tests.
 - **A UI-free Domain** – colours live in `Presentation/DesignSystem/DomainColors.swift` and AVFoundation mappings in `Data`, so `Domain` imports only Foundation.
-- **Single responsibility** – play-along, the demo riff and the effect units are their own classes; feature rules (which mode stops what, tone-balance hysteresis) live in view models, not views.
+- **Single responsibility** – play-along, the demo riff, the effect units, signal analysis and the offline tone matcher are their own types; feature rules (which mode stops what, tone-balance hysteresis, undo) live in view models, and board rules (placing a classic pedal, pedal-order advice) in the Domain – views only render and forward intents.
+- **Open/closed** – a new classic pedal or amp is data (a `PedalModel` / `AmpVoice` entry with its voicing and look); the DSP and the drawing code don't change.
 
 ## Getting started
 

@@ -109,6 +109,7 @@ final class AudioEngineManager: AudioManaging {
 
     // Signal Lab – taps on both sides of one pedal
     @ObservationIgnored let signalProbe = SignalProbeStore()
+    @ObservationIgnored let signalAnalyzer = SignalAnalyzer()
     @ObservationIgnored let outputLevelStore = OutputLevelStore()
     @ObservationIgnored var probedNodes: [AVAudioNode] = []
     /// The pedal whose input and output the Signal Lab is watching.

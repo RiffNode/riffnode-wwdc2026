@@ -42,7 +42,6 @@ final class FFTAnalyzer: SpectrumAnalyzing {
     private(set) var dominantBand: String = "—"
 
     /// Cached band energies — updated once per analyze() call, not per SwiftUI render
-    private(set) var cachedBandEnergies: [String: Float] = [:]
 
     /// Log-spaced spectrum (20 Hz – 20 kHz), matching how we hear and how EQs are drawn.
     /// `logMagnitudes` is 0–1 (−80…0 dBFS); `logFrequencies` holds each point's centre in Hz.
@@ -193,7 +192,6 @@ final class FFTAnalyzer: SpectrumAnalyzing {
         updateLogSpectrum(fromDecibels: _magDB, binCount: halfSize, resolution: freqResolution)
 
         // Cache band energies once per analysis cycle (not per render frame)
-        cachedBandEnergies = computeBandEnergies()
     }
 
     // MARK: - Helpers
@@ -300,35 +298,4 @@ final class FFTAnalyzer: SpectrumAnalyzing {
 
     // MARK: - Frequency Band Analysis for Educational Display
 
-    /// Returns cached band energies (computed once per analyze() call, not per render)
-    func getBandEnergies() -> [String: Float] { cachedBandEnergies }
-
-    private func computeBandEnergies() -> [String: Float] {
-        guard magnitudes.count == binCount else { return [:] }
-
-        let nyquist = Float(sampleRate / 2)
-        let binWidth = nyquist / Float(binCount)
-
-        var bass: Float = 0, bassCount: Float = 0
-        var mid: Float = 0, midCount: Float = 0
-        var high: Float = 0, highCount: Float = 0
-
-        for i in 0..<binCount {
-            let freq = Float(i) * binWidth
-            let mag = magnitudes[i]
-            if freq < 250 {
-                bass += mag; bassCount += 1
-            } else if freq < 4000 {
-                mid += mag; midCount += 1
-            } else {
-                high += mag; highCount += 1
-            }
-        }
-
-        return [
-            "Bass":  bassCount  > 0 ? bass  / bassCount  : 0,
-            "Mid":   midCount   > 0 ? mid   / midCount   : 0,
-            "Highs": highCount  > 0 ? high  / highCount  : 0
-        ]
-    }
 }

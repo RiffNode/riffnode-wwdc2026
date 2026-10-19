@@ -359,7 +359,6 @@ private struct SettingsInfoRow: View {
     }
 }
 
-
 #if os(iOS) && !targetEnvironment(macCatalyst)
 // MARK: - Bluetooth MIDI Pairing
 

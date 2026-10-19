@@ -152,8 +152,8 @@ protocol SignalProbing: AnyObject {
     /// Watches the signal into and out of this pedal (the right copy when there are two of a kind).
     func probe(_ effect: EffectNode, owner: UUID)
     func stopProbe(owner: UUID)
-    /// The latest captures into and out of the probed pedal.
-    func probeSnapshot() -> (before: SignalCapture, after: SignalCapture)
+    /// What the signal into and out of the probed pedal looks like right now.
+    func probeAnalysis() -> SignalAnalysis
 }
 
 /// Hands-free control: the mouth wah and other expression targets.
@@ -162,6 +162,23 @@ protocol ExpressionControlling: AnyObject {
     /// nil turns the wah off; 0…1 is the pedal position (heel → toe).
     func setWah(_ position: Float?)
     func setExpressionValue(_ value: Float, for effectType: EffectType)
+}
+
+extension EffectsChainManaging {
+    /// Puts a classic pedal on the board: it takes over a pedal of its own type (or another
+    /// drive slot for a drive), switched on; with no such pedal, one is added.
+    func usePedalModel(_ model: PedalModel) {
+        if let node = effectsChain.first(where: { $0.type == model.type })
+            ?? effectsChain.first(where: { model.fits($0.type) }) {
+            setPedalModel(node, modelID: model.id)
+            if !node.isEnabled { toggleEffect(node) }
+        } else {
+            addEffect(model.type)
+            if let node = effectsChain.last(where: { $0.type == model.type }) {
+                setPedalModel(node, modelID: model.id)
+            }
+        }
+    }
 }
 
 extension EffectAuditioning {

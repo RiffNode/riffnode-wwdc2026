@@ -81,20 +81,11 @@ struct PedalLibraryView: View {
         .animation(.smooth(duration: 0.25), value: family)
     }
 
-    /// Puts this classic on the player's board: swaps the pedal of its kind, or adds one.
+    /// Puts this classic on the player's board, then briefly confirms it.
     private func place(_ model: PedalModel) {
         guard let engine else { return }
         engine.stopAudition()
-        if let node = engine.effectsChain.first(where: { model.fits($0.type) && $0.type == model.type })
-            ?? engine.effectsChain.first(where: { model.fits($0.type) }) {
-            engine.setPedalModel(node, modelID: model.id)
-            if !node.isEnabled { engine.toggleEffect(node) }
-        } else {
-            engine.addEffect(model.type)
-            if let node = engine.effectsChain.last(where: { $0.type == model.type }) {
-                engine.setPedalModel(node, modelID: model.id)
-            }
-        }
+        engine.usePedalModel(model)
         placedID = model.id
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.5))

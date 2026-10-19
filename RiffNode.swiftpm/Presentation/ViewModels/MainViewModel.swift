@@ -177,6 +177,14 @@ final class MainViewModel {
         engine.applyPreset(presets[index])
     }
 
+    /// Jumps straight to one preset (Stage Mode's preset bar).
+    func selectPreset(at index: Int) {
+        let presets = presetService.presets
+        guard presets.indices.contains(index) else { return }
+        performanceController.currentPresetIndex = index
+        engine.applyPreset(presets[index])
+    }
+
     func toggle(_ effect: EffectNode) {
         engine.toggleEffect(effect)
     }

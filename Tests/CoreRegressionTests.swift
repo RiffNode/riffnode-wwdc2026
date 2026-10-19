@@ -177,6 +177,17 @@ struct CoreRegressionTests {
         restored.restoreSavedBoard()
         check(board.drive == 90, "The saved board is restored at launch")
 
+        // Putting a classic pedal on the board: it takes over the pedal of its type, switched on…
+        let board2 = TestEngine()
+        board2.effectsChain = [EffectNode(type: .overdrive, isEnabled: false)]
+        board2.usePedalModel(PedalModel.model(id: "blue-diver")!)
+        check(board2.effectsChain.count == 1 && board2.effectsChain[0].modelID == "blue-diver" && board2.effectsChain[0].isEnabled,
+              "A classic pedal replaces the board's pedal of its type and switches on")
+        // …or is added when the board has none
+        board2.usePedalModel(PedalModel.model(id: "carbon-paper")!)
+        check(board2.effectsChain.last?.type == .delay && board2.effectsChain.last?.modelID == "carbon-paper",
+              "A classic pedal is added when the board has none of its type")
+
         let setupEngine = TestEngine()
         let setup = SetupViewModel(audioEngine: setupEngine)
         await setup.performNextStep()

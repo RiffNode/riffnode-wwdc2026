@@ -158,11 +158,4 @@ final class AIChatbotController {
         }
     }
 
-    func clearHistory(processor: (any ToneAssisting)? = nil) {
-        processor?.resetConversation()
-        messages = [ChatMessage(
-            role: .assistant,
-            content: "Fresh start! What tone are you going for?"
-        )]
-    }
 }

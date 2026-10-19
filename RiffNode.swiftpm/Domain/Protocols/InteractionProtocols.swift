@@ -61,6 +61,4 @@ protocol ToneAssisting: AnyObject {
     func processCommand(_ command: String, pedalboard: String?) async -> Bool
     func processImage(at url: URL) async -> Bool
     func applyToEngine(_ engine: any EffectsChainManaging)
-    /// Starts a new conversation (the chat was cleared).
-    func resetConversation()
 }

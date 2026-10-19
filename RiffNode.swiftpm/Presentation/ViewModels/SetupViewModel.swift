@@ -104,24 +104,4 @@ final class SetupViewModel {
         isLoading = false
     }
 
-    private func advanceStep() {
-        withAnimation(.spring(duration: 0.3)) {
-            if let nextStep = SetupStep(rawValue: currentStep.rawValue + 1) {
-                currentStep = nextStep
-            }
-        }
-    }
-
-    func stepStatus(for step: SetupStep) -> StepStatus {
-        if step.rawValue < currentStep.rawValue {
-            return .completed
-        } else if step == currentStep {
-            return .active
-        }
-        return .pending
-    }
-
-    enum StepStatus {
-        case pending, active, completed
-    }
 }
