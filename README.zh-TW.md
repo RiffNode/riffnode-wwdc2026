@@ -63,6 +63,26 @@
 > [!TIP]
 > 把吉他接上任何 USB 錄音介面，就能即時經過同一條訊號鏈彈奏。快速測試用內建麥克風也可以。
 
+## 畫面
+
+<table>
+  <tr>
+    <td width="50%"><img src="screenshots/mac_assistant.jpg" alt="Mac 上的 Tone Assistant：Apple Intelligence 回答 surf rock，並開啟 overdrive、reverb、tremolo、chorus、delay"><br><sub><b>Tone Assistant</b> —— 「surf rock」，由裝置上的 Apple Intelligence 回答</sub></td>
+    <td width="50%"><img src="screenshots/mac_eq.jpg" alt="Mac 上的 EQ & Tone 分頁：Tone balance 卡片建議 Boost 1 kHz，下方是 parametric EQ 與即時頻譜"><br><sub><b>EQ &amp; Tone</b> —— 聲音落在哪裡，以及一鍵修正的 EQ 調整</sub></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/mac_amp.jpg" alt="Mac 上的音箱與喇叭箱面板：音箱型號、喇叭箱與 IR 選擇、五顆旋鈕，以及在 5 kHz 以上滾降的頻率響應"><br><sub><b>音箱與喇叭箱</b> —— 把破音的沙沙聲濾掉的喇叭</sub></td>
+    <td><img src="screenshots/mac_cable.jpg" alt="Mac 上的吉他輸入面板：40 英尺導線、buffer、音量踏板與 noise gate，頻率響應在 2.8 kHz 以上滾降"><br><sub><b>吉他與導線</b> —— 量得到的 tone suck：f = 1/(2π√LC)</sub></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/mac_learn.jpg" alt="Mac 上的 Learn 分頁：踏板圖鑑，二十顆經典踏板排成一面牆，打開 Tube Steamer 顯示電路原理、增益、削波方式與耗電，以及試聽與放到踏板盤的按鈕"><br><sub><b>踏板圖鑑</b> —— 二十顆經典：看電路、聽聲音、放上你的踏板盤</sub></td>
+    <td><img src="screenshots/mac_stage.jpg" alt="Mac 上的 Stage Mode：鋁條板面上的擬真踏板盤，第一顆是調音器，九顆經典踏板以跳線和電源線相連，右邊接吉他、左邊接音箱"><br><sub><b>Stage Mode</b> —— 真的踏板盤：調音器在前、跳線、電源，點一下就踩</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="screenshots/mac_board_guide.jpg" alt="Mac 上的 Learn 分頁：組一塊踏板盤，小型踏板盤示意圖在吉他導線、調音器、buffer、踏板、跳線、電源與音箱上標有編號，下方是導線長度的互動說明"><br><sub><b>組一塊踏板盤</b> —— 真實的踏板盤，一次認識一個部分</sub></td>
+  </tr>
+</table>
+
 ## Riff Notch
 
 視窗頂端有一個 Dynamic Island 風格的瀏海，iPad 和 Mac 都有。眼睛看著指板時，它也能給你回饋 —— 對頭部手勢尤其重要，否則手勢完全沒有視覺回應。
@@ -104,6 +124,9 @@
 
 20 顆經典踏板與 5 台經典音箱，依原版電路的運作方式調出聲音：Tube Screamer 式的中頻隆起、Blues Driver 開闊又不對稱的削波、Big Muff 挖空中頻的厚重 fuzz。點踏板名稱就能換成同類的其他經典款；三個破音位置可以放任何一顆破音，像真的踏板盤一樣疊兩顆 overdrive。
 
+<details>
+<summary><b>20 顆踏板與 5 台音箱</b> —— 各自參考哪一款、電路做了什麼</summary>
+
 | RiffNode 踏板 | 參考的原版 | 電路的作用 |
 | --- | --- | --- |
 | Tube Steamer | Ibanez TS808 Tube Screamer | 約 720 Hz 以上軟削波、低頻乾聲混回：中頻推力 |
@@ -134,6 +157,8 @@
 | Top Boost 30 | Vox AC30 Top Boost | 清脆的 A 類中高頻 |
 | Plexus 100 | Marshall 1959 Super Lead（plexi） | 音色控制在前級之後：中頻穿透破音 |
 | Brit 800 | Marshall JCM800 2203 | 串接前級：緊實的 80 年代搖滾 |
+
+</details>
 
 踏板與音箱的名稱、面板與外殼都是 RiffNode 原創，沒有使用任何 Logo 或複製圖案。提到原版型號只是為了說明聲音；所有商標屬於其擁有者，RiffNode 與它們沒有任何關係，也未獲得背書。
 
@@ -178,6 +203,9 @@
 
 ### 鍵盤快捷鍵（Mac 與 iPad）
 
+<details>
+<summary>顯示全部快捷鍵</summary>
+
 | 快捷鍵 | 動作 |
 | --- | --- |
 | `⌘↩` | 開始／停止引擎 |
@@ -191,25 +219,7 @@
 | `1` – `9` | Stage Mode：踩第 1–9 顆踏板 |
 | `←` `→` · `L` · `B` · `T` · `Esc` | Stage Mode：preset · Looper · 整組旁通 · 調音靜音 · 離開 |
 
-## 畫面
-
-<table>
-  <tr>
-    <td width="50%"><img src="screenshots/mac_assistant.jpg" alt="Mac 上的 Tone Assistant：Apple Intelligence 回答 surf rock，並開啟 overdrive、reverb、tremolo、chorus、delay"><br><sub><b>Tone Assistant</b> —— 「surf rock」，由裝置上的 Apple Intelligence 回答</sub></td>
-    <td width="50%"><img src="screenshots/mac_eq.jpg" alt="Mac 上的 EQ & Tone 分頁：Tone balance 卡片建議 Boost 1 kHz，下方是 parametric EQ 與即時頻譜"><br><sub><b>EQ &amp; Tone</b> —— 聲音落在哪裡，以及一鍵修正的 EQ 調整</sub></td>
-  </tr>
-  <tr>
-    <td><img src="screenshots/mac_amp.jpg" alt="Mac 上的音箱與喇叭箱面板：音箱型號、喇叭箱與 IR 選擇、五顆旋鈕，以及在 5 kHz 以上滾降的頻率響應"><br><sub><b>音箱與喇叭箱</b> —— 把破音的沙沙聲濾掉的喇叭</sub></td>
-    <td><img src="screenshots/mac_cable.jpg" alt="Mac 上的吉他輸入面板：40 英尺導線、buffer、音量踏板與 noise gate，頻率響應在 2.8 kHz 以上滾降"><br><sub><b>吉他與導線</b> —— 量得到的 tone suck：f = 1/(2π√LC)</sub></td>
-  </tr>
-  <tr>
-    <td><img src="screenshots/mac_learn.jpg" alt="Mac 上的 Learn 分頁：踏板圖鑑，二十顆經典踏板排成一面牆，打開 Tube Steamer 顯示電路原理、增益、削波方式與耗電，以及試聽與放到踏板盤的按鈕"><br><sub><b>踏板圖鑑</b> —— 二十顆經典：看電路、聽聲音、放上你的踏板盤</sub></td>
-    <td><img src="screenshots/mac_stage.jpg" alt="Mac 上的 Stage Mode：鋁條板面上的擬真踏板盤，第一顆是調音器，九顆經典踏板以跳線和電源線相連，右邊接吉他、左邊接音箱"><br><sub><b>Stage Mode</b> —— 真的踏板盤：調音器在前、跳線、電源，點一下就踩</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2"><img src="screenshots/mac_board_guide.jpg" alt="Mac 上的 Learn 分頁：組一塊踏板盤，小型踏板盤示意圖在吉他導線、調音器、buffer、踏板、跳線、電源與音箱上標有編號，下方是導線長度的互動說明"><br><sub><b>組一塊踏板盤</b> —— 真實的踏板盤，一次認識一個部分</sub></td>
-  </tr>
-</table>
+</details>
 
 ## 技術
 
@@ -223,81 +233,15 @@
 | AI | Foundation Models | 裝置上的 `LanguageModelSession`，搭配 `@Generable` 音色描述 |
 | 狀態 | Observation | `@Observable` 的 view model 與服務 |
 
-### 實作重點
-
-- **Swift 6 的音訊 tap** —— tap block 是全域、非隔離的函式，寫入有鎖保護的緩衝區，所以音訊執行緒上永遠不會跑到 `@MainActor` 的 closure。
-- **啟動不卡頓** —— `AVAudioSession` 的啟用放在主執行緒之外。
-- **Demo riff 與 groove** —— Karplus–Strong 撥弦合成（all-pass 校正音準、濾波過的撥弦雜訊、悶音 ghost note），加上合成的大鼓、小鼓、hi-hat 和貝斯，都用固定種子在裝置上產生；App 不內含任何音檔；Demo 匯入的 clean 錄音與 Play Along 的歌曲會用 `AVAudioConverter` 轉成引擎的取樣率。
-- **即時 DSP** —— 自製的 `AUAudioUnit` 在音訊執行緒上原地處理，不配置記憶體、不用鎖；旋鈕數值透過 `Synchronization.Atomic` 跨執行緒傳遞。音箱的濾波器係數與喇叭箱 IR 在主執行緒寫進兩組緩衝區的其中一組；音訊執行緒會先標記自己正在讀哪一組、再確認它仍是目前那組，所以主執行緒不會改寫正在被讀的那組，即使同一個音訊區塊內連續改兩次設定也一樣。壓力測試在讀取端同時運作下切換 20 萬次，確認沒有任何一次讀到寫到一半的資料。
-- **低延遲** —— I/O buffer 約 5 ms（48 kHz 下 256 個取樣）；Settings 顯示實測的來回延遲（輸入＋輸出延遲＋兩個 buffer），輸出為藍牙時提醒會多 100–200 ms。踏板一直接在圖上，以 `shouldBypassEffect` 切換，開關時不重建音訊圖。
-- **實測的效能餘裕** —— `scripts/bench-audio.sh` 以 128 個取樣的 buffer 渲染一個有 11 個 DSP 階段的踏板盤（輸入級、wah、三顆破音、四顆調變、類比延遲、音箱）。在 M1 Pro 上約為即時速度的 59 倍（單核心的 1.7%）；加上一個標準 A1 NAM 擷取模型約再多 5%（即時速度的 20 倍）。就算是第 99.9 百分位的 buffer，也只用掉 2.67 ms 預算中不到 0.5 ms。
-- **主執行緒保持空閒** —— 音高與和弦偵測在 main actor 之外執行（以 `vDSP_dotpr` 向量化）；每次結果帶有世代編號，重設或切換音源後才完成的舊結果會被丟棄，不會覆蓋新狀態。FFT 緩衝區只配置一次，不是每一幀配置。
-- **乾淨的削波** —— overdrive、distortion、fuzz 的削波以 4 倍 oversampling 運算，超過 Nyquist 的諧波不會折回成刺耳的 aliasing。
-- **喇叭箱 IR** —— 載入的檔案用 `AVAudioConverter` 重新取樣、截成 2048 tap、依峰值正規化，再用 `vDSP_conv` 卷積。
-- **快速的裝置端 AI** —— 模型只填一個小小的 `@Generable` 輪廓（風格、gain、空間感、最多三顆代表性踏板），而不是直接給旋鈕數值；每次請求使用預熱過的新 session，在 macOS 27 的模型上約 3.5 秒回應，且不會超出 4K 的 context window。
-
 ## 架構
 
-RiffNode 採用 **MVVM** 與 **Clean Architecture**。依賴方向一律向內：Presentation 和 Data 都只依賴 Domain，彼此不依賴對方的具體型別。
+RiffNode 採用 **MVVM** 與 **Clean Architecture**：Presentation 和 Data 都只依賴只用 Foundation 的 Domain，彼此不互相依賴。
 
-```mermaid
-graph TD
-    subgraph Presentation
-        V[SwiftUI Views]
-        VM[View Models<br/>MainViewModel · BoardHistory · PlayAlongViewModel · ToneBalanceViewModel<br/>SignalLabModel · AIChatbotController · PerformanceModeController · RiffNotchController]
-    end
+- **小而專一的能力 protocol** —— 每個畫面明確宣告它能用引擎的哪些功能。
+- **單一組合根** —— `AppDependencies` 只持有 protocol；它的 `live()` 是唯一寫出具體型別的地方，所以 view model 在測試裡可以用假的實作來跑。
+- **即時安全的音訊** —— 自製的 `AUAudioUnit`，音訊執行緒上不配置記憶體、不用鎖；11 個 DSP 階段的踏板盤實測約為即時速度的 59 倍。
 
-    subgraph Domain
-        M[Models<br/>EffectType · EffectNode · PedalModel · AmpModel · EQBand<br/>SignalAnalysis · ToneDocument · BoardGuideStop · FaceGesture]
-        P[Protocols<br/>AudioEngineControlling · EffectsChainManaging · SignalProbing · ToneSharing<br/>ToneStoring · SpectrumAnalyzing · ChordAnalyzing · GestureControlling · ToneAssisting …]
-    end
-
-    subgraph Data
-        AE[AudioEngineManager]
-        BT[BackingTrackPlayer · DemoRiffPlayer · EffectUnitsContainer · DSP]
-        AN[FFTAnalyzer · ChordDetector · SignalAnalyzer · SongAnalyzer]
-        AI[SemanticCommandProcessor · OfflineToneMatcher · ToneRecipeBook]
-        SV[SystemMusicService · PresetService · ToneAutosaveStore · VisionGestureController · MIDIFootswitch]
-    end
-
-    V --> VM
-    V --> P
-    VM --> P
-    AE -.implements.-> P
-    BT -.implements.-> P
-    AN -.implements.-> P
-    SV -.implements.-> P
-    AE --> BT
-    P --> M
-```
-
-```
-RiffNode.swiftpm/
-├── App/                    AppDependencies（只持有 protocol）與 live() 工廠（組合根，唯一會寫出
-│                           Data 具體型別的地方），以及 ContentView（Welcome → Tour → Main）
-├── Domain/                 純 Swift（只用 Foundation）
-│   ├── Models/             效果器、經典踏板與音箱、preset、EQ、訊號分析、音色檔、
-│   │                       踏板盤導覽、手勢，以及小型純規則（踏板順序、套用型號）
-│   └── Protocols/          一個能力一個 protocol：音訊（引擎、踏板鏈、EQ、擷取、分享…）、
-│                           互動（分析、手勢、Tone Assistant）與學習
-├── Data/
-│   ├── Audio/              AudioEngineManager（音訊圖）依職責拆成擴充檔（+AmpAndInput、
-│   │                       +ChainSync、+PedalUnits、+SignalProbe…）· 播放器 · EffectUnitsContainer · DSP/
-│   ├── Analysis/           FFTAnalyzer、ChordDetector、SignalProbe、SignalAnalyzer、SongAnalyzer
-│   ├── AI/                 SemanticCommandProcessor、OfflineToneMatcher、ToneRecipeBook、ToneModels
-│   ├── Playback/ · MIDI/ · Vision/ · Presets/（含自動儲存）· Learning/ · Logging
-├── Presentation/
-│   ├── ViewModels/         各功能的 view model + EngineRequirements（每個畫面能用什麼）
-│   ├── Views/              一個功能一個資料夾：Main、Pedalboard、Performance、EQ、Learn、AI…
-│   └── DesignSystem/       Tokens、玻璃卡片、按鈕、旋鈕、分頁列、背景、版面、DomainColors
-└── Core/Extensions/
-```
-
-- **介面隔離** —— 引擎拆成多個小的能力 protocol。每個畫面在 `EngineRequirements` 宣告它需要什麼（例如 `SignalLabEngine = AudioEngineControlling & DemoRiffPlaying & SignalProbing & EffectsChainManaging`），所以 View 碰不到其他功能。
-- **依賴反轉** —— View 與 view model 持有的是 `any …` protocol 型別。`AppDependencies` 只持有 protocol；它的 `live()` 工廠方法獨立成一個檔案，是唯一會寫出 Data 層具體型別的地方（預覽也透過它取得）。所以 `MainViewModel` 在測試裡可以用假的實作來跑，不需要音訊引擎、相機或 MIDI；`BoardHistory` 也只把踏板盤看成 `ToneSharing`、把儲存看成 `ToneStoring`。
-- **不依賴 UI 的 Domain** —— 顏色放在 `Presentation/DesignSystem/DomainColors.swift`，AVFoundation 的對應放在 `Data`，所以 `Domain` 只 import Foundation。
-- **單一職責** —— 伴奏、demo riff、效果器 unit、訊號分析、離線音色比對都是各自的型別；功能規則（切換模式時停止什麼、Tone balance 的遲滯判斷、復原）放在 view model，踏板盤規則（套用經典踏板、踏板順序建議）放在 Domain —— View 只負責呈現與轉交使用者的意圖。
-- **開放封閉** —— 新增一顆經典踏板或音箱只是新增資料（一筆帶聲音參數與外觀的 `PedalModel`／`AmpVoice`），DSP 與繪圖程式都不用改。
+架構圖、資料夾結構、SOLID 說明、實作細節與測試都在 **[docs/ARCHITECTURE.zh-TW.md](docs/ARCHITECTURE.zh-TW.md)**。
 
 ## 開始使用
 
@@ -316,6 +260,8 @@ open riffnode-wwdc2026/RiffNode.swiftpm
 
 用 Swift Playgrounds 或 Xcode 開啟 `RiffNode.swiftpm`，在 iPad 或 **My Mac** 上執行。iPad 模擬器可以使用 demo riff；即時吉他輸入與手勢需要實機。
 
+測試與 DSP 效能量測都在 `scripts/` 裡 —— 見[測試](docs/ARCHITECTURE.zh-TW.md#測試)。
+
 ## Swift Student Challenge 2026
 
 RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— 全球 350 位得主之一，也是今年台灣的 8 位得主之一。
@@ -327,7 +273,7 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
 
 <p align="center">
   <img src="screenshots/wwdc26-apple-park-stage.jpg" width="860" alt="WWDC26 Apple Park 的舞台：上面是 2026 Swift Student Challenge 全體得獎者名單牆">
-  <br><sub>Apple Park，加州 Cupertino · WWDC26，2026 年 6 月 8 日 —— 今年全體得獎者的名單牆</sub>
+  <br><sub>Apple Park，加州 Cupertino · WWDC26，2026 年 6 月 8 日 —— 今年全體得獎者的名單牆 · 照片由在場的朋友拍攝</sub>
 </p>
 
 <table>
@@ -384,7 +330,6 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
 - 音訊路由變更與中斷（拔掉錄音介面、來電）後完整恢復
 - 分析 tap 與介面之間改用無鎖 ring buffer
 - 手勢（Vision）相機在不同畫面間的生命週期
-- 輸入端設定（導線、buffer、gate）也一起存進踏板盤
 - EQ 曲線依實際濾波器響應繪製
 - 長伴奏串流播放，並與節拍器、Looper 同步
 
@@ -401,7 +346,3 @@ RiffNode 原始碼以 [MIT 授權](LICENSE) 釋出。App 不內含任何第三�
 <p align="center">
   由梁祐嘉（Jesse）用 ❤️ 和無數次的回授製作
 </p>
-
-## 核心回歸驗證
-
-在裝有 Xcode 的 Mac 執行 `scripts/test-core.sh`，驗證音高、FFT、電平、AI 參數修改、舊訊息快照與免麥克風 setup。`scripts/test-audio.sh` 以離線音訊圖驗證 44.1／48 kHz 的 clean／加踏板差異、原創合成 riff，以及高競爭下的係數緩衝區交接。`scripts/test-viewmodels.sh` 用假的實作驗證 `MainViewModel`：腳踏開關事件、頭部手勢、preset 循環切換、取樣率傳遞、還原上次的踏板盤，以及 Learn 試聽不會進入復原紀錄。設定 `RIFFNODE_TEST_RECORDING` 為自己的 WAV，就能用自己的錄音跑音訊檢查。`scripts/bench-audio.sh [capture.nam]` 會量測 DSP 佔即時預算的比例。

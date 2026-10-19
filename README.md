@@ -61,6 +61,26 @@ Guitar effects are usually explained with jargon and sold as expensive boxes. Ri
 > [!TIP]
 > Plug a guitar into any USB audio interface to play through the same chain live. The built-in microphone also works for quick tests.
 
+## Gallery
+
+<table>
+  <tr>
+    <td width="50%"><img src="screenshots/mac_assistant.jpg" alt="Tone Assistant on Mac answering surf rock with Apple Intelligence and switching on overdrive, reverb, tremolo, chorus and delay"><br><sub><b>Tone Assistant</b> – “surf rock”, answered on device by Apple Intelligence</sub></td>
+    <td width="50%"><img src="screenshots/mac_eq.jpg" alt="EQ and Tone tab on Mac: tone balance card suggesting Boost 1 kHz above the parametric EQ and live spectrum"><br><sub><b>EQ &amp; Tone</b> – where your sound sits, and the EQ move to fix it in one tap</sub></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/mac_amp.jpg" alt="Amp and Cabinet panel on Mac: amp model, cabinet and IR choices, five knobs and the response curve rolling off above 5 kHz"><br><sub><b>Amp &amp; Cabinet</b> – the speaker that takes the fizz out of distortion</sub></td>
+    <td><img src="screenshots/mac_cable.jpg" alt="Guitar input panel on Mac: 40 ft of cable, buffer, volume pedal and noise gate, with the pickup and cable response rolling off above 2.8 kHz"><br><sub><b>Guitar &amp; cable</b> – tone suck, measured: f = 1/(2π√LC)</sub></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/mac_learn.jpg" alt="Learn tab on Mac: the Pedal Library, a wall of twenty classic stompboxes with the Tube Steamer open – what its circuit does, its gain, clipping and current draw, Hear it and Use on my board"><br><sub><b>Pedal Library</b> – twenty classics: see the circuit, hear it, put it on your board</sub></td>
+    <td><img src="screenshots/mac_stage.jpg" alt="Stage Mode on Mac: a realistic pedalboard on aluminium rails with a tuner first, nine classic pedals joined by patch cables and power leads, guitar in on the right and the amp on the left"><br><sub><b>Stage Mode</b> – a real board: tuner first, patch cables, power, one tap to stomp</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="screenshots/mac_board_guide.jpg" alt="Learn tab on Mac: Build a Board, a small pedalboard diagram with numbered spots on the guitar cable, tuner, buffer, pedals, patch cable, power brick and amp, and the Guitar and Cable step with its cable-length explorer"><br><sub><b>Build a Board</b> – a real pedalboard, one numbered part at a time</sub></td>
+  </tr>
+</table>
+
 ## The Riff Notch
 
 A Dynamic Island–style notch hangs from the top of the window on both iPad and Mac. It gives you feedback while your eyes are on the fretboard – especially important for head gestures, which otherwise have no visual response.
@@ -102,6 +122,9 @@ The board is laid out like a real one: **guitar → input stage → pedals → a
 
 Twenty classic stompboxes and five classic amps, voiced after how their circuits work – a Tube Screamer-style mid hump, a Blues Driver's open, uneven clipping, a Big Muff's scooped wall of fuzz. Tap a pedal's name to swap it for another classic of its kind; any drive slot takes any drive, so you can stack two overdrives like on a real board.
 
+<details>
+<summary><b>The twenty pedals and five amps</b> – what each is voiced after, and what its circuit does</summary>
+
 | RiffNode pedal | Voiced after | What the circuit does |
 | --- | --- | --- |
 | Tube Steamer | Ibanez TS808 Tube Screamer | Soft clipping above ~720 Hz, clean bass blended back: the mid-hump push |
@@ -132,6 +155,8 @@ Twenty classic stompboxes and five classic amps, voiced after how their circuits
 | Top Boost 30 | Vox AC30 Top Boost | Chimey class-A upper mids |
 | Plexus 100 | Marshall 1959 Super Lead (plexi) | Tone stack after the preamp: mids push through the crunch |
 | Brit 800 | Marshall JCM800 2203 | Cascaded preamp: tight 80s rock |
+
+</details>
 
 Pedal and amp names, panels and enclosures are RiffNode's own – no logos or copied graphics. The originals are named only to describe the sound; all trademarks belong to their owners, and RiffNode is not affiliated with or endorsed by them.
 
@@ -176,6 +201,9 @@ Pedal and amp names, panels and enclosures are RiffNode's own – no logos or co
 
 ### Keyboard shortcuts (Mac and iPad)
 
+<details>
+<summary>Show all shortcuts</summary>
+
 | Shortcut | Action |
 | --- | --- |
 | `⌘↩` | Start / stop the engine |
@@ -189,25 +217,7 @@ Pedal and amp names, panels and enclosures are RiffNode's own – no logos or co
 | `1` – `9` | Stage Mode: stomp pedal 1–9 |
 | `←` `→` · `L` · `B` · `T` · `Esc` | Stage Mode: presets · looper · bypass board · tuner mute · exit |
 
-## Gallery
-
-<table>
-  <tr>
-    <td width="50%"><img src="screenshots/mac_assistant.jpg" alt="Tone Assistant on Mac answering surf rock with Apple Intelligence and switching on overdrive, reverb, tremolo, chorus and delay"><br><sub><b>Tone Assistant</b> – “surf rock”, answered on device by Apple Intelligence</sub></td>
-    <td width="50%"><img src="screenshots/mac_eq.jpg" alt="EQ and Tone tab on Mac: tone balance card suggesting Boost 1 kHz above the parametric EQ and live spectrum"><br><sub><b>EQ &amp; Tone</b> – where your sound sits, and the EQ move to fix it in one tap</sub></td>
-  </tr>
-  <tr>
-    <td><img src="screenshots/mac_amp.jpg" alt="Amp and Cabinet panel on Mac: amp model, cabinet and IR choices, five knobs and the response curve rolling off above 5 kHz"><br><sub><b>Amp &amp; Cabinet</b> – the speaker that takes the fizz out of distortion</sub></td>
-    <td><img src="screenshots/mac_cable.jpg" alt="Guitar input panel on Mac: 40 ft of cable, buffer, volume pedal and noise gate, with the pickup and cable response rolling off above 2.8 kHz"><br><sub><b>Guitar &amp; cable</b> – tone suck, measured: f = 1/(2π√LC)</sub></td>
-  </tr>
-  <tr>
-    <td><img src="screenshots/mac_learn.jpg" alt="Learn tab on Mac: the Pedal Library, a wall of twenty classic stompboxes with the Tube Steamer open – what its circuit does, its gain, clipping and current draw, Hear it and Use on my board"><br><sub><b>Pedal Library</b> – twenty classics: see the circuit, hear it, put it on your board</sub></td>
-    <td><img src="screenshots/mac_stage.jpg" alt="Stage Mode on Mac: a realistic pedalboard on aluminium rails with a tuner first, nine classic pedals joined by patch cables and power leads, guitar in on the right and the amp on the left"><br><sub><b>Stage Mode</b> – a real board: tuner first, patch cables, power, one tap to stomp</sub></td>
-  </tr>
-  <tr>
-    <td colspan="2"><img src="screenshots/mac_board_guide.jpg" alt="Learn tab on Mac: Build a Board, a small pedalboard diagram with numbered spots on the guitar cable, tuner, buffer, pedals, patch cable, power brick and amp, and the Guitar and Cable step with its cable-length explorer"><br><sub><b>Build a Board</b> – a real pedalboard, one numbered part at a time</sub></td>
-  </tr>
-</table>
+</details>
 
 ## Technical stack
 
@@ -221,81 +231,15 @@ Pedal and amp names, panels and enclosures are RiffNode's own – no logos or co
 | AI | Foundation Models | On-device `LanguageModelSession` with `@Generable` tone parameters |
 | State | Observation | `@Observable` view models and services |
 
-### Implementation notes
-
-- **Swift 6 audio taps** – tap blocks are global, non-isolated functions writing into a lock-protected buffer, so no `@MainActor` closure ever runs on the audio thread.
-- **Responsive start-up** – `AVAudioSession` activation runs off the main thread.
-- **Demo riff and groove** – Karplus–Strong plucked strings (all-pass tuned, with filtered pick noise and ghost-note mutes), plus synthesized kick, snare, hi-hat and bass, render on device with seeded generators. No audio files are bundled; clean recordings you import for Demo, and songs for Play Along, are converted to the engine's sample rate with `AVAudioConverter`.
-- **Real-time DSP** – a custom `AUAudioUnit` processes in place on the audio thread with no allocation or locks; knob values cross threads through `Synchronization.Atomic`. The amp's filter coefficients and cabinet IRs are prepared on the main thread in one of two banks; the audio thread announces which bank it is reading and re-checks it is still current, so the main thread never rewrites a bank mid-read – even when settings change twice within one audio block. A stress test swaps banks 200 000 times against a concurrent reader and checks no copy is ever torn.
-- **Low latency** – a ~5 ms I/O buffer (256 frames at 48 kHz); Settings shows the measured round trip (input + output latency + two buffers) and warns when Bluetooth output adds 100–200 ms. Pedals stay wired and switch with `shouldBypassEffect`, so toggling never rebuilds the graph.
-- **A free main thread** – pitch and chord detection run off the main actor (vectorised with `vDSP_dotpr`); each result carries a generation number, so a result that finishes after a reset or a source switch is dropped instead of overwriting newer state. FFT buffers are allocated once, not per frame.
-- **Measured headroom** – `scripts/bench-audio.sh` renders a board of 11 DSP stages (input stage, wah, three drives, four modulations, analog delay, amp) in 128-frame buffers. On an M1 Pro it runs about 59× real time (1.7% of one core); a standard A1 NAM capture adds about 5% (20× real time). Even the 99.9th-percentile buffer takes under 0.5 ms of its 2.67 ms budget.
-- **Clean clipping** – the overdrive, distortion and fuzz clippers run 4× oversampled, so harmonics above Nyquist don't fold back as harsh aliasing.
-- **Cabinet IRs** – loaded files are resampled with `AVAudioConverter`, trimmed to 2048 taps, peak-normalised and convolved with `vDSP_conv`.
-- **Fast on-device AI** – the model fills a small `@Generable` sketch (style, gain, space, up to three signature pedals) instead of raw knob values; a prewarmed session per request answers in about 3.5 seconds on the macOS 27 model and never overflows the 4K context window.
-
 ## Architecture
 
-RiffNode follows **MVVM** inside a **Clean Architecture** layout. Dependencies point inward: Presentation and Data both depend on Domain, never on each other's concrete types.
+RiffNode follows **MVVM** inside a **Clean Architecture** layout: Presentation and Data both depend on a Foundation-only Domain, never on each other.
 
-```mermaid
-graph TD
-    subgraph Presentation
-        V[SwiftUI Views]
-        VM[View Models<br/>MainViewModel · BoardHistory · PlayAlongViewModel · ToneBalanceViewModel<br/>SignalLabModel · AIChatbotController · PerformanceModeController · RiffNotchController]
-    end
+- **Small capability protocols** – each screen declares exactly what it may use from the engine.
+- **One composition root** – `AppDependencies` holds only protocols; its `live()` factory is the one place that names concrete types, so view models run against fakes in the tests.
+- **Real-time-safe audio** – a custom `AUAudioUnit`, no allocation or locks on the audio thread, measured at ~59× real time for an 11-stage board.
 
-    subgraph Domain
-        M[Models<br/>EffectType · EffectNode · PedalModel · AmpModel · EQBand<br/>SignalAnalysis · ToneDocument · BoardGuideStop · FaceGesture]
-        P[Protocols<br/>AudioEngineControlling · EffectsChainManaging · SignalProbing · ToneSharing<br/>ToneStoring · SpectrumAnalyzing · ChordAnalyzing · GestureControlling · ToneAssisting …]
-    end
-
-    subgraph Data
-        AE[AudioEngineManager]
-        BT[BackingTrackPlayer · DemoRiffPlayer · EffectUnitsContainer · DSP]
-        AN[FFTAnalyzer · ChordDetector · SignalAnalyzer · SongAnalyzer]
-        AI[SemanticCommandProcessor · OfflineToneMatcher · ToneRecipeBook]
-        SV[SystemMusicService · PresetService · ToneAutosaveStore · VisionGestureController · MIDIFootswitch]
-    end
-
-    V --> VM
-    V --> P
-    VM --> P
-    AE -.implements.-> P
-    BT -.implements.-> P
-    AN -.implements.-> P
-    SV -.implements.-> P
-    AE --> BT
-    P --> M
-```
-
-```
-RiffNode.swiftpm/
-├── App/                    AppDependencies (protocols only) and its live() factory – the composition
-│                           root, the only place that names concrete Data types – and ContentView
-├── Domain/                 Pure Swift (Foundation only)
-│   ├── Models/             Effects, classic pedals & amps, presets, EQ, signal analysis, tone files,
-│   │                       the board guide, gestures – plus small pure rules (pedal order, use a model)
-│   └── Protocols/          One protocol per capability: audio (engine, chain, EQ, probe, sharing …),
-│                           interaction (analysis, gestures, Tone Assistant) and learning
-├── Data/
-│   ├── Audio/              AudioEngineManager (graph) split by concern (+AmpAndInput, +ChainSync,
-│   │                       +PedalUnits, +SignalProbe …) · players · EffectUnitsContainer · DSP/
-│   ├── Analysis/           FFTAnalyzer, ChordDetector, SignalProbe, SignalAnalyzer, SongAnalyzer
-│   ├── AI/                 SemanticCommandProcessor, OfflineToneMatcher, ToneRecipeBook, ToneModels
-│   ├── Playback/ · MIDI/ · Vision/ · Presets/ (incl. autosave) · Learning/ · Logging
-├── Presentation/
-│   ├── ViewModels/         Feature view models + EngineRequirements (what each screen may use)
-│   ├── Views/              One folder per feature: Main, Pedalboard, Performance, EQ, Learn, AI …
-│   └── DesignSystem/       Tokens, glass card, buttons, knob, tab bar, background, layout, DomainColors
-└── Core/Extensions/
-```
-
-- **Interface segregation** – the engine is exposed as small capability protocols. Each screen declares what it needs in `EngineRequirements` (for example `SignalLabEngine = AudioEngineControlling & DemoRiffPlaying & SignalProbing & EffectsChainManaging`), so a view can't reach anything else.
-- **Dependency inversion** – views and view models hold `any …` protocol types. `AppDependencies` holds only protocols; its `live()` factory, in a file of its own, is the one place that names concrete Data types (previews borrow it too). So `MainViewModel` runs against fakes in the tests, with no audio engine, camera or MIDI, and `BoardHistory` sees the board only as `ToneSharing` and its store as `ToneStoring`.
-- **A UI-free Domain** – colours live in `Presentation/DesignSystem/DomainColors.swift` and AVFoundation mappings in `Data`, so `Domain` imports only Foundation.
-- **Single responsibility** – play-along, the demo riff, the effect units, signal analysis and the offline tone matcher are their own types; feature rules (which mode stops what, tone-balance hysteresis, undo) live in view models, and board rules (placing a classic pedal, pedal-order advice) in the Domain – views only render and forward intents.
-- **Open/closed** – a new classic pedal or amp is data (a `PedalModel` / `AmpVoice` entry with its voicing and look); the DSP and the drawing code don't change.
+The diagram, folder layout, SOLID notes, implementation details and tests are in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ## Getting started
 
@@ -314,6 +258,8 @@ open riffnode-wwdc2026/RiffNode.swiftpm
 
 Open `RiffNode.swiftpm` in Swift Playgrounds or Xcode and run it on iPad or **My Mac**. The demo riff works in the iPad simulator; live guitar input and gestures need a real device.
 
+Tests and the DSP benchmark run from `scripts/` – see [Tests](docs/ARCHITECTURE.md#tests).
+
 ## Swift Student Challenge 2026
 
 RiffNode was selected by Apple as a **2026 Swift Student Challenge Winner** – one of 350 winners worldwide and one of eight from Taiwan this year.
@@ -325,7 +271,7 @@ RiffNode was selected by Apple as a **2026 Swift Student Challenge Winner** – 
 
 <p align="center">
   <img src="screenshots/wwdc26-apple-park-stage.jpg" width="860" alt="The stage at Apple Park for WWDC26: the full wall of 2026 Swift Student Challenge winners on stage">
-  <br><sub>Apple Park, Cupertino, California · WWDC26, June 8, 2026 – the full wall of this year's winners</sub>
+  <br><sub>Apple Park, Cupertino, California · WWDC26, June 8, 2026 – the full wall of this year's winners · photo by a friend who was there</sub>
 </p>
 
 <table>
@@ -382,7 +328,6 @@ It brings low-level signal processing, computer vision and on-device AI together
 - Full recovery from audio route changes and interruptions (unplugging an interface, phone calls)
 - A lock-free ring buffer between the analysis taps and the UI
 - Hand-gesture (Vision) camera lifecycle across scenes
-- Saving the input stage (cable, buffer, gate) with the rest of the board
 - An EQ curve drawn from the exact filter response
 - Streaming long backing tracks, synced with the metronome and looper
 
@@ -399,7 +344,3 @@ RiffNode source code is released under the [MIT License](LICENSE). No third-part
 <p align="center">
   Made with ❤️ and a lot of feedback loops by Jesse
 </p>
-
-## Core regression checks
-
-Run `scripts/test-core.sh` for pitch, FFT calibration, metering, AI edits, chat snapshots and permission-free setup. Run `scripts/test-audio.sh` for offline clean/processed audio at 44.1/48 kHz, the original synth source and the coefficient-bank handshake under contention. Run `scripts/test-viewmodels.sh` for `MainViewModel` against fakes: footswitch events, head gestures, preset wrapping, sample-rate routing, restoring the saved board and keeping Learn auditions out of undo. Set `RIFFNODE_TEST_RECORDING` to a WAV of your own to run the audio checks on it. `scripts/bench-audio.sh [capture.nam]` times the DSP against the real-time budget. All require Xcode on macOS.
