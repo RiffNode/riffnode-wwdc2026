@@ -157,7 +157,7 @@ Pedal and amp names, panels and enclosures are RiffNode's own – no logos or co
 ### Practice, sharing and live control
 
 - **Low latency** – a ~5 ms I/O buffer, the measured string-to-ear latency in Settings, and a warning when Bluetooth headphones would add 100–200 ms.
-- **Undo and autosave** – every change to the board (pedals, order, models, knobs, amp, EQ) is one undo step once it settles, so a knob drag is one step; the board is saved and comes back next launch.
+- **Undo and autosave** – every change to the board (pedals, order, models, knobs, amp, EQ, and the cable, buffer and noise gate in front of it) is one undo step once it settles, so a knob drag is one step; the board is saved and comes back next launch.
 - **Two of a kind** – stack two overdrives, or a short and a long delay: every pedal after the first of its type gets its own audio unit, and the Signal Lab probes exactly the one you picked.
 - **Looper** – one footswitch: record, play, overdub, undo. It records the amp's output, so only your guitar is layered.
 - **Metronome** – an accented click that can match the groove's tempo.

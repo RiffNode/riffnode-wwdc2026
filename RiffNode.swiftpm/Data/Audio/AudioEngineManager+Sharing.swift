@@ -8,7 +8,8 @@ extension AudioEngineManager {
     // MARK: - Tone Sharing
 
     func makeToneDocument(named name: String) -> ToneDocument {
-        ToneDocument(name: name, chain: effectsChain, amp: ampSettings, eqBands: parametricEQBands)
+        ToneDocument(name: name, chain: effectsChain, amp: ampSettings, eqBands: parametricEQBands,
+                     input: inputSettings)
     }
 
     func applyToneDocument(_ document: ToneDocument) {
@@ -23,6 +24,7 @@ extension AudioEngineManager {
             bands[index].gain = max(-24, min(24, gain))
         }
         parametricEQBands = bands
+        inputSettings = document.inputSettings(over: inputSettings)
         rebuildEffectsChain()
     }
 }
