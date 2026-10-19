@@ -271,7 +271,7 @@ RiffNode was selected by Apple as a **2026 Swift Student Challenge Winner** – 
 
 <p align="center">
   <img src="screenshots/wwdc26-apple-park-stage.jpg" width="860" alt="The stage at Apple Park for WWDC26: the full wall of 2026 Swift Student Challenge winners on stage">
-  <br><sub>Apple Park, Cupertino, California · WWDC26, June 8, 2026 – the full wall of this year's winners · photo by a friend who was there</sub>
+  <br><sub>Apple Park, Cupertino, California · WWDC26, June 8, 2026 – the full wall of this year's winners</sub>
 </p>
 
 <table>

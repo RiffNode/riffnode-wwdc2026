@@ -273,7 +273,7 @@ RiffNode 獲 Apple 選為 **2026 Swift Student Challenge 得獎作品** —— �
 
 <p align="center">
   <img src="screenshots/wwdc26-apple-park-stage.jpg" width="860" alt="WWDC26 Apple Park 的舞台：上面是 2026 Swift Student Challenge 全體得獎者名單牆">
-  <br><sub>Apple Park，加州 Cupertino · WWDC26，2026 年 6 月 8 日 —— 今年全體得獎者的名單牆 · 照片由在場的朋友拍攝</sub>
+  <br><sub>Apple Park，加州 Cupertino · WWDC26，2026 年 6 月 8 日 —— 今年全體得獎者的名單牆</sub>
 </p>
 
 <table>
