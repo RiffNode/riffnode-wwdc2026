@@ -135,8 +135,12 @@ struct CableResponseCard: View {
                         .foregroundStyle(.green)
                         .padding(8)
                 }
-                .accessibilityElement()
-                .accessibilityLabel(String(format: "Pickup and cable response, corner at %.1f kilohertz", corner / 1000))
+                .audioGraph(AudioGraphChart(
+                    title: "Pickup and cable response",
+                    summary: "Highs start falling at \(AudioGraphChart.hertz(Double(corner)))",
+                    x: .frequency(40...16_000),
+                    y: .decibels(-24...12),
+                    series: [.init(name: "Response", points: zip(Self.frequencies, response).map { (Double($0), Double($1)) })]))
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Why long cables sound dull")

@@ -120,6 +120,7 @@ struct SettingsView: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityLabel("Refresh input devices")
                             }
 
                             GlassDivider()

@@ -34,6 +34,7 @@ struct GlassPedalControlsView: View {
                             .foregroundStyle(showingInfo ? effect.type.color : .secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(showingInfo ? "Hide how it works" : "How it works")
 
                     // Bypass toggle
                     Toggle("", isOn: Binding(
@@ -42,6 +43,7 @@ struct GlassPedalControlsView: View {
                     ))
                     .toggleStyle(.switch)
                     .tint(effect.type.color)
+                    .accessibilityLabel("\(effect.type.rawValue) on")
                 }
 
                 GlassDivider()

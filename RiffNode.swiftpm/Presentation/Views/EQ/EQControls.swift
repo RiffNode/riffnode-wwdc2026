@@ -188,6 +188,7 @@ struct GlassEQBandControls: View {
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
+                            .accessibilityLabel("Lower gain")
 
                             Text(String(format: "%+.1f", band.gain))
                                 .font(.system(.callout, weight: .bold).monospacedDigit())
@@ -202,6 +203,7 @@ struct GlassEQBandControls: View {
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
+                            .accessibilityLabel("Raise gain")
                         }
                     }
 
@@ -220,6 +222,7 @@ struct GlassEQBandControls: View {
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
+                            .accessibilityLabel("Lower Q")
 
                             Text(String(format: "%.1f", band.q))
                                 .font(.system(.callout, weight: .bold).monospacedDigit())
@@ -234,6 +237,7 @@ struct GlassEQBandControls: View {
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
+                            .accessibilityLabel("Raise Q")
                         }
                     }
                 }

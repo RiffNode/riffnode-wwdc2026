@@ -7,7 +7,7 @@ import Foundation
 
 @MainActor
 struct AppDependencies {
-    let engine: AudioEngineManager
+    let engine: any AudioManaging
     let presets: PresetProviding
     let spectrum: any SpectrumAnalyzing
     let chords: any ChordAnalyzing
@@ -18,21 +18,4 @@ struct AppDependencies {
     let songAnalyzer: any SongAnalyzing
     let effectGuide: any EffectGuideServiceProtocol
     let toneStore: any ToneStoring
-
-    /// The real thing: audio engine, analysis, camera, MIDI and on-device AI.
-    static func live() -> AppDependencies {
-        AppDependencies(
-            engine: AudioEngineManager(),
-            presets: PresetService(),
-            spectrum: FFTAnalyzer(),
-            chords: ChordDetector(),
-            footswitch: MIDIFootswitch(),
-            gestures: VisionGestureController(),
-            toneAssistant: SemanticCommandProcessor(),
-            musicApp: SystemMusicService(),
-            songAnalyzer: SongAnalyzer(),
-            effectGuide: EffectGuideService.shared,
-            toneStore: ToneAutosaveStore()
-        )
-    }
 }

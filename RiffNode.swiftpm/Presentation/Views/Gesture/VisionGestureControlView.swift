@@ -48,6 +48,7 @@ struct VisionGestureControlView: View {
                         .foregroundStyle(controller.isRunning ? .red : .green)
                 }
                 .buttonStyle(.bordered)
+                .accessibilityLabel(controller.isRunning ? "Stop gesture control" : "Start gesture control")
             }
 
             if controller.isRunning {

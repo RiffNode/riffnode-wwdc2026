@@ -21,6 +21,7 @@ struct ToneBalanceCard: View {
                     .foregroundStyle(region?.color ?? .secondary)
                     .frame(width: 42, height: 42)
                     .glassEffect(.regular.tint((region?.color ?? .gray).opacity(0.15)), in: Circle())
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(region?.insight.title ?? "Tone balance")
@@ -69,6 +70,9 @@ struct ToneBalanceCard: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
                     .background(range.color.opacity(isDominant ? 0.18 : 0.05), in: RoundedRectangle(cornerRadius: 8))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(range.name), \(range.feel), \(range.rangeLabel) hertz")
+                    .accessibilityAddTraits(isDominant ? .isSelected : [])
                 }
             }
         }

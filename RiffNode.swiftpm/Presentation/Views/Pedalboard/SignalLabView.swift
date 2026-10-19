@@ -74,7 +74,8 @@ struct SignalLabView: View {
             RoundedRectangle(cornerRadius: CornerRadius.md)
                 .fill(.black.opacity(0.78))
 
-            SignalPlot(lens: lens, model: model, color: color)
+            SignalPlot(lens: lens, model: model, color: color,
+                       summary: statusMessage?.text ?? findingList.map(\.spoken).joined(separator: ". "))
                 .padding(.vertical, 10)
                 .padding(.horizontal, 8)
                 .opacity(model.isSilent ? 0.25 : 1)
@@ -155,6 +156,8 @@ struct SignalLabView: View {
         let before: String
         let after: String
         let hint: String
+
+        var spoken: String { "\(id), \(before) before, \(after) after" }
     }
 
     private var findings: some View {
@@ -180,6 +183,10 @@ struct SignalLabView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
                 .background(.background.opacity(0.35), in: RoundedRectangle(cornerRadius: CornerRadius.md))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(finding.id)
+                .accessibilityValue("\(finding.before) before the pedal, \(finding.after) after")
+                .accessibilityHint(finding.hint)
             }
         }
         .contentTransition(.numericText())
@@ -228,6 +235,8 @@ private struct SignalPlot: View {
     let lens: SignalLens
     let model: SignalLabModel
     let color: Color
+    /// What the measurements say, read by VoiceOver with the chart.
+    let summary: String
 
     var body: some View {
         Canvas { context, size in
@@ -254,6 +263,50 @@ private struct SignalPlot: View {
             }
         }
         .overlay(alignment: .topTrailing) { axisLabels }
+        .audioGraph(chart)
+    }
+
+    // MARK: - Chart for VoiceOver
+
+    private var chart: AudioGraphChart {
+        func series(_ name: String, _ values: [Float], x: (Int) -> Double, y: (Float) -> Double) -> AudioGraphChart.Series {
+            let stride = max(1, values.count / 64)
+            let points = Swift.stride(from: 0, to: values.count, by: stride).map { (x: x($0), y: y(values[$0])) }
+            return .init(name: name, points: points)
+        }
+        let title = "Signal Lab, \(lens.rawValue.lowercased())"
+        switch lens {
+        case .wave:
+            let ms = { (i: Int) in Double(i) / Double(max(1, SignalLabModel.waveLength - 1)) * 11 }
+            return AudioGraphChart(
+                title: title, summary: summary,
+                x: .init(title: "Time", range: 0...11) { String(format: "%.1f ms", $0) },
+                y: .init(title: "Amplitude", range: -1...1) { String(format: "%.2f", $0) },
+                series: [series("Into the pedal", model.waveBefore, x: ms, y: Double.init),
+                         series("Out of the pedal", model.waveAfter, x: ms, y: Double.init)])
+        case .volume:
+            let count = max(model.envelopeBefore.count, model.envelopeAfter.count, 2)
+            let seconds = { (i: Int) in Double(i) / Double(count - 1) * 3 - 3 }
+            let db = { (v: Float) in Double(max(-60, 20 * log10(max(v, 1e-6)))) }
+            return AudioGraphChart(
+                title: title, summary: summary,
+                x: .init(title: "Time", range: -3...0) { String(format: "%.1f s", $0) },
+                y: .decibels(-60...0),
+                series: [series("Into the pedal", model.envelopeBefore, x: seconds, y: db),
+                         series("Out of the pedal", model.envelopeAfter, x: seconds, y: db)])
+        case .frequencies:
+            let range = SignalLabModel.spectrumRange
+            let hz = { (i: Int) in
+                Double(range.lowerBound) * pow(Double(range.upperBound / range.lowerBound),
+                                               Double(i) / Double(SignalLabModel.spectrumBands - 1))
+            }
+            return AudioGraphChart(
+                title: title, summary: summary,
+                x: .frequency(Double(range.lowerBound)...Double(range.upperBound)),
+                y: .init(title: "Energy", range: 0...1) { "\(Int(($0 * 100).rounded())) percent" },
+                series: [series("Into the pedal", model.spectrumBefore, x: hz, y: Double.init),
+                         series("Out of the pedal", model.spectrumAfter, x: hz, y: Double.init)])
+        }
     }
 
     @ViewBuilder
