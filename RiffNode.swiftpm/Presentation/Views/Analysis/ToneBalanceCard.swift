@@ -163,7 +163,6 @@ enum FrequencyRegion: CaseIterable {
     }
 }
 
-
 // MARK: - Suggestions
 
 extension FrequencyRegion {

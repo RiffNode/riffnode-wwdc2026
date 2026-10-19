@@ -11,6 +11,8 @@ xcrun swiftc -swift-version 6 -parse-as-library \
   RiffNode.swiftpm/Data/Analysis/ChordDetector.swift \
   RiffNode.swiftpm/Data/AI/ToneRecipeBook.swift \
   RiffNode.swiftpm/Data/AI/SemanticCommandProcessor.swift \
+  RiffNode.swiftpm/Data/AI/ToneModels.swift \
+  RiffNode.swiftpm/Core/Extensions/Array+RemovingDuplicates.swift \
   RiffNode.swiftpm/Data/AI/OfflineToneMatcher.swift \
   RiffNode.swiftpm/Presentation/ViewModels/SetupViewModel.swift \
   RiffNode.swiftpm/Presentation/ViewModels/AIChatbotController.swift \

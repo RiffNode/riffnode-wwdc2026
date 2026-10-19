@@ -241,20 +241,20 @@ RiffNode 採用 **MVVM** 與 **Clean Architecture**。依賴方向一律向內�
 graph TD
     subgraph Presentation
         V[SwiftUI Views]
-        VM[View Models<br/>MainViewModel · PlayAlongViewModel · ToneBalanceViewModel<br/>SignalLabModel · AIChatbotController · RiffNotchController]
+        VM[View Models<br/>MainViewModel · BoardHistory · PlayAlongViewModel · ToneBalanceViewModel<br/>SignalLabModel · AIChatbotController · PerformanceModeController · RiffNotchController]
     end
 
     subgraph Domain
-        M[Models<br/>EffectType · EffectNode · EQBand · SignalCapture · ToneSuggestion]
-        P[Protocols<br/>AudioEngineControlling · EffectsChainManaging · EqualizerControlling<br/>DemoRiffPlaying · SignalProbing · BackingTrackManaging · ChordDetecting …]
+        M[Models<br/>EffectType · EffectNode · PedalModel · AmpModel · EQBand<br/>SignalAnalysis · ToneDocument · BoardGuideStop · FaceGesture]
+        P[Protocols<br/>AudioEngineControlling · EffectsChainManaging · SignalProbing · ToneSharing<br/>ToneStoring · SpectrumAnalyzing · ChordAnalyzing · GestureControlling · ToneAssisting …]
     end
 
     subgraph Data
         AE[AudioEngineManager]
         BT[BackingTrackPlayer · DemoRiffPlayer · EffectUnitsContainer · DSP]
-        AN[FFTAnalyzer · ChordDetector]
-        AI[SemanticCommandProcessor · ToneRecipeBook]
-        SV[SystemMusicService · PresetService · VisionGestureController]
+        AN[FFTAnalyzer · ChordDetector · SignalAnalyzer · SongAnalyzer]
+        AI[SemanticCommandProcessor · OfflineToneMatcher · ToneRecipeBook]
+        SV[SystemMusicService · PresetService · ToneAutosaveStore · VisionGestureController · MIDIFootswitch]
     end
 
     V --> VM
@@ -270,28 +270,31 @@ graph TD
 
 ```
 RiffNode.swiftpm/
-├── App/                    組合根：建立引擎，切換 Welcome → Tour → Main
-├── Domain/                 純 Swift（只依賴 Foundation）
-│   ├── Models/             效果器、preset、EQ、訊號擷取、輸入裝置、學習內容
-│   └── Protocols/          一個能力一個 protocol（引擎、踏板鏈、EQ、demo riff、訊號擷取、伴奏 …）
+├── App/                    AppDependencies（組合根，唯一會寫出 Data 具體型別的地方）
+│                           與 ContentView（Welcome → Tour → Main）
+├── Domain/                 純 Swift（只用 Foundation）
+│   ├── Models/             效果器、經典踏板與音箱、preset、EQ、訊號分析、音色檔、
+│   │                       踏板盤導覽、手勢，以及小型純規則（踏板順序、套用型號）
+│   └── Protocols/          一個能力一個 protocol：音訊（引擎、踏板鏈、EQ、擷取、分享…）、
+│                           互動（分析、手勢、Tone Assistant）與學習
 ├── Data/
-│   ├── Audio/              AudioEngineManager（音訊圖）· BackingTrackPlayer · DemoRiffPlayer
-│   │                       EffectUnitsContainer · 合成器 · DSP/（自製 Audio Unit）
-│   ├── Analysis/           FFTAnalyzer、ChordDetector、SignalProbe
-│   ├── AI/                 SemanticCommandProcessor、ToneRecipeBook
-│   ├── Playback/           SystemMusicService（Apple Music）
-│   ├── Vision/ · Presets/ · Learning/
+│   ├── Audio/              AudioEngineManager（音訊圖）依職責拆成擴充檔（+AmpAndInput、
+│   │                       +ChainSync、+PedalUnits、+SignalProbe…）· 播放器 · EffectUnitsContainer · DSP/
+│   ├── Analysis/           FFTAnalyzer、ChordDetector、SignalProbe、SignalAnalyzer、SongAnalyzer
+│   ├── AI/                 SemanticCommandProcessor、OfflineToneMatcher、ToneRecipeBook、ToneModels
+│   ├── Playback/ · MIDI/ · Vision/ · Presets/（含自動儲存）· Learning/ · Logging
 ├── Presentation/
-│   ├── ViewModels/         各功能的 view model + EngineRequirements（每個畫面能用的能力）
-│   ├── Views/              一個功能一個資料夾：Main、Pedalboard、EQ、Learn、AI、Notch …
-│   └── DesignSystem/       設計 token、玻璃元件、NotchShape、DomainColors
+│   ├── ViewModels/         各功能的 view model + EngineRequirements（每個畫面能用什麼）
+│   ├── Views/              一個功能一個資料夾：Main、Pedalboard、Performance、EQ、Learn、AI…
+│   └── DesignSystem/       Tokens、玻璃卡片、按鈕、旋鈕、分頁列、背景、版面、DomainColors
 └── Core/Extensions/
 ```
 
 - **介面隔離** —— 引擎拆成多個小的能力 protocol。每個畫面在 `EngineRequirements` 宣告它需要什麼（例如 `SignalLabEngine = AudioEngineControlling & DemoRiffPlaying & SignalProbing & EffectsChainManaging`），所以 View 碰不到其他功能。
-- **依賴反轉** —— View 與 view model 持有的是 `any …` protocol 型別；只有組合根 `ContentView` 會建立 `AudioEngineManager`。
+- **依賴反轉** —— View 與 view model 持有的是 `any …` protocol 型別；只有組合根 `AppDependencies` 會寫出 Data 層的具體型別（預覽也透過它取得）。連 `BoardHistory` 也只把踏板盤看成 `ToneSharing`、把儲存看成 `ToneStoring`，所以測試時兩者都能換成假的實作。
 - **不依賴 UI 的 Domain** —— 顏色放在 `Presentation/DesignSystem/DomainColors.swift`，AVFoundation 的對應放在 `Data`，所以 `Domain` 只 import Foundation。
-- **單一職責** —— 伴奏、demo riff、效果器 unit 都是各自的類別；功能規則（切換模式時停止什麼、Tone balance 的遲滯判斷）放在 view model，而不是 View。
+- **單一職責** —— 伴奏、demo riff、效果器 unit、訊號分析、離線音色比對都是各自的型別；功能規則（切換模式時停止什麼、Tone balance 的遲滯判斷、復原）放在 view model，踏板盤規則（套用經典踏板、踏板順序建議）放在 Domain —— View 只負責呈現與轉交使用者的意圖。
+- **開放封閉** —— 新增一顆經典踏板或音箱只是新增資料（一筆帶聲音參數與外觀的 `PedalModel`／`AmpVoice`），DSP 與繪圖程式都不用改。
 
 ## 開始使用
 

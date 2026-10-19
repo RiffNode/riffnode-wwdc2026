@@ -3,9 +3,6 @@ import SwiftUI
 import UIKit
 #endif
 
-// MARK: - Visualization Views
-// Liquid Glass UI Design - iOS 26+
-
 // MARK: - Liquid Waveform View (High-Performance Canvas)
 
 struct WaveformView: View {
